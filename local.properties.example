@@ -1,0 +1,11 @@
+# Local Configuration
+# Copy this file to local.properties and update with your actual values
+# local.properties is in .gitignore and will not be committed
+
+# Google Maps API Key
+# Get your API key from: https://console.cloud.google.com/google/maps-apis
+# Enable Maps SDK for Android for your project
+MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
+
+# Android SDK location (usually auto-detected by Android Studio)
+# sdk.dir=/path/to/Android/Sdk
