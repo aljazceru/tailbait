@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.5"
+        android:scaleY="0.5"
+        android:translateX="27"
+        android:translateY="27">
+        <!-- BLE icon: Bluetooth symbol -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M30,24L30,8L42,16L30,24ZM30,40L30,24L42,32L30,40ZM24,32L16,24L24,16L24,32ZM36,24L48,16L36,8L36,24ZM36,40L48,32L36,24L36,40Z" />
+        <!-- Location marker -->
+        <path
+            android:fillColor="#FF9800"
+            android:pathData="M54,18C54,13.6,50.4,10,46,10C41.6,10,38,13.6,38,18C38,21,42,28,46,34C50,28,54,21,54,18ZM46,20C44.9,20,44,19.1,44,18C44,16.9,44.9,16,46,16C47.1,16,48,16.9,48,18C48,19.1,47.1,20,46,20Z" />
+    </group>
+</vector>

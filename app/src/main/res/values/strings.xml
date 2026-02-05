@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Name -->
+    <string name="app_name">TailBait</string>
+
+    <!-- Permission Strings -->
+    <string name="permission_bluetooth_title">Bluetooth Access</string>
+    <string name="permission_bluetooth_description">Required to scan for BLE devices</string>
+    
+    <string name="permission_location_title">Location Access</string>
+    <string name="permission_location_description">Required to track device locations</string>
+    
+    <string name="permission_background_location_title">Background Location</string>
+    <string name="permission_background_location_description">Optional: Enable 24/7 protection</string>
+    
+    <string name="permission_notification_title">Notifications</string>
+    <string name="permission_notification_description">Required for instant alerts</string>
+
+    <!-- General Strings -->
+    <string name="action_settings">Settings</string>
+    <string name="action_continue">Continue</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_add">Add</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_search">Search</string>
+    <string name="action_filter">Filter</string>
+    <string name="action_sort">Sort</string>
+    <string name="action_close">Close</string>
+    <string name="action_back">Back</string>
+
+    <!-- Home Screen -->
+    <string name="home_title">TailBait</string>
+    <string name="home_tracking_enabled">Tracking Enabled</string>
+    <string name="home_tracking_disabled">Tracking Disabled</string>
+    <string name="home_scan_status">Scan Status</string>
+    <string name="home_devices_found">Devices Found</string>
+    <string name="home_last_scan">Last Scan</string>
+    <string name="home_manual_scan">Manual Scan</string>
+    <string name="home_toggle_tracking">Toggle Tracking</string>
+
+    <!-- Device List Screen -->
+    <string name="device_list_title">Discovered Devices</string>
+    <string name="device_list_empty">No devices found</string>
+    <string name="device_list_search_hint">Search devices…</string>
+    <string name="device_unknown_name">Unknown Device</string>
+    <string name="device_first_seen">First Seen</string>
+    <string name="device_last_seen">Last Seen</string>
+    <string name="device_detection_count">Detection Count</string>
+
+    <!-- Alert Screen -->
+    <string name="alerts_title">Alerts</string>
+    <string name="alerts_empty">No alerts</string>
+    <string name="alerts_active">Active Alerts</string>
+    <string name="alerts_dismissed">Dismissed Alerts</string>
+    <string name="alert_level_low">Low</string>
+    <string name="alert_level_medium">Medium</string>
+    <string name="alert_level_high">High</string>
+    <string name="alert_level_critical">Critical</string>
+    <string name="alert_dismiss_confirm">Dismiss this alert?</string>
+
+    <!-- Whitelist Screen -->
+    <string name="whitelist_title">Trusted Devices</string>
+    <string name="whitelist_empty">No trusted devices</string>
+    <string name="whitelist_add_device">Add to Whitelist</string>
+    <string name="whitelist_remove_device">Remove from Whitelist</string>
+    <string name="whitelist_category_own">My Devices</string>
+    <string name="whitelist_category_partner">Partner\'s Devices</string>
+    <string name="whitelist_category_trusted">Trusted Devices</string>
+    <string name="whitelist_label">Label</string>
+    <string name="whitelist_notes">Notes</string>
+
+    <!-- Learn Mode Screen -->
+    <string name="learn_mode_title">Learn Mode</string>
+    <string name="learn_mode_description">Discover and whitelist your devices in one session</string>
+    <string name="learn_mode_start">Start Learn Mode</string>
+    <string name="learn_mode_stop">Stop Learn Mode</string>
+    <string name="learn_mode_active">Learn Mode Active</string>
+    <string name="learn_mode_time_remaining">Time Remaining</string>
+    <string name="learn_mode_devices_found">Devices Found</string>
+    <string name="learn_mode_select_devices">Select devices to add to whitelist</string>
+    <string name="learn_mode_finish">Finish &amp; Add Selected</string>
+    <string name="learn_mode_success">%1$d devices added to whitelist</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_tracking">Tracking</string>
+    <string name="settings_data_retention">Data Retention (Days)</string>
+    <string name="settings_alert_threshold">Alert Threshold</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_clear_data">Clear All Data</string>
+    <string name="settings_clear_data_confirm">This will delete all app data. Continue?</string>
+
+    <!-- Error Messages -->
+    <string name="error_generic">An error occurred</string>
+    <string name="error_no_permissions">Required permissions not granted</string>
+    <string name="error_bluetooth_disabled">Bluetooth is disabled</string>
+    <string name="error_location_disabled">Location services are disabled</string>
+    <string name="error_scan_failed">Scan failed</string>
+    <string name="error_database_error">Database error occurred</string>
+    <string name="error_network_error">Network error</string>
+
+    <!-- Success Messages -->
+    <string name="success_device_added">Device added to whitelist</string>
+    <string name="success_device_removed">Device removed from whitelist</string>
+    <string name="success_alert_dismissed">Alert dismissed</string>
+    <string name="success_data_cleared">Data cleared successfully</string>
+
+    <!-- Content Descriptions (Accessibility) -->
+    <string name="cd_app_logo">TailBait App Logo</string>
+    <string name="cd_tracking_toggle">Toggle tracking on or off</string>
+    <string name="cd_manual_scan_button">Trigger manual device scan</string>
+    <string name="cd_refresh_button">Refresh current view</string>
+    <string name="cd_search_button">Search devices</string>
+    <string name="cd_filter_button">Filter devices</string>
+    <string name="cd_sort_button">Sort devices</string>
+    <string name="cd_settings_button">Open settings</string>
+    <string name="cd_back_button">Navigate back</string>
+    <string name="cd_close_button">Close dialog</string>
+    <string name="cd_add_device_button">Add device to whitelist</string>
+    <string name="cd_remove_device_button">Remove device from whitelist</string>
+    <string name="cd_edit_device_button">Edit device details</string>
+    <string name="cd_dismiss_alert_button">Dismiss alert</string>
+    <string name="cd_device_icon">Device icon</string>
+    <string name="cd_alert_icon">Alert icon</string>
+    <string name="cd_permission_icon">Permission status icon</string>
+    <string name="cd_learn_mode_progress">Learn mode progress indicator</string>
+    <string name="cd_device_checkbox">Select or deselect device</string>
+    <string name="back_button_desc">Navigate back</string>
+
+    <!-- Notification Strings -->
+    <string name="notification_channel_service">Background Service</string>
+    <string name="notification_channel_alerts">Device Alerts</string>
+    <string name="notification_service_title">TailBait Running</string>
+    <string name="notification_service_text">Monitoring for suspicious devices</string>
+    <string name="notification_alert_title">Suspicious Device Detected</string>
+    <string name="notification_alert_text">%1$d device(s) detected at multiple locations</string>
+
+    <!-- Formatting Strings -->
+    <string name="format_time_ago">%1$s ago</string>
+    <string name="format_devices_count">%1$d devices</string>
+    <string name="format_locations_count">%1$d locations</string>
+    <string name="format_threat_score">Threat Score: %1$.2f</string>
+    <string name="format_rssi">Signal: %1$d dBm</string>
+
+    <!-- Time Units -->
+    <string name="time_just_now">Just now</string>
+    <string name="time_seconds">%1$d seconds</string>
+    <string name="time_minute">1 minute</string>
+    <string name="time_minutes">%1$d minutes</string>
+    <string name="time_hour">1 hour</string>
+    <string name="time_hours">%1$d hours</string>
+    <string name="time_day">1 day</string>
+    <string name="time_days">%1$d days</string>
+</resources>

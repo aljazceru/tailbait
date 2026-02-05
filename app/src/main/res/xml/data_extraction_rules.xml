@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="device_prefs"/>
+        <exclude domain="database" path="ble_tracker.db"/>
+    </cloud-backup>
+</data-extraction-rules>
