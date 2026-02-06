@@ -69,14 +69,18 @@ class DetectionAlgorithmTest {
             minDetectionDistanceMeters = 100.0
         )
 
-        // Create algorithm instance
+        // Create algorithm instance with mock shadowAnalyzer
+        val shadowAnalyzer = mockk<ShadowAnalyzer>(relaxed = true)
+        coEvery { shadowAnalyzer.findSuspiciousShadows(any(), any()) } returns emptyList()
+
         detectionAlgorithm = DetectionAlgorithm(
             deviceRepository = deviceRepository,
             locationRepository = locationRepository,
             whitelistRepository = whitelistRepository,
             settingsRepository = settingsRepository,
             threatScoreCalculator = threatScoreCalculator,
-            patternMatcher = patternMatcher
+            patternMatcher = patternMatcher,
+            shadowAnalyzer = shadowAnalyzer
         )
     }
 

@@ -413,78 +413,6 @@ View report at: `app/build/reports/jacoco/test/html/index.html`
 
 ## Privacy & Security
 
-### Data Storage
-
-- **100% Local**: All data stored on device using Room/SQLite
-- **No Cloud Sync**: No data transmitted to external servers
-- **No Analytics**: No third-party tracking or analytics services
-- **Encrypted**: Protected by Android's encryption-at-rest
-
-### Privacy Policy
-
-See [docs/legal/PRIVACY_POLICY.md](docs/legal/PRIVACY_POLICY.md) for complete privacy information.
-
-### Security Considerations
-
-- **Source Code Transparency**: Fully open source for security audits
-- **Minimal Permissions**: Only requests necessary permissions
-- **No Data Sharing**: Never shares data with third parties
-- **User Control**: Complete control over data retention and deletion
-
-### Responsible Disclosure
-
-If you discover a security vulnerability:
-
-1. **DO NOT** open a public issue
-2. Email: security@untailed.app
-3. Provide detailed description and reproduction steps
-4. Allow 90 days for patching before public disclosure
-
-## Contributing
-
-We welcome contributions from the community! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Quick Start for Contributors
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Write/update tests
-5. Run linting: `./gradlew lint`
-6. Commit: `git commit -m 'Add amazing feature'`
-7. Push: `git push origin feature/amazing-feature`
-8. Open a Pull Request
-
-### Code Style
-
-- Follow [Kotlin Coding Conventions](https://kotlinlang.org/docs/coding-conventions.html)
-- Use Android Studio default formatter
-- Run `./gradlew ktlintFormat` before committing
-- Write meaningful commit messages
-
-### Code of Conduct
-
-Please review our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before contributing.
-
-## License
-
-This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
-
-### What This Means
-
-- ✅ Commercial use allowed
-- ✅ Modification allowed
-- ✅ Distribution allowed
-- ✅ Patent use allowed
-- ✅ Private use allowed
-- ⚠️ License and copyright notice required
-- ⚠️ State changes required
-- ❌ Trademark use not allowed
-- ❌ Liability not provided
-- ❌ Warranty not provided
-
- Need for open-source privacy-focused security tools
-
 ## FAQ
 
 ### Q: Does this app drain my battery?
@@ -518,10 +446,6 @@ This project is licensed under the **Apache License 2.0** - see the [LICENSE](LI
 
 **A:** No, it complements it. Apple's built-in detection only works for AirTags. This app detects all BLE devices for broader coverage.
 
----
 
 
-**Stay safe and protect your privacy!**
-
-If you find this project useful, please give it a ⭐ on GitHub and share it with others who might benefit from it.
 

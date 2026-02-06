@@ -1,6 +1,8 @@
 package com.tailbait.data.repository
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.room.withTransaction
+import com.tailbait.data.database.TailBaitDatabase
 import com.tailbait.data.database.dao.DeviceLocationRecordDao
 import com.tailbait.data.database.dao.ScannedDeviceDao
 import com.tailbait.data.database.entities.ScannedDevice
@@ -29,7 +31,8 @@ class DeviceRepositoryTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    // Mock DAOs
+    // Mock database and DAOs
+    private lateinit var database: TailBaitDatabase
     private lateinit var scannedDeviceDao: ScannedDeviceDao
     private lateinit var deviceLocationRecordDao: DeviceLocationRecordDao
 
@@ -52,16 +55,26 @@ class DeviceRepositoryTest {
         Dispatchers.setMain(testDispatcher)
 
         // Initialize mocks
+        database = mockk(relaxed = true)
         scannedDeviceDao = mockk(relaxed = true)
         deviceLocationRecordDao = mockk(relaxed = true)
 
+        // Mock withTransaction to just execute the block directly
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        coEvery { database.withTransaction<Any?>(any()) } coAnswers {
+            @Suppress("UNCHECKED_CAST")
+            val block = args[1] as (suspend () -> Any?)
+            block()
+        }
+
         // Create repository
-        repository = DeviceRepositoryImpl(scannedDeviceDao, deviceLocationRecordDao)
+        repository = DeviceRepositoryImpl(database, scannedDeviceDao, deviceLocationRecordDao)
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkStatic("androidx.room.RoomDatabaseKt")
     }
 
     // ==================== Upsert Device Tests ====================
@@ -497,6 +510,216 @@ class DeviceRepositoryTest {
         coVerify {
             scannedDeviceDao.insert(
                 match { it.manufacturerData == "" }
+            )
+        }
+    }
+
+    // ==================== FM Fingerprint Stale Link Tests ====================
+
+    private fun upsertWithFingerprint(
+        address: String = "BB:CC:DD:EE:FF:01",
+        lastSeen: Long = 5000L,
+        payloadFingerprint: String? = null,
+        isTracker: Boolean = true
+    ) = runTest {
+        repository.upsertDeviceWithFingerprint(
+            address = address,
+            name = null,
+            advertisedName = null,
+            lastSeen = lastSeen,
+            manufacturerData = null,
+            manufacturerId = 0x004C,
+            manufacturerName = "Apple",
+            deviceType = "TRACKER",
+            deviceModel = "AirTag",
+            isTracker = isTracker,
+            serviceUuids = null,
+            appearance = null,
+            txPowerLevel = null,
+            advertisingFlags = null,
+            appleContinuityType = 0x12,
+            identificationConfidence = 0.65f,
+            identificationMethod = "APPLE_PAYLOAD",
+            payloadFingerprint = payloadFingerprint,
+            findMyStatus = null,
+            findMySeparated = false,
+            highestRssi = -55,
+            signalStrength = "STRONG",
+            beaconType = "FIND_MY",
+            threatLevel = null
+        )
+    }
+
+    @Test
+    fun `FM fingerprint match over 20 min old produces WEAK link`() = runTest {
+        val fmFingerprint = "FM:AABBCCDD1122"
+        val now = System.currentTimeMillis()
+        val thirtyMinutesAgo = now - 30 * 60 * 1000L
+
+        // Existing device was last seen 30 minutes ago (beyond the 20-min stale threshold)
+        val existingDevice = testDevice.copy(
+            id = 10L,
+            payloadFingerprint = fmFingerprint,
+            lastSeen = thirtyMinutesAgo,
+            isTracker = true
+        )
+
+        // New MAC address not in database
+        coEvery { scannedDeviceDao.getByAddress("BB:CC:DD:EE:FF:01") } returns null
+        // Fingerprint match finds the old device
+        coEvery { scannedDeviceDao.getByFingerprint(fmFingerprint) } returns existingDevice
+        coEvery { scannedDeviceDao.insert(any()) } returns 20L
+        coEvery { scannedDeviceDao.getById(10L) } returns existingDevice
+
+        // Execute
+        repository.upsertDeviceWithFingerprint(
+            address = "BB:CC:DD:EE:FF:01",
+            name = null,
+            advertisedName = null,
+            lastSeen = now,
+            manufacturerData = null,
+            manufacturerId = 0x004C,
+            manufacturerName = "Apple",
+            deviceType = "TRACKER",
+            deviceModel = "AirTag",
+            isTracker = true,
+            serviceUuids = null,
+            appearance = null,
+            txPowerLevel = null,
+            advertisingFlags = null,
+            appleContinuityType = 0x12,
+            identificationConfidence = 0.65f,
+            identificationMethod = "APPLE_PAYLOAD",
+            payloadFingerprint = fmFingerprint,
+            findMyStatus = null,
+            findMySeparated = false,
+            highestRssi = -55,
+            signalStrength = "STRONG",
+            beaconType = "FIND_MY",
+            threatLevel = null
+        )
+
+        // Verify the inserted device has WEAK link strength and :stale suffix
+        coVerify {
+            scannedDeviceDao.insert(
+                match {
+                    it.linkStrength == "WEAK" &&
+                    it.linkReason?.endsWith(":stale") == true
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `FM fingerprint match within 15 min produces STRONG link`() = runTest {
+        val fmFingerprint = "FM:AABBCCDD1122"
+        val now = System.currentTimeMillis()
+        val tenMinutesAgo = now - 10 * 60 * 1000L
+
+        // Existing device was last seen 10 minutes ago (within the 20-min threshold)
+        val existingDevice = testDevice.copy(
+            id = 10L,
+            payloadFingerprint = fmFingerprint,
+            lastSeen = tenMinutesAgo,
+            isTracker = true
+        )
+
+        coEvery { scannedDeviceDao.getByAddress("BB:CC:DD:EE:FF:02") } returns null
+        coEvery { scannedDeviceDao.getByFingerprint(fmFingerprint) } returns existingDevice
+        coEvery { scannedDeviceDao.insert(any()) } returns 21L
+        coEvery { scannedDeviceDao.getById(10L) } returns existingDevice
+
+        repository.upsertDeviceWithFingerprint(
+            address = "BB:CC:DD:EE:FF:02",
+            name = null,
+            advertisedName = null,
+            lastSeen = now,
+            manufacturerData = null,
+            manufacturerId = 0x004C,
+            manufacturerName = "Apple",
+            deviceType = "TRACKER",
+            deviceModel = "AirTag",
+            isTracker = true,
+            serviceUuids = null,
+            appearance = null,
+            txPowerLevel = null,
+            advertisingFlags = null,
+            appleContinuityType = 0x12,
+            identificationConfidence = 0.65f,
+            identificationMethod = "APPLE_PAYLOAD",
+            payloadFingerprint = fmFingerprint,
+            findMyStatus = null,
+            findMySeparated = false,
+            highestRssi = -55,
+            signalStrength = "STRONG",
+            beaconType = "FIND_MY",
+            threatLevel = null
+        )
+
+        // Verify the inserted device has STRONG link strength (fresh FM match)
+        coVerify {
+            scannedDeviceDao.insert(
+                match {
+                    it.linkStrength == "STRONG" &&
+                    it.linkReason == "fingerprint_match:$fmFingerprint"
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `PP fingerprint match over 20 min still produces STRONG link`() = runTest {
+        // PP (Proximity Pairing) fingerprints are hardware-stable, not time-dependent
+        val ppFingerprint = "PP:0E200050AA"
+        val now = System.currentTimeMillis()
+        val thirtyMinutesAgo = now - 30 * 60 * 1000L
+
+        val existingDevice = testDevice.copy(
+            id = 10L,
+            payloadFingerprint = ppFingerprint,
+            lastSeen = thirtyMinutesAgo,
+            isTracker = false
+        )
+
+        coEvery { scannedDeviceDao.getByAddress("BB:CC:DD:EE:FF:03") } returns null
+        coEvery { scannedDeviceDao.getByFingerprint(ppFingerprint) } returns existingDevice
+        coEvery { scannedDeviceDao.insert(any()) } returns 22L
+        coEvery { scannedDeviceDao.getById(10L) } returns existingDevice
+
+        repository.upsertDeviceWithFingerprint(
+            address = "BB:CC:DD:EE:FF:03",
+            name = null,
+            advertisedName = null,
+            lastSeen = now,
+            manufacturerData = null,
+            manufacturerId = 0x004C,
+            manufacturerName = "Apple",
+            deviceType = "EARBUDS",
+            deviceModel = "AirPods Pro",
+            isTracker = false,
+            serviceUuids = null,
+            appearance = null,
+            txPowerLevel = null,
+            advertisingFlags = null,
+            appleContinuityType = 0x07,
+            identificationConfidence = 0.95f,
+            identificationMethod = "APPLE_PAYLOAD",
+            payloadFingerprint = ppFingerprint,
+            findMyStatus = null,
+            findMySeparated = false,
+            highestRssi = -40,
+            signalStrength = "VERY_STRONG",
+            beaconType = null,
+            threatLevel = null
+        )
+
+        // PP fingerprints are time-stable, so even stale matches stay STRONG
+        coVerify {
+            scannedDeviceDao.insert(
+                match {
+                    it.linkStrength == "STRONG" &&
+                    it.linkReason == "fingerprint_match:$ppFingerprint"
+                }
             )
         }
     }

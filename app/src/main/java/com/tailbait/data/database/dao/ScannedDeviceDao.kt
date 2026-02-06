@@ -456,6 +456,68 @@ interface ScannedDeviceDao {
     @Query("SELECT COUNT(*) FROM scanned_devices WHERE payload_fingerprint IS NOT NULL")
     suspend fun getFingerprintedDeviceCount(): Int
 
+    // ============================================================================
+    // SHADOW-BASED DETECTION (MAC-agnostic device profiling)
+    // ============================================================================
+
+    /**
+     * Get shadow keys that appear at a minimum number of distinct locations.
+     * These are candidates for shadow-based suspicious device detection.
+     *
+     * @param minLocationCount Minimum distinct locations required
+     * @return List of shadow key strings meeting the threshold
+     */
+    @Query("""
+        SELECT sd.shadow_key
+        FROM scanned_devices sd
+        INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
+        WHERE sd.shadow_key IS NOT NULL
+          AND sd.id NOT IN (SELECT device_id FROM whitelist_entries)
+        GROUP BY sd.shadow_key
+        HAVING COUNT(DISTINCT dlr.location_id) >= :minLocationCount
+    """)
+    suspend fun getSuspiciousShadowKeys(minLocationCount: Int): List<String>
+
+    /**
+     * Get all devices with a specific shadow key, ordered by most recently seen.
+     *
+     * @param shadowKey The shadow key to query
+     * @return List of devices matching this shadow profile
+     */
+    @Query("""
+        SELECT * FROM scanned_devices
+        WHERE shadow_key = :shadowKey
+        ORDER BY last_seen DESC
+    """)
+    suspend fun getDevicesByShadowKey(shadowKey: String): List<ScannedDevice>
+
+    /**
+     * Get per-location device counts for a shadow key.
+     * Returns how many distinct devices with this shadow key were seen at each location.
+     *
+     * @param shadowKey The shadow key to analyze
+     * @return List of (locationId, deviceCount, maxRssi) per location
+     */
+    @Query("""
+        SELECT dlr.location_id AS locationId,
+               COUNT(DISTINCT sd.id) AS deviceCount,
+               MAX(dlr.rssi) AS maxRssi
+        FROM scanned_devices sd
+        INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
+        WHERE sd.shadow_key = :shadowKey
+        GROUP BY dlr.location_id
+    """)
+    suspend fun getShadowLocationDeviceCounts(shadowKey: String): List<ShadowLocationCount>
+
+    /**
+     * Update the shadow key for a device.
+     *
+     * @param deviceId The device ID
+     * @param shadowKey The computed shadow key
+     */
+    @Query("UPDATE scanned_devices SET shadow_key = :shadowKey WHERE id = :deviceId")
+    suspend fun updateShadowKey(deviceId: Long, shadowKey: String)
+
     /**
      * Get recently seen devices grouped by fingerprint for correlation analysis.
      * Helps identify devices that may be rotating MACs.

@@ -101,7 +101,8 @@ class DetectionAlgorithm @Inject constructor(
     private val whitelistRepository: WhitelistRepository,
     private val settingsRepository: SettingsRepository,
     private val threatScoreCalculator: ThreatScoreCalculator,
-    private val patternMatcher: PatternMatcher
+    private val patternMatcher: PatternMatcher,
+    private val shadowAnalyzer: ShadowAnalyzer
 ) {
 
     companion object {
@@ -271,6 +272,66 @@ class DetectionAlgorithm @Inject constructor(
                     results.add(result)
                     Timber.tag(TAG).i("ALERT: ${result.detectionReason}")
                 }
+            }
+
+            // Step 8: Shadow-based detection (parallel path for MAC-agnostic detection)
+            // Finds suspicious device profiles even when explicit MAC linking failed
+            val existingDeviceIds = results.map { it.device.id }.toSet()
+            try {
+                val shadowResults = shadowAnalyzer.findSuspiciousShadows(
+                    minLocationCount = settings.alertThresholdCount,
+                    whitelistedIds = whitelistedDeviceIds
+                )
+
+                for (shadowResult in shadowResults) {
+                    val device = shadowResult.representativeDevice
+
+                    // Dedup: skip if this device was already detected by MAC-linked path
+                    if (device.id in existingDeviceIds) {
+                        Timber.tag(TAG).d(
+                            "Shadow result for ${device.address} already detected by MAC-linked path, skipping"
+                        )
+                        continue
+                    }
+
+                    // Get locations for this representative device
+                    val locations = getLocationsForDevice(device.id)
+                    if (locations.size < settings.alertThresholdCount) continue
+
+                    val distances = calculateDistancesBetweenLocations(locations)
+                    if (distances.none { it >= settings.minDetectionDistanceMeters }) continue
+
+                    // Compute base threat score, then blend with shadow persistence score
+                    val deviceRecords = deviceRepository.getDeviceLocationRecordsForDevice(device.id)
+                    val baseThreatScore = threatScoreCalculator.calculateEnhanced(
+                        device = device,
+                        locations = locations,
+                        distances = distances,
+                        deviceRecords = deviceRecords,
+                        userLocations = userLocations,
+                        userPaths = userPaths
+                    )
+
+                    // Blend: average of base threat score and shadow combined score
+                    val blendedScore = (baseThreatScore + shadowResult.combinedScore) / 2.0
+
+                    if (blendedScore >= MIN_THREAT_SCORE_FOR_ALERT) {
+                        val result = DetectionResult(
+                            device = device,
+                            locations = locations,
+                            threatScore = blendedScore,
+                            maxDistance = distances.maxOrNull() ?: 0.0,
+                            avgDistance = if (distances.isNotEmpty()) distances.average() else 0.0,
+                            detectionReason = buildDetectionReason(device, locations, blendedScore) +
+                                " (Shadow detection: persistence=${"%.2f".format(shadowResult.persistenceScore)}" +
+                                ", rotation=${"%.2f".format(shadowResult.rotationScore)})"
+                        )
+                        results.add(result)
+                        Timber.tag(TAG).i("SHADOW ALERT: ${result.detectionReason}")
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.tag(TAG).w(e, "Shadow detection failed, continuing with MAC-linked results only")
             }
 
             // Sort results by threat score (highest first)

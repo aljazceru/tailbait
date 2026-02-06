@@ -60,7 +60,8 @@ import androidx.room.PrimaryKey
         Index(value = ["payload_fingerprint"]),  // For fingerprint-based device correlation
         Index(value = ["linked_device_id"]),     // For finding linked devices
         Index(value = ["highest_rssi"]),         // For signal strength queries
-        Index(value = ["threat_level"])          // For threat-based filtering
+        Index(value = ["threat_level"]),         // For threat-based filtering
+        Index(value = ["shadow_key"])            // For shadow-based detection queries
     ]
 )
 
@@ -255,5 +256,23 @@ data class ScannedDevice(
      * @see com.tailbait.algorithm.TrackerAnalyzerFactory.ThreatLevel
      */
     @ColumnInfo(name = "threat_level")
-    val threatLevel: String? = null
+    val threatLevel: String? = null,
+
+    // ============================================================================
+    // SHADOW DETECTION (MAC-agnostic device profiling)
+    // ============================================================================
+
+    /**
+     * Coarse device profile key for shadow-based detection.
+     * Built from stable BLE properties that survive MAC rotation:
+     * manufacturer ID, device type, continuity type, tracker flag, etc.
+     *
+     * Two devices of the same make/model will share a shadow key.
+     * Persistence scoring then determines if exactly one such device
+     * consistently appears at the user's locations.
+     *
+     * @see com.tailbait.algorithm.ShadowKeyGenerator
+     */
+    @ColumnInfo(name = "shadow_key")
+    val shadowKey: String? = null
 )

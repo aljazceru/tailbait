@@ -748,6 +748,38 @@ class BleScannerManager @Inject constructor(
     }
 
     /**
+     * Stop scanning and save any pending results.
+     *
+     * Cancels the current scan job, processes any collected results,
+     * and ensures data is persisted before resetting state.
+     */
+    suspend fun stopAndSaveScanResults() {
+        Timber.i("Stopping scanner and saving results")
+
+        // 1. Cancel active scan job to stop collecting new data
+        scanJob?.cancel()
+        scanJob = null
+
+        // 2. Process any accumulated results
+        // This will save to DB and clear scanResults map
+        if (scanResults.isNotEmpty()) {
+            _scanState.value = ScanState.Processing
+            try {
+                processScanResults(Constants.SCAN_TRIGGER_MANUAL)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to save final scan results")
+            }
+        }
+
+        // 3. Reset state
+        _scanState.value = ScanState.Idle
+        scanResults.clear() // Safety clear in case processScanResults failed or was empty
+        retryCount = 0
+
+        Timber.i("Scanner stopped and results saved")
+    }
+
+    /**
      * Stop all scanning operations.
      *
      * Cancels the continuous scan job if running and clears all scan state.

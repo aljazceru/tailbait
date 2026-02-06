@@ -6,6 +6,9 @@ import com.tailbait.data.database.dao.DeviceLocationRecordDao
 import com.tailbait.data.database.dao.ScannedDeviceDao
 import com.tailbait.data.database.entities.DeviceLocationRecord
 import com.tailbait.data.database.entities.ScannedDevice
+import com.tailbait.algorithm.ShadowKeyGenerator
+import com.tailbait.data.database.dao.ShadowLocationCount
+import com.tailbait.util.DeviceFingerprinter
 import com.tailbait.util.DeviceIdentifier
 import com.tailbait.util.ManufacturerDataParser
 import kotlinx.coroutines.flow.Flow
@@ -309,6 +312,34 @@ interface DeviceRepository {
         beaconType: String? = null,
         threatLevel: String? = null
     ): Long
+
+    // ============================================================================
+    // SHADOW-BASED DETECTION (MAC-agnostic device profiling)
+    // ============================================================================
+
+    /**
+     * Get shadow keys that appear at a minimum number of distinct locations.
+     *
+     * @param minLocationCount Minimum distinct locations required
+     * @return List of suspicious shadow key strings
+     */
+    suspend fun getSuspiciousShadowKeys(minLocationCount: Int): List<String>
+
+    /**
+     * Get all devices matching a specific shadow key.
+     *
+     * @param shadowKey The shadow key to query
+     * @return List of devices with this shadow profile
+     */
+    suspend fun getDevicesByShadowKey(shadowKey: String): List<ScannedDevice>
+
+    /**
+     * Get per-location device counts for a shadow key.
+     *
+     * @param shadowKey The shadow key to analyze
+     * @return List of (locationId, deviceCount, maxRssi) per location
+     */
+    suspend fun getShadowLocationDeviceCounts(shadowKey: String): List<ShadowLocationCount>
 
     // ============================================================================
     // TEMPORAL CLUSTERING (For devices without fingerprints)
@@ -677,7 +708,9 @@ class DeviceRepositoryImpl @Inject constructor(
                     beaconType = beaconType ?: existingDevice.beaconType,
                     threatLevel = threatLevel ?: existingDevice.threatLevel
                 )
-                scannedDeviceDao.update(updatedDevice)
+                // Compute shadow key if not set or if new data yields a more specific key
+                val deviceWithShadow = computeShadowKey(updatedDevice)
+                scannedDeviceDao.update(deviceWithShadow)
                 existingDevice.id // Return ID (Implicit return from lambda)
             } else {
                 // New MAC address - check if we have a matching fingerprint
@@ -691,7 +724,25 @@ class DeviceRepositoryImpl @Inject constructor(
 
                     if (existingByFingerprint != null) {
                         // FOUND MATCHING FINGERPRINT
-                        val linkReason = "fingerprint_match:$payloadFingerprint"
+                        // FM fingerprints use the rotating public key prefix (bytes 2-7)
+                        // which changes every ~15 min with the MAC. If the matched device
+                        // was last seen >20 min ago (rotation period + 5 min buffer), the
+                        // fingerprint has likely rotated and this match is unreliable.
+                        val timeSinceLastSeen = lastSeen - existingByFingerprint.lastSeen
+                        val fmStaleThresholdMs = 20 * 60 * 1000L // 20 minutes
+                        val isStaleFmMatch = payloadFingerprint.startsWith("FM:") &&
+                            timeSinceLastSeen > fmStaleThresholdMs
+
+                        val resolvedLinkStrength = if (isStaleFmMatch) {
+                            LinkStrength.WEAK
+                        } else {
+                            LinkStrength.STRONG
+                        }
+                        val linkReason = if (isStaleFmMatch) {
+                            "fingerprint_match:$payloadFingerprint:stale"
+                        } else {
+                            "fingerprint_match:$payloadFingerprint"
+                        }
 
                         val newDevice = ScannedDevice(
                             address = address,
@@ -718,7 +769,7 @@ class DeviceRepositoryImpl @Inject constructor(
                             findMySeparated = findMySeparated,
                             linkedDeviceId = existingByFingerprint.linkedDeviceId ?: existingByFingerprint.id,
                             lastMacRotation = System.currentTimeMillis(),
-                            linkStrength = LinkStrength.STRONG.name,
+                            linkStrength = resolvedLinkStrength.name,
                             linkReason = linkReason,
                             highestRssi = highestRssi,
                             signalStrength = signalStrength,
@@ -726,7 +777,7 @@ class DeviceRepositoryImpl @Inject constructor(
                             threatLevel = threatLevel
                         )
 
-                        scannedDeviceDao.insert(newDevice)
+                        scannedDeviceDao.insert(computeShadowKey(newDevice))
 
                         val primaryId = existingByFingerprint.linkedDeviceId ?: existingByFingerprint.id
                         val primary = scannedDeviceDao.getById(primaryId)
@@ -807,7 +858,7 @@ class DeviceRepositoryImpl @Inject constructor(
                                 threatLevel = threatLevel
                             )
 
-                            scannedDeviceDao.insert(newDevice)
+                            scannedDeviceDao.insert(computeShadowKey(newDevice))
 
                             val primaryId = temporalMatch.linkedDeviceId ?: temporalMatch.id
                             val primary = scannedDeviceDao.getById(primaryId)
@@ -858,7 +909,8 @@ class DeviceRepositoryImpl @Inject constructor(
                         beaconType = beaconType,
                         threatLevel = threatLevel
                     )
-                    resultId = scannedDeviceDao.insert(newDevice)
+                    val deviceWithShadow = computeShadowKey(newDevice)
+                    resultId = scannedDeviceDao.insert(deviceWithShadow)
                 }
                 
                 resultId!! // Should never be null here
@@ -1006,6 +1058,37 @@ class DeviceRepositoryImpl @Inject constructor(
      */
     private fun bytesToHexString(bytes: ByteArray): String {
         return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Compute and set shadow key on a device if not already set
+     * or if the new key is more specific (more components).
+     */
+    private fun computeShadowKey(device: ScannedDevice): ScannedDevice {
+        val newKey = ShadowKeyGenerator.generate(device) ?: return device
+        val existingKey = device.shadowKey
+        if (existingKey != null) {
+            val existingSpecificity = ShadowKeyGenerator.specificityScore(existingKey)
+            val newSpecificity = ShadowKeyGenerator.specificityScore(newKey)
+            if (newSpecificity <= existingSpecificity) return device
+        }
+        return device.copy(shadowKey = newKey)
+    }
+
+    // ============================================================================
+    // SHADOW-BASED DETECTION IMPLEMENTATION
+    // ============================================================================
+
+    override suspend fun getSuspiciousShadowKeys(minLocationCount: Int): List<String> {
+        return scannedDeviceDao.getSuspiciousShadowKeys(minLocationCount)
+    }
+
+    override suspend fun getDevicesByShadowKey(shadowKey: String): List<ScannedDevice> {
+        return scannedDeviceDao.getDevicesByShadowKey(shadowKey)
+    }
+
+    override suspend fun getShadowLocationDeviceCounts(shadowKey: String): List<ShadowLocationCount> {
+        return scannedDeviceDao.getShadowLocationDeviceCounts(shadowKey)
     }
 
     // ============================================================================

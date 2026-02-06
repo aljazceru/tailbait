@@ -95,13 +95,19 @@ object DeviceFingerprinter {
         txPowerLevel: Int?,
         deviceName: String?
     ): FingerprintResult? {
-        // Try Apple payload fingerprint first (highest confidence)
+        // Try Apple payload fingerprint first
         if (manufacturerId == ManufacturerDataParser.ManufacturerId.APPLE && manufacturerData != null) {
             val appleFingerprint = ManufacturerDataParser.extractPayloadFingerprint(manufacturerId, manufacturerData)
             if (appleFingerprint != null) {
+                // FM (Find My) fingerprints use bytes 2-7 of the rotating public key.
+                // These rotate with the MAC address (~15 min cycle), so they're only
+                // useful for short-term correlation within a single rotation window.
+                // PP (Proximity Pairing) fingerprints use the hardware model ID which
+                // is stable across rotations.
+                val confidence = if (appleFingerprint.startsWith("FM:")) 0.65f else 0.95f
                 return FingerprintResult(
                     fingerprint = appleFingerprint,
-                    confidence = 0.95f,
+                    confidence = confidence,
                     method = FingerprintMethod.APPLE_PAYLOAD
                 )
             }
@@ -328,8 +334,9 @@ object DeviceFingerprinter {
      */
     fun isHighConfidenceFingerprint(fingerprint: String?): Boolean {
         if (fingerprint == null) return false
-        return fingerprint.startsWith("FM:") ||  // Find My
-               fingerprint.startsWith("PP:") ||  // Proximity Pairing
+        // FM (Find My) is excluded: its bytes 2-7 are part of the rotating public key
+        // and change every ~15 minutes with the MAC address. It's medium-confidence only.
+        return fingerprint.startsWith("PP:") ||  // Proximity Pairing (hardware model ID - stable)
                fingerprint.startsWith("NI:") ||  // Nearby Info
                fingerprint.startsWith("MS:") ||  // Magic Switch
                fingerprint.startsWith("HO:") ||  // Handoff
@@ -338,6 +345,24 @@ object DeviceFingerprinter {
                fingerprint.startsWith("TL:") ||  // Tile
                fingerprint.startsWith("CH:") ||  // Chipolo
                fingerprint.startsWith("GF:")     // Google Find My
+    }
+
+    /**
+     * Check if a fingerprint is stable across MAC address rotations.
+     *
+     * FM (Find My) fingerprints use the rotating public key prefix (bytes 2-7)
+     * which changes every ~15 minutes along with the MAC address. They're useful
+     * for short-term correlation but unreliable across rotation boundaries.
+     *
+     * All other fingerprint types use hardware-stable identifiers (model IDs,
+     * service UUIDs, etc.) that persist across MAC rotations.
+     *
+     * @param fingerprint The fingerprint string
+     * @return True if the fingerprint survives MAC rotation, false for FM fingerprints
+     */
+    fun isTimeStableFingerprint(fingerprint: String?): Boolean {
+        if (fingerprint == null) return false
+        return !fingerprint.startsWith("FM:")
     }
 
     /**

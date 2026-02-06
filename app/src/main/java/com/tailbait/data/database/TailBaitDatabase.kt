@@ -60,7 +60,7 @@ import kotlinx.coroutines.launch
         AppSettings::class,
         UserPath::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 abstract class TailBaitDatabase : RoomDatabase() {
@@ -346,6 +346,22 @@ abstract class TailBaitDatabase : RoomDatabase() {
         }
 
         /**
+         * Migration from version 10 to 11.
+         * Adds shadow_key column for MAC-agnostic device profiling.
+         *
+         * Shadow keys are coarse device profiles built from stable BLE properties
+         * (manufacturer ID, device type, etc.) that survive MAC rotation. Used by
+         * the shadow detection path to find suspicious devices without requiring
+         * explicit MAC-to-MAC linking.
+         */
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE scanned_devices ADD COLUMN shadow_key TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_scanned_devices_shadow_key` ON `scanned_devices` (`shadow_key`)")
+            }
+        }
+
+        /**
          * Gets the singleton database instance.
          * Creates a new instance if one doesn't exist, using double-checked locking
          * for thread safety.
@@ -389,7 +405,7 @@ abstract class TailBaitDatabase : RoomDatabase() {
                 //   - 3 -> 4: Added advertised_name column for BLE local name
 
                 // Add migrations
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
 
                 // Enable Write-Ahead Logging for better concurrent access
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)

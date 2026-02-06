@@ -828,9 +828,14 @@ object ManufacturerDataParser {
 
         return when (messageType) {
             // =====================================================
-            // FIND MY (0x12) - AirTags - HIGHEST PRIORITY
+            // FIND MY (0x12) - AirTags
             // Payload: Type(1) + Length(1) + Status(1) + PublicKey(25)
-            // Fingerprint: Bytes 2-7 (first 6 bytes of public key)
+            // Fingerprint: Bytes 2-7 (first 6 bytes of rotating public key)
+            //
+            // WARNING: These bytes are part of the rotating public key prefix
+            // and change every ~15 minutes when the MAC address rotates.
+            // This fingerprint is only valid within a single rotation window.
+            // Cross-rotation correlation requires the shadow detection path.
             // =====================================================
             AppleContinuityType.FIND_MY -> {
                 val findMyFingerprint = parseFindMyPayload(payload)?.payloadFingerprint

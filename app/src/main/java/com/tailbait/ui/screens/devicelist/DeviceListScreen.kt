@@ -377,15 +377,13 @@ private fun SummaryHeader(
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            Text(
-                text = if (searchActive) {
-                    "Showing $filteredDevices of $totalDevices devices"
-                } else {
-                    "$totalDevices ${if (totalDevices == 1) "device" else "devices"} found"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (searchActive) {
+                Text(
+                    text = "Showing $filteredDevices of $totalDevices devices",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (!searchActive && (unknownCount > 0 || knownCount > 0)) {
                 Text(
                     text = "$unknownCount unknown • $knownCount known",

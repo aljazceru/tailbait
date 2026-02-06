@@ -227,8 +227,8 @@ class TailBaitService : NotificationService() {
                 // Stop location tracking
                 locationTracker.stopLocationTracking()
 
-                // Stop BLE scanning
-                bleScannerManager.stopScanning()
+                // Stop BLE scanning and save results
+                bleScannerManager.stopAndSaveScanResults()
 
                 Timber.i("Tracking stopped, terminating service")
 
@@ -277,8 +277,8 @@ class TailBaitService : NotificationService() {
                 // Stop location tracking
                 locationTracker.stopLocationTracking()
 
-                // Stop scanning
-                bleScannerManager.stopScanning()
+                // Stop scanning and save results
+                bleScannerManager.stopAndSaveScanResults()
 
                 // Update notification to show paused state
                 updateNotification(
