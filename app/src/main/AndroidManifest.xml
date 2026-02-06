@@ -99,7 +99,9 @@
                 android:resource="@xml/file_provider_paths" />
         </provider>
 
-        <!-- WorkManager Worker -->
+        <!-- Disable default WorkManager initializer so our custom
+             Configuration.Provider (TailBaitApplication) can supply
+             HiltWorkerFactory after Hilt injection completes in onCreate() -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -107,7 +109,8 @@
             tools:node="merge">
             <meta-data
                 android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup" />
+                android:value="androidx.startup"
+                tools:node="remove" />
         </provider>
 
     </application>
