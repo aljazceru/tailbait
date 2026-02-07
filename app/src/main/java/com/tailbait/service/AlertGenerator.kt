@@ -38,7 +38,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class AlertGenerator @Inject constructor(
-    private val alertRepository: AlertRepository
+    private val alertRepository: AlertRepository,
+    private val notificationHelper: NotificationHelper
 ) {
 
     companion object {
@@ -105,6 +106,7 @@ class AlertGenerator @Inject constructor(
 
             if (alertId != null) {
                 Timber.d("Alert created: id=$alertId, level=$alertLevel")
+                notificationHelper.showAlertNotification(alert.copy(id = alertId))
             } else {
                 Timber.d("Alert throttled: similar alert exists within ${throttleWindowMs}ms window")
             }

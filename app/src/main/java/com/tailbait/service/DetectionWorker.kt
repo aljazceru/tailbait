@@ -100,12 +100,14 @@ class DetectionWorker @AssistedInject constructor(
             Timber.d("[$TAG] Detection complete: found ${detectionResults.size} suspicious devices")
 
             // Generate alerts for detections
+            var alertCount = 0
             if (detectionResults.isNotEmpty()) {
                 Timber.d("[$TAG] Generating alerts for ${detectionResults.size} detections...")
                 val alertIds = alertGenerator.generateAlerts(
                     detectionResults = detectionResults,
                     throttleWindowMs = throttleWindowMs
                 )
+                alertCount = alertIds.size
                 Timber.d(
                     "[$TAG] Generated ${alertIds.size} alerts " +
                         "(${detectionResults.size - alertIds.size} throttled)"
@@ -120,10 +122,7 @@ class DetectionWorker @AssistedInject constructor(
             // Build output data
             val outputData = androidx.work.Data.Builder()
                 .putInt(KEY_DETECTIONS_FOUND, detectionResults.size)
-                .putInt(
-                    KEY_ALERTS_GENERATED,
-                    if (detectionResults.isNotEmpty()) detectionResults.size else 0
-                )
+                .putInt(KEY_ALERTS_GENERATED, alertCount)
                 .putLong(KEY_EXECUTION_TIME_MS, executionTime)
                 .build()
 
