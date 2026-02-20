@@ -14,9 +14,12 @@ import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.lifecycleScope
 import com.tailbait.R
+import com.tailbait.algorithm.DetectionAlgorithm
+import com.tailbait.data.repository.LocationRepository
 import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.util.Constants
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -57,7 +60,20 @@ class TailBaitService : NotificationService() {
     lateinit var settingsRepository: SettingsRepository
 
     @Inject
+    lateinit var locationRepository: LocationRepository
+
+    @Inject
     lateinit var locationTracker: LocationTracker
+
+    @Inject
+    lateinit var detectionAlgorithm: DetectionAlgorithm
+
+    @Inject
+    lateinit var alertGenerator: AlertGenerator
+
+    // Flow collector jobs - tracked to prevent duplicate collectors on pause/resume
+    private var scanStateJob: Job? = null
+    private var locationStateJob: Job? = null
 
     // Service binder for UI communication
     private val binder = LocalBinder()
@@ -87,11 +103,24 @@ class TailBaitService : NotificationService() {
                 // This ensures consistent behavior with periodic scans
                 handleTriggerScan()
 
+                // Cancel existing collectors to prevent duplicates on pause/resume
+                scanStateJob?.cancel()
+                locationStateJob?.cancel()
+
                 // Observe scan state and update notification accordingly
                 // WakeLock is now managed based on scan state for battery optimization
-                bleScannerManager.scanState
+                scanStateJob = bleScannerManager.scanState
                     .onEach { state ->
                         handleScanStateChange(state)
+                    }
+                    .launchIn(lifecycleScope)
+
+                // Observe location state and save user path points
+                locationStateJob = locationTracker.locationState
+                    .onEach { state ->
+                        if (state is LocationTracker.LocationState.LocationUpdated) {
+                            handleLocationUpdate(state.location)
+                        }
                     }
                     .launchIn(lifecycleScope)
 
@@ -111,6 +140,40 @@ class TailBaitService : NotificationService() {
     }
 
     /**
+     * Handle continuous location updates from LocationTracker.
+     * Persists location and user path data regardless of scan results.
+     */
+    private fun handleLocationUpdate(androidLocation: android.location.Location) {
+        if (!isTracking) return
+
+        lifecycleScope.launch {
+            try {
+                // Convert Android location to entity
+                // FQN needed to disambiguate from android.location.Location
+                val location = com.tailbait.data.database.entities.Location(
+                    latitude = androidLocation.latitude,
+                    longitude = androidLocation.longitude,
+                    accuracy = androidLocation.accuracy,
+                    altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
+                    timestamp = androidLocation.time,
+                    provider = androidLocation.provider ?: "FUSED"
+                )
+
+                // Save location (find existing nearby or create new)
+                // Use a slightly larger radius (50m) to group nearby points
+                val (locationId, _) = locationRepository.findOrCreateLocation(location, 50.0)
+
+                // Record user path point to track movement history
+                locationRepository.insertUserPath(locationId, location)
+
+                Timber.d("Recorded user path point: ${locationId} (acc=${location.accuracy}m)")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to record user path point")
+            }
+        }
+    }
+
+    /**
      * Handle the trigger scan action.
      * Accuires WakeLock, performs scan, and schedules next alarm.
      */
@@ -122,12 +185,25 @@ class TailBaitService : NotificationService() {
 
         // Acquire safety WakeLock IMMEDIATELY to prevent Doze mode from suspending
         // the app before the coroutine even starts.
-        acquireWakeLock(30 * 1000L) // 30 seconds safety buffer
+        // Increased timeout to account for detection analysis
+        acquireWakeLock(45 * 1000L) // 45 seconds safety buffer
 
         lifecycleScope.launch {
             try {
                 // Perform the scan (this will suspend until scan + processing is complete)
                 bleScannerManager.performManualScan(Constants.SCAN_TRIGGER_PERIODIC)
+
+                // Run detection algorithm immediately after scan
+                Timber.d("Running detection algorithm...")
+                val detectionResults = detectionAlgorithm.runDetection()
+
+                if (detectionResults.isNotEmpty()) {
+                    Timber.d("Detection complete: found ${detectionResults.size} suspicious devices")
+                    val alertIds = alertGenerator.generateAlerts(detectionResults)
+                    Timber.d("Generated ${alertIds.size} alerts")
+                } else {
+                    Timber.d("No suspicious devices detected")
+                }
 
                 // Schedule the next scan
                 scheduleNextScan()

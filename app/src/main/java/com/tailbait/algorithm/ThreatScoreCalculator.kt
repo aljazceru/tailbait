@@ -192,7 +192,8 @@ class ThreatScoreCalculator @Inject constructor(
         }
 
         // Factor 6: Consistency of appearances (0.0 - 0.10)
-        val avgTimeBetween = calculateAverageTimeBetween(locations)
+        // Use record timestamps (immutable) instead of location timestamps (mutated by dedup)
+        val avgTimeBetween = calculateAverageTimeBetweenRecords(deviceRecords)
         val consistencyScore = when {
             avgTimeBetween < ONE_HOUR_MS -> 1.0      // Very regular, highly suspicious
             avgTimeBetween < SIX_HOURS_MS -> 0.67
@@ -202,7 +203,8 @@ class ThreatScoreCalculator @Inject constructor(
         totalScore += consistencyScore * WEIGHT_CONSISTENCY
 
         // Factor 7: Time correlation (0.0 - 0.08)
-        val timeSpan = calculateTimeSpan(locations)
+        // Use record timestamps (immutable) instead of location timestamps (mutated by dedup)
+        val timeSpan = calculateTimeSpanFromRecords(deviceRecords)
         val timeScore = when {
             timeSpan < ONE_HOUR_MS -> 0.25  // Short period, low score
             timeSpan < ONE_DAY_MS -> 0.75   // Medium period
@@ -425,6 +427,54 @@ class ThreatScoreCalculator @Inject constructor(
             "COMPUTER", "SMART_HOME", "AUTOMOTIVE", "GAMING", "MEDICAL" -> SCORE_BEACON
             else -> SCORE_OTHER
         }
+    }
+
+    /**
+     * Calculate the time span from DeviceLocationRecord timestamps.
+     *
+     * These timestamps are immutable (unlike Location.timestamp which is mutated
+     * by findOrCreateLocation dedup), making them reliable for time-based scoring.
+     *
+     * @param records Device location records
+     * @return Time span in milliseconds between oldest and newest record
+     */
+    private fun calculateTimeSpanFromRecords(records: List<DeviceLocationRecord>): Long {
+        if (records.size < 2) return 0
+
+        var oldest = Long.MAX_VALUE
+        var newest = Long.MIN_VALUE
+
+        for (record in records) {
+            val timestamp = record.timestamp
+            if (timestamp < oldest) oldest = timestamp
+            if (timestamp > newest) newest = timestamp
+        }
+
+        return newest - oldest
+    }
+
+    /**
+     * Calculate the average time between consecutive record timestamps.
+     *
+     * Uses DeviceLocationRecord timestamps (immutable) instead of Location timestamps
+     * (mutated by location dedup).
+     *
+     * @param records Device location records
+     * @return Average time between records in milliseconds
+     */
+    private fun calculateAverageTimeBetweenRecords(records: List<DeviceLocationRecord>): Long {
+        if (records.size < 2) return Long.MAX_VALUE
+
+        val sorted = records.sortedBy { it.timestamp }
+
+        var gapSum = 0L
+        val gapCount = sorted.size - 1
+
+        for (i in 0 until gapCount) {
+            gapSum += sorted[i + 1].timestamp - sorted[i].timestamp
+        }
+
+        return if (gapCount > 0) gapSum / gapCount else Long.MAX_VALUE
     }
 
     /**

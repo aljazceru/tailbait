@@ -10,6 +10,7 @@ import com.tailbait.data.repository.AlertRepository
 import com.tailbait.data.repository.DeviceRepository
 import com.tailbait.data.repository.LocationRepository
 import com.tailbait.data.repository.SettingsRepository
+import com.tailbait.service.DataExportService
 import com.tailbait.util.CsvDataExporter
 import com.tailbait.util.FileShareHelper
 import io.mockk.coEvery
@@ -18,7 +19,9 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Before
@@ -50,6 +53,7 @@ class SettingsViewModelTest {
     private lateinit var locationRepository: LocationRepository
     private lateinit var alertRepository: AlertRepository
     private lateinit var csvDataExporter: CsvDataExporter
+    private lateinit var dataExportService: DataExportService
     private lateinit var fileShareHelper: FileShareHelper
 
     // Test data
@@ -59,6 +63,9 @@ class SettingsViewModelTest {
     private lateinit var testAlerts: List<AlertHistory>
 
     private lateinit var viewModel: SettingsViewModel
+
+    // Collector job to keep WhileSubscribed flow active
+    private lateinit var collectJob: Job
 
     @Before
     fun setup() {
@@ -71,16 +78,15 @@ class SettingsViewModelTest {
         locationRepository = mockk(relaxed = true)
         alertRepository = mockk(relaxed = true)
         csvDataExporter = mockk(relaxed = true)
+        dataExportService = mockk(relaxed = true)
         fileShareHelper = mockk(relaxed = true)
 
         // Create test data
         testSettings = AppSettings(
             id = 1,
             isTrackingEnabled = false,
-            trackingMode = "PERIODIC",
             scanIntervalSeconds = 300,
             scanDurationSeconds = 30,
-            locationChangeThresholdMeters = 50.0,
             minDetectionDistanceMeters = 100.0,
             alertThresholdCount = 3,
             alertNotificationEnabled = true,
@@ -169,12 +175,25 @@ class SettingsViewModelTest {
 
     @After
     fun tearDown() {
+        if (::collectJob.isInitialized) {
+            collectJob.cancel()
+        }
         Dispatchers.resetMain()
+    }
+
+    /**
+     * Create the ViewModel and start a subscriber so the WhileSubscribed-based
+     * stateIn flow actually starts collecting.
+     */
+    private fun TestScope.createAndSubscribe(): SettingsViewModel {
+        val vm = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, dataExportService, fileShareHelper)
+        collectJob = backgroundScope.launch { vm.uiState.collect {} }
+        return vm
     }
 
     @Test
     fun `initial state is loading`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, dataExportService, fileShareHelper)
 
         val initialState = viewModel.uiState.value
         assertTrue(initialState.isLoading)
@@ -182,7 +201,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `loads settings and statistics successfully`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -196,23 +215,8 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `updateTrackingMode updates mode successfully`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.updateTrackingMode("CONTINUOUS")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify {
-            settingsRepository.updateSettings(
-                match { it.trackingMode == "CONTINUOUS" }
-            )
-        }
-    }
-
-    @Test
     fun `updateScanInterval converts minutes to seconds`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateScanInterval(10) // 10 minutes
@@ -225,7 +229,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `updateScanDuration updates duration successfully`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateScanDuration(45)
@@ -238,7 +242,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `updateAlertThresholdCount updates count successfully`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateAlertThresholdCount(5)
@@ -253,7 +257,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `updateMinDetectionDistance updates distance successfully`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateMinDetectionDistance(200.0)
@@ -268,7 +272,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `updateAlertNotificationEnabled updates notification setting`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateAlertNotificationEnabled(false)
@@ -283,7 +287,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `updateAlertSoundEnabled updates sound setting`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateAlertSoundEnabled(false)
@@ -298,7 +302,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `updateAlertVibrationEnabled updates vibration setting`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateAlertVibrationEnabled(false)
@@ -312,23 +316,8 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `updateLocationChangeThreshold updates threshold successfully`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.updateLocationChangeThreshold(75.0)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify {
-            settingsRepository.updateSettings(
-                match { it.locationChangeThresholdMeters == 75.0 }
-            )
-        }
-    }
-
-    @Test
     fun `updateDataRetentionDays updates retention period`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateDataRetentionDays(60)
@@ -343,7 +332,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `updateBatteryOptimizationEnabled updates battery setting`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.updateBatteryOptimizationEnabled(false)
@@ -358,33 +347,37 @@ class SettingsViewModelTest {
 
     @Test
     fun `showClearDataDialog sets dialog visible`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.showClearDataDialog()
+        testDispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.showClearDataDialog)
     }
 
     @Test
     fun `hideClearDataDialog hides dialog`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.showClearDataDialog()
+        testDispatcher.scheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.showClearDataDialog)
 
         viewModel.hideClearDataDialog()
+        testDispatcher.scheduler.advanceUntilIdle()
         assertFalse(viewModel.uiState.value.showClearDataDialog)
     }
 
     @Test
     fun `clearAllData deletes all data from repositories`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.clearAllData()
         testDispatcher.scheduler.advanceTimeBy(100)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify { deviceRepository.deleteAllDevices() }
         coVerify { locationRepository.deleteAllLocations() }
@@ -393,30 +386,37 @@ class SettingsViewModelTest {
 
     @Test
     fun `clearAllData sets dataCleared flag temporarily`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.clearAllData()
+        // Advance just enough to let the clearAllData coroutine run up to the delay(3000)
         testDispatcher.scheduler.advanceTimeBy(100)
+        testDispatcher.scheduler.runCurrent()
+        // Give the combine/stateIn a chance to process the _uiState change
+        testDispatcher.scheduler.runCurrent()
 
-        // dataCleared should be true immediately after clearing
-        assertTrue(viewModel.uiState.value.dataCleared)
+        // dataCleared should be true (coroutine is suspended at delay(3000))
+        assertTrue("dataCleared should be true after clear completes", viewModel.uiState.value.dataCleared)
 
         // After 3 seconds, it should be reset to false
         testDispatcher.scheduler.advanceTimeBy(3100)
-        assertFalse(viewModel.uiState.value.dataCleared)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse("dataCleared should be false after 3s delay", viewModel.uiState.value.dataCleared)
     }
 
     @Test
     fun `clearAllData hides dialog after completion`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.showClearDataDialog()
+        testDispatcher.scheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.showClearDataDialog)
 
         viewModel.clearAllData()
         testDispatcher.scheduler.advanceTimeBy(100)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.showClearDataDialog)
     }
@@ -424,12 +424,12 @@ class SettingsViewModelTest {
     @Test
     fun `error is shown when settings update fails`() = runTest {
         // Setup mock to throw exception
-        coEvery { settingsRepository.getSettingsOnce() } throws RuntimeException("Database error")
+        coEvery { settingsRepository.updateScanInterval(any()) } throws RuntimeException("Database error")
 
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateTrackingMode("CONTINUOUS")
+        viewModel.updateScanInterval(10)
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertNotNull(viewModel.uiState.value.errorMessage)
@@ -438,12 +438,12 @@ class SettingsViewModelTest {
 
     @Test
     fun `clearError removes error message`() = runTest {
-        coEvery { settingsRepository.getSettingsOnce() } throws RuntimeException("Error")
+        coEvery { settingsRepository.updateScanInterval(any()) } throws RuntimeException("Error")
 
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateTrackingMode("CONTINUOUS")
+        viewModel.updateScanInterval(10)
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Verify error exists
@@ -451,6 +451,7 @@ class SettingsViewModelTest {
 
         // Clear error
         viewModel.clearError()
+        testDispatcher.scheduler.advanceUntilIdle()
 
         // Verify error is cleared
         assertNull(viewModel.uiState.value.errorMessage)
@@ -461,11 +462,12 @@ class SettingsViewModelTest {
         // Setup mock to throw exception
         coEvery { deviceRepository.deleteAllDevices() } throws RuntimeException("Delete failed")
 
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.clearAllData()
         testDispatcher.scheduler.advanceTimeBy(100)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         assertNotNull(viewModel.uiState.value.errorMessage)
         assertTrue(viewModel.uiState.value.errorMessage!!.contains("Failed to clear data"))
@@ -473,7 +475,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `statistics show correct counts`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -489,7 +491,7 @@ class SettingsViewModelTest {
         every { locationRepository.getAllLocations() } returns flowOf(emptyList())
         every { alertRepository.getAllAlerts() } returns flowOf(emptyList())
 
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -500,7 +502,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `app version and build number are populated`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, fileShareHelper)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value

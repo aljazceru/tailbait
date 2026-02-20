@@ -4,10 +4,8 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.tailbait.data.database.dao.DeviceLocationRecordDao
 import com.tailbait.data.database.dao.LocationDao
 import com.tailbait.data.database.dao.ScannedDeviceDao
-import com.tailbait.data.database.entities.DeviceLocationRecord
-import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
-import io.mockk.coEvery
+import com.tailbait.data.dto.DeviceLocationMapData
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -45,8 +43,7 @@ class MapViewModelTest {
 
     // Test data
     private lateinit var testDevices: List<ScannedDevice>
-    private lateinit var testLocations: List<Location>
-    private lateinit var testRecords: List<DeviceLocationRecord>
+    private lateinit var testMapData: List<DeviceLocationMapData>
 
     private lateinit var viewModel: MapViewModel
 
@@ -59,7 +56,7 @@ class MapViewModelTest {
         locationDao = mockk(relaxed = true)
         scannedDeviceDao = mockk(relaxed = true)
 
-        // Create test data
+        // Create test devices
         testDevices = listOf(
             ScannedDevice(
                 id = 1L,
@@ -79,67 +76,59 @@ class MapViewModelTest {
             )
         )
 
-        testLocations = listOf(
-            Location(
+        // Create test map data (replaces separate records + locations)
+        testMapData = listOf(
+            DeviceLocationMapData(
                 id = 1L,
+                deviceId = 1L,
+                locationId = 1L,
                 latitude = 40.7128,
                 longitude = -74.0060,
                 accuracy = 10f,
                 timestamp = 1000L,
-                provider = "GPS"
+                rssi = -65,
+                deviceAddress = "AA:BB:CC:DD:EE:01",
+                deviceType = null,
+                manufacturerData = null
             ),
-            Location(
+            DeviceLocationMapData(
                 id = 2L,
+                deviceId = 1L,
+                locationId = 2L,
                 latitude = 40.7589,
                 longitude = -73.9851,
                 accuracy = 15f,
                 timestamp = 1500L,
-                provider = "GPS"
+                rssi = -70,
+                deviceAddress = "AA:BB:CC:DD:EE:01",
+                deviceType = null,
+                manufacturerData = null
             ),
-            Location(
+            DeviceLocationMapData(
                 id = 3L,
+                deviceId = 2L,
+                locationId = 3L,
                 latitude = 40.7489,
                 longitude = -73.9680,
                 accuracy = 12f,
                 timestamp = 2000L,
-                provider = "GPS"
-            )
-        )
-
-        testRecords = listOf(
-            DeviceLocationRecord(
-                id = 1L,
-                deviceId = 1L,
-                locationId = 1L,
-                rssi = -65,
-                timestamp = 1000L,
-                scanTriggerType = "PERIODIC"
-            ),
-            DeviceLocationRecord(
-                id = 2L,
-                deviceId = 1L,
-                locationId = 2L,
-                rssi = -70,
-                timestamp = 1500L,
-                scanTriggerType = "PERIODIC"
-            ),
-            DeviceLocationRecord(
-                id = 3L,
-                deviceId = 2L,
-                locationId = 3L,
                 rssi = -75,
-                timestamp = 2000L,
-                scanTriggerType = "LOCATION_BASED"
+                deviceAddress = "AA:BB:CC:DD:EE:02",
+                deviceType = null,
+                manufacturerData = null
             )
         )
 
-        // Setup mock responses
-        every { deviceLocationRecordDao.getAllRecords() } returns flowOf(testRecords)
-        every { scannedDeviceDao.getAllDevices() } returns flowOf(testDevices)
+        // Setup mock responses - getMapData with default (null) filters returns all data
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = null,
+                startTimestamp = null,
+                endTimestamp = null
+            )
+        } returns flowOf(testMapData)
 
-        coEvery { locationDao.getById(1L) } returns testLocations[0]
-        coEvery { locationDao.getById(2L) } returns testLocations[1]
-        coEvery { locationDao.getById(3L) } returns testLocations[2]
+        every { scannedDeviceDao.getAllDevices() } returns flowOf(testDevices)
     }
 
     @After
@@ -179,11 +168,10 @@ class MapViewModelTest {
         val state = viewModel.uiState.value
         val marker = state.markers.first()
 
-        assertEquals(testDevices[0].id, marker.deviceId)
-        assertEquals(testDevices[0].name, marker.deviceName)
-        assertEquals(testDevices[0].address, marker.deviceAddress)
-        assertEquals(testLocations[0].latitude, marker.position.latitude)
-        assertEquals(testLocations[0].longitude, marker.position.longitude)
+        assertEquals(testMapData[0].deviceId, marker.deviceId)
+        assertEquals(testMapData[0].deviceAddress, marker.deviceAddress)
+        assertEquals(testMapData[0].latitude, marker.position.latitude, 0.0001)
+        assertEquals(testMapData[0].longitude, marker.position.longitude, 0.0001)
         assertEquals(-65, marker.rssi)
         assertEquals(10f, marker.accuracy)
     }
@@ -197,8 +185,7 @@ class MapViewModelTest {
         val devicePath = state.devicePaths.find { it.deviceId == 1L }
 
         assertNotNull(devicePath)
-        assertEquals("Device 1", devicePath!!.deviceName)
-        assertEquals(2, devicePath.points.size) // Device 1 has 2 locations
+        assertEquals(2, devicePath!!.points.size) // Device 1 has 2 locations
         assertEquals(2, devicePath.timestamps.size)
 
         // Verify points are sorted by timestamp
@@ -216,8 +203,8 @@ class MapViewModelTest {
         assertNotNull(cameraPosition)
 
         // Verify it's approximately the center of all markers
-        val avgLat = testLocations.map { it.latitude }.average()
-        val avgLng = testLocations.map { it.longitude }.average()
+        val avgLat = testMapData.map { it.latitude }.average()
+        val avgLng = testMapData.map { it.longitude }.average()
 
         assertEquals(avgLat, cameraPosition!!.latitude, 0.001)
         assertEquals(avgLng, cameraPosition.longitude, 0.001)
@@ -225,6 +212,16 @@ class MapViewModelTest {
 
     @Test
     fun `filter by device filters markers and paths correctly`() = runTest {
+        // Setup filtered mock for device 1
+        val device1Data = testMapData.filter { it.deviceId == 1L }
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = 1L,
+                startTimestamp = null,
+                endTimestamp = null
+            )
+        } returns flowOf(device1Data)
+
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -241,6 +238,16 @@ class MapViewModelTest {
 
     @Test
     fun `filter by date range filters data correctly`() = runTest {
+        // Setup filtered mock for date range 1200-1800
+        val filteredData = testMapData.filter { it.timestamp in 1200L..1800L }
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = null,
+                startTimestamp = 1200L,
+                endTimestamp = 1800L
+            )
+        } returns flowOf(filteredData)
+
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -259,6 +266,15 @@ class MapViewModelTest {
 
     @Test
     fun `filter by start timestamp only works correctly`() = runTest {
+        val filteredData = testMapData.filter { it.timestamp >= 1500L }
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = null,
+                startTimestamp = 1500L,
+                endTimestamp = null
+            )
+        } returns flowOf(filteredData)
+
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -276,6 +292,15 @@ class MapViewModelTest {
 
     @Test
     fun `filter by end timestamp only works correctly`() = runTest {
+        val filteredData = testMapData.filter { it.timestamp <= 1500L }
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = null,
+                startTimestamp = null,
+                endTimestamp = 1500L
+            )
+        } returns flowOf(filteredData)
+
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -293,6 +318,25 @@ class MapViewModelTest {
 
     @Test
     fun `clear filters resets all filters`() = runTest {
+        // Setup filtered mocks
+        val device1Data = testMapData.filter { it.deviceId == 1L }
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = 1L,
+                startTimestamp = null,
+                endTimestamp = null
+            )
+        } returns flowOf(device1Data)
+
+        val device1DateFiltered = device1Data.filter { it.timestamp in 1200L..1800L }
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = 1L,
+                startTimestamp = 1200L,
+                endTimestamp = 1800L
+            )
+        } returns flowOf(device1DateFiltered)
+
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -315,6 +359,25 @@ class MapViewModelTest {
 
     @Test
     fun `combining device and date filters works correctly`() = runTest {
+        // Setup combined filter mock
+        val filteredData = testMapData.filter { it.deviceId == 1L && it.timestamp in 1200L..1800L }
+
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = 1L,
+                startTimestamp = null,
+                endTimestamp = null
+            )
+        } returns flowOf(testMapData.filter { it.deviceId == 1L })
+
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = 1L,
+                startTimestamp = 1200L,
+                endTimestamp = 1800L
+            )
+        } returns flowOf(filteredData)
+
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -339,7 +402,13 @@ class MapViewModelTest {
     @Test
     fun `error state is set when data loading fails`() = runTest {
         // Setup mock to throw exception
-        every { deviceLocationRecordDao.getAllRecords() } throws RuntimeException("Database error")
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = null,
+                startTimestamp = null,
+                endTimestamp = null
+            )
+        } throws RuntimeException("Database error")
 
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -354,7 +423,13 @@ class MapViewModelTest {
     @Test
     fun `clear error removes error message`() = runTest {
         // Setup mock to throw exception
-        every { deviceLocationRecordDao.getAllRecords() } throws RuntimeException("Error")
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = null,
+                startTimestamp = null,
+                endTimestamp = null
+            )
+        } throws RuntimeException("Error")
 
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -372,7 +447,13 @@ class MapViewModelTest {
     @Test
     fun `empty data shows empty state correctly`() = runTest {
         // Setup mocks to return empty data
-        every { deviceLocationRecordDao.getAllRecords() } returns flowOf(emptyList())
+        every {
+            deviceLocationRecordDao.getMapData(
+                deviceId = null,
+                startTimestamp = null,
+                endTimestamp = null
+            )
+        } returns flowOf(emptyList())
         every { scannedDeviceDao.getAllDevices() } returns flowOf(emptyList())
 
         viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
@@ -416,40 +497,6 @@ class MapViewModelTest {
         // Color should be consistent (based on deviceId % colors.size)
         assertTrue(device1Path.color != 0)
         assertTrue(device2Path.color != 0)
-    }
-
-    @Test
-    fun `handles location data that is null gracefully`() = runTest {
-        // Setup one location to return null
-        coEvery { locationDao.getById(2L) } returns null
-
-        viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-
-        // Should only have 2 markers (skipped the one with null location)
-        assertEquals(2, state.markers.size)
-        assertTrue(state.markers.none { it.locationId == 2L })
-    }
-
-    @Test
-    fun `handles device data that is null gracefully`() = runTest {
-        // Setup devices to only return one device
-        val singleDevice = listOf(testDevices[0])
-        every { scannedDeviceDao.getAllDevices() } returns flowOf(singleDevice)
-
-        viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-
-        // Should only have markers for device 1
-        assertEquals(2, state.markers.size)
-        assertTrue(state.markers.all { it.deviceId == 1L })
-        assertEquals(1, state.devicePaths.size)
     }
 
     // Note: onCleared() is protected and cannot be tested directly.

@@ -48,6 +48,7 @@ data class DetectionResult(
     val maxDistance: Double,
     val avgDistance: Double,
     val detectionReason: String,
+    val timeSpanMs: Long = 0L,
     val timestamp: Long = System.currentTimeMillis(),
     val detectionId: String = generateDetectionId(device.id, timestamp)
 ) {
@@ -71,6 +72,8 @@ data class DetectionResult(
      * @return Time span in milliseconds
      */
     fun getTimeSpan(): Long {
+        if (timeSpanMs > 0) return timeSpanMs
+        // Legacy fallback using location timestamps
         if (locations.isEmpty()) return 0
         val oldest = locations.minByOrNull { it.timestamp }?.timestamp ?: 0
         val newest = locations.maxByOrNull { it.timestamp }?.timestamp ?: 0

@@ -1,12 +1,16 @@
 package com.tailbait.ui.screens.alert
 
+import androidx.lifecycle.viewModelScope
 import com.tailbait.data.database.entities.AlertHistory
 import com.tailbait.data.repository.AlertRepository
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -28,6 +32,9 @@ class AlertViewModelTest {
     private lateinit var viewModel: AlertViewModel
     private lateinit var alertRepository: AlertRepository
     private val testDispatcher = StandardTestDispatcher()
+
+    // Collector job to keep WhileSubscribed flow active
+    private lateinit var collectJob: Job
 
     // Sample test data
     private val activeAlerts = listOf(
@@ -80,23 +87,39 @@ class AlertViewModelTest {
         // Setup mock responses
         every { alertRepository.getActiveAlerts() } returns flowOf(activeAlerts)
         every { alertRepository.getDismissedAlerts() } returns flowOf(dismissedAlerts)
-
-        viewModel = AlertViewModel(alertRepository)
     }
 
     @After
     fun tearDown() {
+        if (::collectJob.isInitialized) {
+            collectJob.cancel()
+        }
+        if (::viewModel.isInitialized) {
+            viewModel.viewModelScope.cancel()
+        }
         Dispatchers.resetMain()
+    }
+
+    /**
+     * Create the ViewModel and start a subscriber so the WhileSubscribed-based
+     * stateIn flow actually starts collecting.
+     */
+    private fun TestScope.createAndSubscribe(): AlertViewModel {
+        val vm = AlertViewModel(alertRepository)
+        collectJob = backgroundScope.launch { vm.uiState.collect {} }
+        return vm
     }
 
     @Test
     fun `initial state is loading`() = runTest {
+        viewModel = AlertViewModel(alertRepository)
         val state = viewModel.uiState.value
         assertTrue(state is AlertViewModel.AlertListUiState.Loading)
     }
 
     @Test
     fun `loads active and dismissed alerts successfully`() = runTest {
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -109,6 +132,7 @@ class AlertViewModelTest {
 
     @Test
     fun `active alerts are not dismissed`() = runTest {
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value as AlertViewModel.AlertListUiState.Success
@@ -117,6 +141,7 @@ class AlertViewModelTest {
 
     @Test
     fun `dismissed alerts are marked as dismissed`() = runTest {
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value as AlertViewModel.AlertListUiState.Success
@@ -128,7 +153,7 @@ class AlertViewModelTest {
         every { alertRepository.getActiveAlerts() } returns flowOf(emptyList())
         every { alertRepository.getDismissedAlerts() } returns flowOf(emptyList())
 
-        viewModel = AlertViewModel(alertRepository)
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value as AlertViewModel.AlertListUiState.Success
@@ -138,6 +163,7 @@ class AlertViewModelTest {
 
     @Test
     fun `alerts are sorted correctly`() = runTest {
+        viewModel = createAndSubscribe()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value as AlertViewModel.AlertListUiState.Success

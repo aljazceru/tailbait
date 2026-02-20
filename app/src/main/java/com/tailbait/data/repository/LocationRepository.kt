@@ -219,12 +219,9 @@ class LocationRepositoryImpl @Inject constructor(
         val lonMin = location.longitude - degreesDelta
         val lonMax = location.longitude + degreesDelta
 
-        // Only check last 24 hours
-        val oneDayAgo = System.currentTimeMillis() - (24 * 60 * 60 * 1000)
-        
-        // Fetch only candidates within the bounding box
-        val nearbyCandidates = locationDao.getNearbyCandidates(
-            latMin, latMax, lonMin, lonMax, oneDayAgo
+        // Search all time to prevent duplicate locations when returning to a place after >24h
+        val nearbyCandidates = locationDao.getNearbyCandidatesAllTime(
+            latMin, latMax, lonMin, lonMax
         )
 
         // Refine with exact distance calculation

@@ -83,7 +83,8 @@ class DeviceListViewModelTest {
 
         // Setup default mock behaviors
         coEvery { deviceRepository.getAllDevices() } returns flowOf(emptyList())
-        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        every { whitelistRepository.getAllWhitelistEntries() } returns flowOf(emptyList())
+        coEvery { locationRepository.getLocationsForDeviceOnce(any()) } returns emptyList()
     }
 
     @After
@@ -278,25 +279,38 @@ class DeviceListViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        // Should match testDevice2 (11:22:33:44:55:66) and testDevice3 (AA:11:BB:22:CC:33)
-        assertEquals(2, state.filteredDevices.size)
+        // Only matches testDevice2 (11:22:33:44:55:66) — "11:22" is not a contiguous substring of "AA:11:BB:22:CC:33"
+        assertEquals(1, state.filteredDevices.size)
+        assertEquals("Samsung Phone", state.filteredDevices[0].name)
     }
 
     @Test
     fun `updateSearchQuery filters by device type`() = runTest {
+        // Use a device whose name doesn't contain its type to isolate type-based filtering
+        val trackerDevice = ScannedDevice(
+            id = 99L,
+            address = "FF:FF:FF:FF:FF:FF",
+            name = "My Gadget",
+            firstSeen = now,
+            lastSeen = now,
+            detectionCount = 1,
+            deviceType = "TRACKER"
+        )
+
         coEvery { deviceRepository.getAllDevices() } returns flowOf(
-            listOf(testDevice1, testDevice2, testDevice3)
+            listOf(testDevice1, testDevice2, testDevice3, trackerDevice)
         )
 
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.updateSearchQuery("PHONE")
+        // The ViewModel formats device types: "TRACKER" -> "Tracker"
+        viewModel.updateSearchQuery("Tracker")
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertEquals(1, state.filteredDevices.size)
-        assertEquals("Samsung Phone", state.filteredDevices[0].name)
+        assertEquals("My Gadget", state.filteredDevices[0].name)
     }
 
     @Test
@@ -367,7 +381,8 @@ class DeviceListViewModelTest {
         assertFalse(viewModel.uiState.value.isRefreshing)
 
         viewModel.refreshDevices()
-        // Don't advance time yet, should be refreshing
+        // Run queued coroutine up to first suspension (the delay) so isRefreshing is set
+        testScheduler.runCurrent()
         assertTrue(viewModel.uiState.value.isRefreshing)
 
         advanceUntilIdle()

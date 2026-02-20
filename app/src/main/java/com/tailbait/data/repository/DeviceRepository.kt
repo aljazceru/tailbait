@@ -207,6 +207,17 @@ interface DeviceRepository {
      */
     suspend fun getDeviceLocationRecordsForDevice(deviceId: Long): List<DeviceLocationRecord>
 
+    /**
+     * Get device-location records for a device AND its linked child devices.
+     *
+     * Historical records created before MAC linking are stored under child device IDs.
+     * This method aggregates them all for complete detection scoring.
+     *
+     * @param deviceId Primary device ID
+     * @return List of device-location records for primary + linked devices
+     */
+    suspend fun getDeviceLocationRecordsForDeviceWithLinked(deviceId: Long): List<DeviceLocationRecord>
+
     // ============================================================================
     // FINGERPRINT-BASED DEVICE CORRELATION (AirTag MAC rotation handling)
     // ============================================================================
@@ -273,11 +284,13 @@ interface DeviceRepository {
     /**
      * Get suspicious devices, accounting for MAC rotation via fingerprint linking.
      * This considers all locations across all linked devices as one physical device.
+     * Only considers device_location_records with timestamps >= sinceTimestamp.
      *
      * @param minLocationCount Minimum locations for suspicion
+     * @param sinceTimestamp Only consider records after this timestamp (epoch ms)
      * @return Flow of suspicious devices
      */
-    fun getSuspiciousDevicesWithLinked(minLocationCount: Int): Flow<List<ScannedDevice>>
+    fun getSuspiciousDevicesWithLinked(minLocationCount: Int, sinceTimestamp: Long): Flow<List<ScannedDevice>>
 
     /**
      * Insert or update a device with fingerprint-based correlation.
@@ -587,6 +600,10 @@ class DeviceRepositoryImpl @Inject constructor(
         return deviceLocationRecordDao.getRecordsForDevice(deviceId).first()
     }
 
+    override suspend fun getDeviceLocationRecordsForDeviceWithLinked(deviceId: Long): List<DeviceLocationRecord> {
+        return deviceLocationRecordDao.getRecordsForDeviceWithLinked(deviceId)
+    }
+
     // ============================================================================
     // FINGERPRINT-BASED DEVICE CORRELATION (AirTag MAC rotation handling)
     // ============================================================================
@@ -626,8 +643,8 @@ class DeviceRepositoryImpl @Inject constructor(
         scannedDeviceDao.updateFindMyStatus(deviceId, findMyStatus, findMySeparated)
     }
 
-    override fun getSuspiciousDevicesWithLinked(minLocationCount: Int): Flow<List<ScannedDevice>> {
-        return scannedDeviceDao.getSuspiciousDevicesWithLinked(minLocationCount)
+    override fun getSuspiciousDevicesWithLinked(minLocationCount: Int, sinceTimestamp: Long): Flow<List<ScannedDevice>> {
+        return scannedDeviceDao.getSuspiciousDevicesWithLinked(minLocationCount, sinceTimestamp)
     }
 
     override suspend fun upsertDeviceWithFingerprint(

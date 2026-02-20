@@ -43,8 +43,13 @@ class AlertGenerator @Inject constructor(
 ) {
 
     companion object {
-        // Default throttle window: 1 hour
+        // Default throttle window: 1 hour (used by insertAlertWithThrottling as final safety net)
         private const val DEFAULT_THROTTLE_WINDOW_MS = 60 * 60 * 1000L
+
+        // Smart throttling constants
+        private const val MIN_ALERT_INTERVAL_MS = 6 * 60 * 60 * 1000L    // 6 hours minimum
+        private const val ESCALATION_WINDOW_MS = 72 * 60 * 60 * 1000L    // 72 hours
+        private const val ESCALATION_THRESHOLD = 0.15                     // Score increase needed
 
         // Alert message templates
         private const val ALERT_TITLE_CRITICAL = "🚨 Critical Tracking Alert"
@@ -73,6 +78,38 @@ class AlertGenerator @Inject constructor(
         Timber.d("Generating alert for device ${detectionResult.device.address}")
 
         try {
+            // Prepare device addresses JSON (needed for throttle check)
+            val deviceAddresses = createDeviceAddressesJson(detectionResult)
+
+            // Smart throttling: check previous alert for this device
+            val previousAlert = alertRepository.getLatestAlertForDevice(deviceAddresses)
+            if (previousAlert != null) {
+                val now = System.currentTimeMillis()
+                val timeSinceLastAlert = now - previousAlert.timestamp
+                val scoreIncrease = detectionResult.threatScore - previousAlert.threatScore
+
+                // Suppress if less than 6 hours since last alert
+                if (timeSinceLastAlert < MIN_ALERT_INTERVAL_MS) {
+                    Timber.d("Smart throttle: suppressing (${timeSinceLastAlert / 3600000}h < 6h minimum)")
+                    return null
+                }
+
+                // Between 6-72 hours: only allow if score escalated significantly
+                if (timeSinceLastAlert < ESCALATION_WINDOW_MS && scoreIncrease < ESCALATION_THRESHOLD) {
+                    Timber.d(
+                        "Smart throttle: suppressing (score +${"%.2f".format(scoreIncrease)} < " +
+                            "$ESCALATION_THRESHOLD threshold, ${timeSinceLastAlert / 3600000}h < 72h)"
+                    )
+                    return null
+                }
+
+                // >= 72 hours: allow as periodic reminder
+                Timber.d(
+                    "Smart throttle: allowing (${timeSinceLastAlert / 3600000}h since last, " +
+                        "score +${"%.2f".format(scoreIncrease)})"
+                )
+            }
+
             // Determine alert level
             val alertLevel = determineAlertLevel(detectionResult.threatScore)
 
@@ -80,8 +117,7 @@ class AlertGenerator @Inject constructor(
             val title = createAlertTitle(alertLevel)
             val message = createAlertMessage(detectionResult)
 
-            // Prepare device addresses and location IDs as JSON
-            val deviceAddresses = createDeviceAddressesJson(detectionResult)
+            // Prepare location IDs as JSON
             val locationIds = createLocationIdsJson(detectionResult)
 
             // Create detection details JSON

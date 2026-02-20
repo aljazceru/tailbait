@@ -668,7 +668,7 @@ object ManufacturerDataParser {
 
         // Fingerprint extraction: We use bytes 3-8 (first 6 bytes of public key)
         // These rotate less frequently than the MAC and provide device correlation
-        const val FINGERPRINT_START = 2  // After type and length
+        const val FINGERPRINT_START = 3  // After type, length, and status byte
         const val FINGERPRINT_LENGTH = 6  // 6 bytes = 12 hex chars
     }
 

@@ -21,6 +21,7 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import timber.log.Timber
 
 /**
  * Unit tests for LocationTracker.
@@ -55,7 +56,6 @@ class LocationTrackerTest {
         isTrackingEnabled = true,
         scanIntervalSeconds = 300,
         scanDurationSeconds = 30,
-        locationChangeThresholdMeters = 50.0,
         batteryOptimizationEnabled = false
     )
 
@@ -87,6 +87,14 @@ class LocationTrackerTest {
         // Mock Looper (required for LocationCallback)
         mockkStatic(Looper::class)
         every { Looper.getMainLooper() } returns mockk(relaxed = true)
+
+        // Mock Timber to prevent NPE from static logging calls
+        mockkStatic(Timber::class)
+
+        // Mock LocationServices BEFORE constructing LocationTracker so the constructor
+        // uses our mock fusedLocationClient instead of creating a real one
+        mockkStatic(LocationServices::class)
+        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
 
         // Set test dispatcher
         Dispatchers.setMain(testDispatcher)
@@ -134,9 +142,6 @@ class LocationTrackerTest {
         // Given
         locationTracker = LocationTracker(context, settingsRepository)
 
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
         every { fusedLocationClient.requestLocationUpdates(any<LocationRequest>(), any<LocationCallback>(), any<Looper>()) } returns mockk(relaxed = true)
 
         // When
@@ -165,10 +170,6 @@ class LocationTrackerTest {
         // Given
         locationTracker = LocationTracker(context, settingsRepository)
 
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
-
         val mockTask = mockk<Task<AndroidLocation>>(relaxed = true)
         every { fusedLocationClient.getCurrentLocation(any<Int>(), any()) } returns mockTask
 
@@ -185,9 +186,9 @@ class LocationTrackerTest {
 
         // Then
         assertNotNull(location)
-        assertEquals(37.7749, location!!.latitude)
-        assertEquals(-122.4194, location.longitude)
-        assertEquals(10f, location.accuracy)
+        assertEquals(37.7749, location!!.latitude, 0.0001)
+        assertEquals(-122.4194, location.longitude, 0.0001)
+        assertEquals(10f, location.accuracy, 0.01f)
         assertEquals("FUSED", location.provider)
         assertNotNull(location.altitude)
         assertEquals(50.0, location.altitude)
@@ -197,10 +198,6 @@ class LocationTrackerTest {
     fun `test getCurrentLocation returns null when location is unavailable`() = testScope.runTest {
         // Given
         locationTracker = LocationTracker(context, settingsRepository)
-
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
 
         val mockTask = mockk<Task<AndroidLocation>>(relaxed = true)
         every { fusedLocationClient.getCurrentLocation(any<Int>(), any()) } returns mockTask
@@ -224,10 +221,6 @@ class LocationTrackerTest {
     fun `test getCurrentLocation handles exceptions`() = testScope.runTest {
         // Given
         locationTracker = LocationTracker(context, settingsRepository)
-
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
 
         val mockTask = mockk<Task<AndroidLocation>>(relaxed = true)
         every { fusedLocationClient.getCurrentLocation(any<Int>(), any()) } returns mockTask
@@ -269,10 +262,6 @@ class LocationTrackerTest {
         // Given
         locationTracker = LocationTracker(context, settingsRepository)
 
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
-
         val mockTask = mockk<Task<AndroidLocation>>(relaxed = true)
         every { fusedLocationClient.lastLocation } returns mockTask
 
@@ -289,8 +278,8 @@ class LocationTrackerTest {
 
         // Then
         assertNotNull(location)
-        assertEquals(37.7749, location!!.latitude)
-        assertEquals(-122.4194, location.longitude)
+        assertEquals(37.7749, location!!.latitude, 0.0001)
+        assertEquals(-122.4194, location.longitude, 0.0001)
     }
 
     @Test
@@ -298,9 +287,6 @@ class LocationTrackerTest {
         // Given
         locationTracker = LocationTracker(context, settingsRepository)
 
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
         every { fusedLocationClient.removeLocationUpdates(any<LocationCallback>()) } returns mockk(relaxed = true)
 
         // When
@@ -326,10 +312,6 @@ class LocationTrackerTest {
         }
 
         locationTracker = LocationTracker(context, settingsRepository)
-
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
 
         val mockTask = mockk<Task<AndroidLocation>>(relaxed = true)
         every { fusedLocationClient.getCurrentLocation(any<Int>(), any()) } returns mockTask
@@ -389,10 +371,6 @@ class LocationTrackerTest {
 
         locationTracker = LocationTracker(context, settingsRepository)
 
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
-
         val requestSlot = slot<LocationRequest>()
         every { fusedLocationClient.requestLocationUpdates(capture(requestSlot), any<LocationCallback>(), any<Looper>()) } returns mockk(relaxed = true)
 
@@ -441,10 +419,6 @@ class LocationTrackerTest {
 
         locationTracker = LocationTracker(context, settingsRepository)
 
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
-
         val mockTask = mockk<Task<AndroidLocation>>(relaxed = true)
         every { fusedLocationClient.getCurrentLocation(any<Int>(), any()) } returns mockTask
 
@@ -476,10 +450,6 @@ class LocationTrackerTest {
         }
 
         locationTracker = LocationTracker(context, settingsRepository)
-
-        // Mock FusedLocationProviderClient
-        mockkStatic(LocationServices::class)
-        every { LocationServices.getFusedLocationProviderClient(context) } returns fusedLocationClient
 
         val mockTask = mockk<Task<AndroidLocation>>(relaxed = true)
         every { fusedLocationClient.getCurrentLocation(any<Int>(), any()) } returns mockTask
