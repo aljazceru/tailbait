@@ -286,6 +286,64 @@ class ThreatScoreCalculator @Inject constructor(
     }
 
     /**
+     * Compute individual factor scores matching the enhanced scoring weights.
+     * Returns a map with keys matching what the alert detail UI expects.
+     *
+     * The enhanced scorer has 7 factors but the UI groups them into 5 categories:
+     * - locationScore: location count factor
+     * - distanceScore: distance factor
+     * - timeScore: time correlation factor
+     * - consistencyScore: consistency factor
+     * - deviceTypeScore: device type + signal strength (merged for display)
+     */
+    fun computeBreakdown(
+        device: ScannedDevice,
+        locations: List<Location>,
+        distances: List<Double>,
+        deviceRecords: List<DeviceLocationRecord>,
+        userPaths: List<UserPath>
+    ): Map<String, Double> {
+        val correlationScore = movementCorrelationCalculator.calculateCorrelation(
+            deviceRecords = deviceRecords,
+            userPaths = userPaths,
+            deviceLocations = locations
+        )
+        val locationScore = min(locations.size / MAX_LOCATIONS_FOR_NORMALIZATION, 1.0)
+        val distanceScore = if (distances.isNotEmpty()) {
+            min((distances.maxOrNull() ?: 0.0) / MAX_DISTANCE_FOR_NORMALIZATION, 1.0)
+        } else 0.0
+
+        val avgTimeBetween = calculateAverageTimeBetweenRecords(deviceRecords)
+        val consistencyScore = when {
+            avgTimeBetween < ONE_HOUR_MS -> 1.0
+            avgTimeBetween < SIX_HOURS_MS -> 0.67
+            avgTimeBetween < ONE_DAY_MS -> 0.33
+            else -> 0.13
+        }
+
+        val timeSpan = calculateTimeSpanFromRecords(deviceRecords)
+        val timeScore = when {
+            timeSpan < ONE_HOUR_MS -> 0.25
+            timeSpan < ONE_DAY_MS -> 0.75
+            else -> 1.0
+        }
+
+        // Merge device type + signal strength into one "device type" display score
+        val deviceTypeRaw = calculateEnhancedDeviceTypeScore(device) / WEIGHT_DEVICE_TYPE
+        val signalRaw = calculateSignalStrengthScore(device) / WEIGHT_SIGNAL_STRENGTH
+        val deviceTypeDisplay = (deviceTypeRaw + signalRaw) / 2.0
+
+        return mapOf(
+            "locationScore" to locationScore,
+            "distanceScore" to distanceScore,
+            "timeScore" to timeScore,
+            "consistencyScore" to consistencyScore,
+            "deviceTypeScore" to deviceTypeDisplay,
+            "movementCorrelation" to correlationScore
+        )
+    }
+
+    /**
      * Calculate the threat score with detailed breakdown of all factors.
      *
      * This method is useful for debugging, analytics, and showing users

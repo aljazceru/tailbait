@@ -195,12 +195,19 @@ class DetectionAlgorithm @Inject constructor(
             Timber.tag(TAG).d("Loaded ${userLocations.size} user locations and ${userPaths.size} path points for correlation analysis")
 
             // Step 6: Batch load locations and device records for all devices concurrently
+            // Then scope to the detection window — the candidate query uses sinceTimestamp,
+            // but the location/record queries load all history which would inflate scores.
             val deviceDataMap = coroutineScope {
                 nonWhitelistedDevices.map { device ->
                     async {
-                        val locations = getLocationsForDevice(device.id)
-                        val deviceRecords = deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(device.id)
-                        device.id to Pair(locations, deviceRecords)
+                        val allRecords = deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(device.id)
+                        val windowRecords = allRecords.filter { it.timestamp >= sinceTimestamp }
+                        val windowLocationIds = windowRecords.map { it.locationId }.toSet()
+
+                        val allLocations = getLocationsForDevice(device.id)
+                        val windowLocations = allLocations.filter { it.id in windowLocationIds }
+
+                        device.id to Pair(windowLocations, windowRecords)
                     }
                 }.awaitAll().toMap()
             }
@@ -288,6 +295,9 @@ class DetectionAlgorithm @Inject constructor(
 
                 // Generate detection result if score exceeds threshold
                 if (threatScore >= MIN_THREAT_SCORE_FOR_ALERT) {
+                    val breakdown = threatScoreCalculator.computeBreakdown(
+                        device, locations, distances, deviceRecords, userPaths
+                    )
                     val result = DetectionResult(
                         device = device,
                         locations = locations,
@@ -297,7 +307,8 @@ class DetectionAlgorithm @Inject constructor(
                         detectionReason = buildDetectionReason(device, locations, threatScore, deviceRecords),
                         timeSpanMs = if (deviceRecords.size >= 2) {
                             deviceRecords.maxOf { it.timestamp } - deviceRecords.minOf { it.timestamp }
-                        } else 0L
+                        } else 0L,
+                        scoreBreakdown = breakdown
                     )
                     results.add(result)
                     Timber.tag(TAG).i("ALERT: ${result.detectionReason}")
@@ -325,7 +336,17 @@ class DetectionAlgorithm @Inject constructor(
                     }
 
                     // Get locations for this representative device
-                    val locations = getLocationsForDevice(device.id)
+                    val rawLocations = getLocationsForDevice(device.id)
+
+                    // Apply same filters as main path: companion check + clustering
+                    if (isCompanionDevice(rawLocations, userLocations, device)) {
+                        Timber.tag(TAG).d(
+                            "Shadow: skipping companion device ${device.address}"
+                        )
+                        continue
+                    }
+
+                    val locations = clusterLocations(rawLocations)
                     if (locations.size < settings.alertThresholdCount) continue
 
                     val distances = calculateDistancesBetweenLocations(locations)
@@ -346,6 +367,9 @@ class DetectionAlgorithm @Inject constructor(
                     val blendedScore = (baseThreatScore + shadowResult.combinedScore) / 2.0
 
                     if (blendedScore >= MIN_THREAT_SCORE_FOR_ALERT) {
+                        val breakdown = threatScoreCalculator.computeBreakdown(
+                            device, locations, distances, deviceRecords, userPaths
+                        )
                         val result = DetectionResult(
                             device = device,
                             locations = locations,
@@ -357,7 +381,8 @@ class DetectionAlgorithm @Inject constructor(
                                 ", rotation=${"%.2f".format(shadowResult.rotationScore)})",
                             timeSpanMs = if (deviceRecords.size >= 2) {
                                 deviceRecords.maxOf { it.timestamp } - deviceRecords.minOf { it.timestamp }
-                            } else 0L
+                            } else 0L,
+                            scoreBreakdown = breakdown
                         )
                         results.add(result)
                         Timber.tag(TAG).i("SHADOW ALERT: ${result.detectionReason}")
@@ -792,6 +817,9 @@ class DetectionAlgorithm @Inject constructor(
                 return@withContext null
             }
 
+            val breakdown = threatScoreCalculator.computeBreakdown(
+                device, locations, distances, deviceRecords, userPaths
+            )
             DetectionResult(
                 device = device,
                 locations = locations,
@@ -801,7 +829,8 @@ class DetectionAlgorithm @Inject constructor(
                 detectionReason = buildDetectionReason(device, locations, threatScore, deviceRecords),
                 timeSpanMs = if (deviceRecords.size >= 2) {
                     deviceRecords.maxOf { it.timestamp } - deviceRecords.minOf { it.timestamp }
-                } else 0L
+                } else 0L,
+                scoreBreakdown = breakdown
             )
 
         } catch (e: Exception) {

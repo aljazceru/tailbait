@@ -72,6 +72,17 @@ class DetectionAlgorithmTest {
         // Default mock for getLinkedDevices (called during weak link discount calculation)
         coEvery { deviceRepository.getLinkedDevices(any()) } returns emptyList()
 
+        // Default mock for computeBreakdown (called when building DetectionResult)
+        every {
+            threatScoreCalculator.computeBreakdown(any(), any(), any(), any(), any())
+        } returns mapOf(
+            "locationScore" to 0.5,
+            "distanceScore" to 0.5,
+            "timeScore" to 0.5,
+            "consistencyScore" to 0.5,
+            "deviceTypeScore" to 0.5
+        )
+
         // Create algorithm instance with mock shadowAnalyzer
         val shadowAnalyzer = mockk<ShadowAnalyzer>(relaxed = true)
         coEvery { shadowAnalyzer.findSuspiciousShadows(any(), any()) } returns emptyList()
@@ -569,6 +580,51 @@ class DetectionAlgorithmTest {
 
         // Assert - NOT a companion device, should be detected
         assertEquals("Non-companion device should be detected", 1, results.size)
+    }
+
+    // ==================== Detection Window Scoping Tests ====================
+
+    @Test
+    fun `runDetection - stale locations outside detection window should be excluded`() = runTest {
+        // Arrange: device has 5 locations total, but only 2 are within the 3-day detection window.
+        // The other 3 are from 30 days ago. Without window scoping, device passes threshold of 3.
+        // With window scoping, only 2 recent locations count → below threshold → excluded.
+        val device = createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Old History Device", "PHONE")
+        val now = System.currentTimeMillis()
+        val thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000L)
+        val oneDayAgo = now - (24 * 60 * 60 * 1000L)
+
+        // 3 old locations (outside 3-day window) + 2 recent ones
+        val locations = listOf(
+            createLocation(1, 40.000, -74.000, thirtyDaysAgo),               // old
+            createLocation(2, 40.010, -74.010, thirtyDaysAgo + 3600000L),    // old
+            createLocation(3, 40.020, -74.020, thirtyDaysAgo + 7200000L),    // old
+            createLocation(4, 40.030, -74.030, oneDayAgo),                   // recent
+            createLocation(5, 40.040, -74.040, now)                          // recent
+        )
+        // Records match the location timestamps
+        val deviceRecords = listOf(
+            DeviceLocationRecord(1, 1, 1, -70, thirtyDaysAgo, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(2, 1, 2, -70, thirtyDaysAgo + 3600000L, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(3, 1, 3, -70, thirtyDaysAgo + 7200000L, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(4, 1, 4, -70, oneDayAgo, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(5, 1, 5, -70, now, scanTriggerType = "PERIODIC")
+        )
+        val userLocations = createUserLocations(5)
+
+        coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
+        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
+        coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+
+        // Act
+        val results = detectionAlgorithm.runDetection()
+
+        // Assert - only 2 recent locations, below threshold of 3
+        assertTrue("Stale locations outside detection window should be excluded", results.isEmpty())
     }
 
     // ==================== Settings Integration Tests ====================

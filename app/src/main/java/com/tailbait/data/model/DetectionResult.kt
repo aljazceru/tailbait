@@ -49,6 +49,7 @@ data class DetectionResult(
     val avgDistance: Double,
     val detectionReason: String,
     val timeSpanMs: Long = 0L,
+    val scoreBreakdown: Map<String, Double>? = null,
     val timestamp: Long = System.currentTimeMillis(),
     val detectionId: String = generateDetectionId(device.id, timestamp)
 ) {

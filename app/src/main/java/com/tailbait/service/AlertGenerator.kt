@@ -334,6 +334,14 @@ class AlertGenerator @Inject constructor(
         jsonObject.put("timeSpan", detectionResult.getTimeSpan())
         jsonObject.put("detectionReason", detectionResult.detectionReason)
         jsonObject.put("detectionId", detectionResult.detectionId)
+
+        // Score breakdown for the alert detail UI
+        detectionResult.scoreBreakdown?.let { breakdown ->
+            for ((key, value) in breakdown) {
+                jsonObject.put(key, value)
+            }
+        }
+
         return jsonObject.toString()
     }
 
