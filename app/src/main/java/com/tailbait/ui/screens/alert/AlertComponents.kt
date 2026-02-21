@@ -657,8 +657,8 @@ private fun AlertCardCriticalPreview() {
             alert = AlertHistory(
                 id = 1,
                 alertLevel = "CRITICAL",
-                title = "Potential Stalking Device Detected",
-                message = "A device has been detected following you across multiple locations.",
+                title = "AirTag at 5 locations over 2 days",
+                message = "AA:BB:CC:DD:EE:FF · 2.5 km apart\n\nStrong tracking pattern. Consider contacting authorities if you feel unsafe.",
                 timestamp = System.currentTimeMillis() - 1800000,
                 deviceAddresses = "[\"AA:BB:CC:DD:EE:FF\"]",
                 locationIds = "[1, 2, 3, 4, 5]",
@@ -679,8 +679,8 @@ private fun AlertCardDismissedPreview() {
             alert = AlertHistory(
                 id = 2,
                 alertLevel = "HIGH",
-                title = "Suspicious Device Activity",
-                message = "Multiple devices detected at unusual times.",
+                title = "Unknown device at 3 locations over 6 hours",
+                message = "11:22:33:44:55:66 · 1.2 km apart\n\nThis device is following your movements.",
                 timestamp = System.currentTimeMillis() - 7200000,
                 deviceAddresses = "[\"11:22:33:44:55:66\", \"AA:BB:CC:DD:EE:FF\"]",
                 locationIds = "[1, 2, 3]",

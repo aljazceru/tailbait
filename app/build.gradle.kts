@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -16,14 +14,6 @@ kotlin {
     jvmToolchain(21)
 }
 
-// Load api keys from gradle.properties
-val props = Properties()
-props.load(project.rootProject.file("gradle.properties").inputStream())
-val mapsApiKey = props.getProperty("API_KEY_GOOGLE_MAPS")
-    ?.trim()
-    ?.trim('"')
-    ?: ""
-
 android {
     namespace = "com.tailbait"
     compileSdk = 35
@@ -36,12 +26,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Pass API key to build config
-        buildConfigField("String", "API_KEY_GOOGLE_MAPS", "\"$mapsApiKey\"")
-
-        // Inject Google Maps key into the manifest
-        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {

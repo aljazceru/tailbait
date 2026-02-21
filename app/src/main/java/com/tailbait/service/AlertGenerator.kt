@@ -50,12 +50,6 @@ class AlertGenerator @Inject constructor(
         private const val MIN_ALERT_INTERVAL_MS = 6 * 60 * 60 * 1000L    // 6 hours minimum
         private const val ESCALATION_WINDOW_MS = 72 * 60 * 60 * 1000L    // 72 hours
         private const val ESCALATION_THRESHOLD = 0.15                     // Score increase needed
-
-        // Alert message templates
-        private const val ALERT_TITLE_CRITICAL = "🚨 Critical Tracking Alert"
-        private const val ALERT_TITLE_HIGH = "⚠️ High Priority Alert"
-        private const val ALERT_TITLE_MEDIUM = "⚡ Medium Priority Alert"
-        private const val ALERT_TITLE_LOW = "ℹ️ Low Priority Alert"
     }
 
     /**
@@ -113,8 +107,8 @@ class AlertGenerator @Inject constructor(
             // Determine alert level
             val alertLevel = determineAlertLevel(detectionResult.threatScore)
 
-            // Create alert message
-            val title = createAlertTitle(alertLevel)
+            // Create alert content
+            val title = createAlertTitle(detectionResult)
             val message = createAlertMessage(detectionResult)
 
             // Prepare location IDs as JSON
@@ -227,64 +221,40 @@ class AlertGenerator @Inject constructor(
     }
 
     /**
-     * Create alert title based on alert level.
-     *
-     * @param alertLevel The alert level
-     * @return Alert title string
+     * Create descriptive alert title from the detection result.
+     * Severity is not included — the alert level badge and notification channel handle that.
      */
-    private fun createAlertTitle(alertLevel: String): String {
-        return when (alertLevel) {
-            Constants.ALERT_LEVEL_CRITICAL -> ALERT_TITLE_CRITICAL
-            Constants.ALERT_LEVEL_HIGH -> ALERT_TITLE_HIGH
-            Constants.ALERT_LEVEL_MEDIUM -> ALERT_TITLE_MEDIUM
-            Constants.ALERT_LEVEL_LOW -> ALERT_TITLE_LOW
-            else -> "Detection Alert"
-        }
+    private fun createAlertTitle(detectionResult: DetectionResult): String {
+        val deviceName = detectionResult.device.name ?: "Unknown device"
+        val locationCount = detectionResult.locations.size
+        val timeSpan = formatTimeSpan(detectionResult.getTimeSpan())
+        return "$deviceName at $locationCount locations over $timeSpan"
     }
 
     /**
-     * Create user-friendly alert message from detection result.
-     *
-     * @param detectionResult The detection result
-     * @return Alert message string
+     * Create concise alert message with actionable details.
+     * No severity labels — the badge, score indicator, and notification channel convey that.
      */
     private fun createAlertMessage(detectionResult: DetectionResult): String {
-        val device = detectionResult.device
-        val deviceName = device.name ?: "Unknown Device"
-        val locationCount = detectionResult.locations.size
         val maxDistanceKm = detectionResult.maxDistance / 1000.0
-        val threatLevel = detectionResult.getThreatLevel()
-
-        val timeSpan = formatTimeSpan(detectionResult.getTimeSpan())
 
         return buildString {
-            append("A suspicious device has been detected following your movements.\n\n")
-            append("Device: $deviceName\n")
-            append("MAC Address: ${device.address}\n")
-            append("Threat Level: ${threatLevel.displayName}\n")
-            append("Locations: $locationCount different places\n")
-            append("Max Distance: ${"%.1f".format(maxDistanceKm)} km\n")
-            append("Time Period: $timeSpan\n\n")
+            append(detectionResult.device.address)
+            append(" · ${"%.1f".format(maxDistanceKm)} km apart")
 
-            when (threatLevel) {
+            when (detectionResult.getThreatLevel()) {
                 ThreatLevel.CRITICAL -> {
-                    append("⚠️ CRITICAL: This device shows a very strong pattern of tracking behavior. ")
-                    append(
-                        "Please review the details immediately and consider contacting " +
-                            "authorities if you feel unsafe."
-                    )
+                    append("\n\nStrong tracking pattern. ")
+                    append("Consider contacting authorities if you feel unsafe.")
                 }
                 ThreatLevel.HIGH -> {
-                    append("⚠️ HIGH: This device shows a strong pattern of following behavior. ")
-                    append("Please review the detection details and take appropriate action.")
+                    append("\n\nThis device is following your movements.")
                 }
                 ThreatLevel.MEDIUM -> {
-                    append("⚡ MEDIUM: This device may be following you. ")
-                    append("Review the details to determine if this is a known device or requires action.")
+                    append("\n\nThis device may be following you. Check if you recognize it.")
                 }
                 ThreatLevel.LOW -> {
-                    append("ℹ️ LOW: This device has appeared at multiple locations. ")
-                    append("It may be a coincidence, but worth monitoring.")
+                    append("\n\nAppeared at multiple locations. May be coincidence.")
                 }
             }
         }

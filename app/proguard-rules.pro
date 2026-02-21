@@ -73,9 +73,9 @@
 -keep class com.google.android.gms.location.** { *; }
 -keep interface com.google.android.gms.location.** { *; }
 
-# Keep Maps classes
--keep class com.google.android.gms.maps.** { *; }
--keep interface com.google.android.gms.maps.** { *; }
+# ========== OSMDroid ==========
+-keep class org.osmdroid.** { *; }
+-dontwarn org.osmdroid.**
 
 # ========== Compose ==========
 -keep class androidx.compose.** { *; }
