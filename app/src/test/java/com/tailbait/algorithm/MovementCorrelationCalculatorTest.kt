@@ -5,7 +5,6 @@ import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.UserPath
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.util.UUID
 
 class MovementCorrelationCalculatorTest {
 
@@ -64,19 +63,22 @@ class MovementCorrelationCalculatorTest {
             UserPath(id = 4, locationId = 1, timestamp = 4000L, accuracy = 10f)
         )
 
-        // Device Only seen at Work -> Gym
+        // Device seen at Work -> Gym -> unknown location (not on user's route)
+        // Need at least MIN_RECORDS_FOR_ANALYSIS (3) device records
         val deviceRecords = listOf(
             createRecord(2, 2000L),
-            createRecord(3, 3000L)
+            createRecord(3, 3000L),
+            createRecord(4, 5000L)  // Location 4 is not in the user's path
         )
 
-        // It matches the sequence "2, 3" which is a subsequence of "1, 2, 3, 1"
-        // LCS length is 2.
-        // Device route length is 2.
-        // Route score = 2/2 = 1.0 (perfect match for where it was seen)
-        // Sync score = 2 matches / 3 user movements (1->2, 2->3, 3->1) = 0.66
-        // Dwell score should be high.
-        // Time pattern irrelevant here.
+        // Route: userRoute=[1,2,3,1], deviceRoute=[2,3,4]
+        //   LCS of [1,2,3,1] and [2,3,4] = 2 (matching 2,3)
+        //   routeScore = 2/3 = 0.667 (device went somewhere user didn't)
+        // Sync: 3 user movements (1->2 @2000, 2->3 @3000, 3->1 @4000)
+        //   All have device records within SYNC_WINDOW_MS -> syncScore = 1.0
+        // Dwell: shared locations 2,3 both match -> dwellScore = 1.0
+        // Time: all records at hour 0 -> timeScore = 1.0
+        // Total = 1.0*0.4 + 0.667*0.3 + 1.0*0.2 + 1.0*0.1 = 0.9
 
         val score = calculator.calculateCorrelation(
             deviceRecords = deviceRecords,
@@ -84,56 +86,51 @@ class MovementCorrelationCalculatorTest {
             deviceLocations = emptyList()
         )
 
-        // Expected roughly:
-        // Sync (0.4) * 0.66 = 0.264
-        // Route (0.3) * 1.0 = 0.3
-        // Dwell (0.15) * 1.0 = 0.15
-        // Time (0.15) * ~0.5 = 0.075
-        // Total ~0.79
-        
-        // Assert it's high but not perfect, or at least consistent
-        // Just checking it runs without crashing and provides non-zero score
+        // Score should be high but not perfect due to route divergence
         assert(score > 0.5)
+        assert(score < 1.0)
     }
     
     @Test
     fun calculateMovementSynchronization_detectsSync() {
          // This tests the specific logic of "did the device move when I moved?"
-         
-         // User moves: A -> B
+
+         // User moves: A -> A -> B -> B (need at least MIN_RECORDS_FOR_ANALYSIS=3 userPaths)
          val userPaths = listOf(
             UserPath(id = 1, locationId = 1, timestamp = 1000L, accuracy = 10f), // Stay at A
             UserPath(id = 2, locationId = 1, timestamp = 1500L, accuracy = 10f), // Stay at A
-            UserPath(id = 3, locationId = 2, timestamp = 2000L, accuracy = 10f)  // Move to B!
+            UserPath(id = 3, locationId = 2, timestamp = 2000L, accuracy = 10f), // Move to B!
+            UserPath(id = 4, locationId = 2, timestamp = 2500L, accuracy = 10f)  // Stay at B
         )
-        
-        // Device seen at A then B
+
+        // Device seen at A, then at A again, then at B (need at least 3 records)
+        // All timestamps within SYNC_WINDOW_MS (300,000ms) of the user movement at t=2000
         val deviceRecords = listOf(
-            createRecord(1, 1500L),
-            createRecord(2, 2050L) // Shortly after user arrival at B
+            createRecord(1, 1000L),  // At A when user is at A
+            createRecord(1, 1500L),  // At A when user is at A
+            createRecord(2, 2050L)   // At B shortly after user moves to B
         )
-        
+
         val breakdown = calculator.calculateWithBreakdown(
             deviceRecords = deviceRecords,
-            userPaths = userPaths, 
+            userPaths = userPaths,
             deviceLocations = emptyList()
         )
-        
-        // Should have high sync score
+
+        // User has one movement: locationId change from 1->2 at timestamp 2000
+        // Device record at 2050 is within SYNC_WINDOW_MS of 2000
+        // syncScore = 1/1 matched movements = 1.0
         assertEquals(1.0, breakdown.movementSyncScore, 0.01)
     }
 
     private fun createRecord(locationId: Long, timestamp: Long): DeviceLocationRecord {
         return DeviceLocationRecord(
             id = 0,
-            scanId = 0,
-            scannedDeviceId = 0,
+            deviceId = 0,
             locationId = locationId,
             timestamp = timestamp,
             rssi = -50,
-            txPower = null,
-            isLegacy = false,
-            locationChanged = true
+            scanTriggerType = "PERIODIC"
         )
     }
 }

@@ -53,21 +53,27 @@ class LearnModeViewModelTest {
     private val backgroundLocationPermissionFlow = MutableStateFlow(PermissionHelper.PermissionState.GRANTED)
     private val notificationPermissionFlow = MutableStateFlow(PermissionHelper.PermissionState.GRANTED)
 
+    // Controllable flow for isLearnModeActive
+    private lateinit var learnModeActiveFlow: MutableStateFlow<Boolean>
+
+    // Fixed timestamps for deterministic tests
+    private val baseTimestamp = 1000000000L
+
     // Test data
     private val testDevice1 = ScannedDevice(
         id = 1L,
         address = "AA:BB:CC:DD:EE:FF",
         name = "Test Device 1",
-        firstSeen = System.currentTimeMillis(),
-        lastSeen = System.currentTimeMillis()
+        firstSeen = baseTimestamp,
+        lastSeen = baseTimestamp
     )
 
     private val testDevice2 = ScannedDevice(
         id = 2L,
         address = "11:22:33:44:55:66",
         name = "Test Device 2",
-        firstSeen = System.currentTimeMillis(),
-        lastSeen = System.currentTimeMillis()
+        firstSeen = baseTimestamp,
+        lastSeen = baseTimestamp
     )
 
     private val testSettings = AppSettings(
@@ -87,13 +93,16 @@ class LearnModeViewModelTest {
         bleScannerManager = mockk(relaxed = true)
         permissionHelper = mockk(relaxed = true)
 
+        // Initialize controllable flow
+        learnModeActiveFlow = MutableStateFlow(false)
+
         // Setup default mock behaviors
         coEvery { settingsRepository.getSettingsOnce() } returns testSettings
-        coEvery { settingsRepository.isLearnModeActive() } returns flowOf(false)
-        coEvery { deviceRepository.getAllDevices() } returns flowOf(emptyList())
-        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { permissionHelper.areEssentialPermissionsGranted() } returns true
-        coEvery { permissionHelper.checkAllPermissions() } just Runs
+        every { settingsRepository.isLearnModeActive() } returns learnModeActiveFlow
+        every { deviceRepository.getAllDevices() } returns flowOf(emptyList())
+        every { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        every { permissionHelper.areEssentialPermissionsGranted() } returns true
+        every { permissionHelper.checkAllPermissions() } just Runs
         every { permissionHelper.bluetoothPermissionsState } returns bluetoothPermissionFlow
         every { permissionHelper.locationPermissionsState } returns locationPermissionFlow
         every { permissionHelper.backgroundLocationPermissionState } returns backgroundLocationPermissionFlow
@@ -116,6 +125,38 @@ class LearnModeViewModelTest {
         )
     }
 
+    /**
+     * Helper to create a ViewModel with learn mode already active and devices discovered.
+     * Sets up mocks so that the scanning loop populates discoveredDevices,
+     * then stops learn mode to terminate the loops.
+     */
+    private fun TestScope.createViewModelWithDevices(
+        devices: List<ScannedDevice>,
+        whitelistedIds: List<Long> = emptyList()
+    ): LearnModeViewModel {
+        val learnModeStartTime = baseTimestamp - 10000
+
+        every { deviceRepository.getAllDevices() } returns flowOf(devices)
+        every { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(whitelistedIds)
+        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
+            learnModeActive = true,
+            learnModeStartedAt = learnModeStartTime
+        )
+
+        val vm = createViewModel()
+
+        // Trigger learn mode to start scanning, which populates discoveredDevices
+        learnModeActiveFlow.value = true
+        advanceTimeBy(100)
+
+        // Stop the scanning/timer loops so tests can proceed without infinite loops
+        learnModeActiveFlow.value = false
+        coEvery { settingsRepository.getSettingsOnce() } returns testSettings
+        advanceTimeBy(15000) // advance past scan interval to let loops terminate
+
+        return vm
+    }
+
     @Test
     fun `initial state is correct`() = runTest {
         viewModel = createViewModel()
@@ -136,22 +177,23 @@ class LearnModeViewModelTest {
         advanceUntilIdle()
 
         coEvery { settingsRepository.startLearnMode() } just Runs
-        coEvery { settingsRepository.isLearnModeActive() } returns flowOf(true)
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
-            learnModeActive = true,
-            learnModeStartedAt = System.currentTimeMillis()
-        )
 
         viewModel.startLearnMode()
-        advanceUntilIdle()
+        // Just advance enough for the coroutine to start and set state, not the full timer
+        advanceTimeBy(100)
 
         coVerify { settingsRepository.startLearnMode() }
         assertTrue(viewModel.uiState.value.isActive)
+
+        // Stop learn mode to clean up loops
+        coEvery { settingsRepository.stopLearnMode() } just Runs
+        viewModel.stopLearnMode()
+        advanceTimeBy(15000)
     }
 
     @Test
     fun `startLearnMode fails without permissions`() = runTest {
-        coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
+        every { permissionHelper.areEssentialPermissionsGranted() } returns false
 
         viewModel = createViewModel()
         advanceUntilIdle()
@@ -166,23 +208,21 @@ class LearnModeViewModelTest {
 
     @Test
     fun `stopLearnMode updates state and settings`() = runTest {
-        // Start learn mode first
         coEvery { settingsRepository.startLearnMode() } just Runs
         coEvery { settingsRepository.stopLearnMode() } just Runs
-        coEvery { settingsRepository.isLearnModeActive() } returns flowOf(true, false)
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
-            learnModeActive = true,
-            learnModeStartedAt = System.currentTimeMillis()
-        )
 
         viewModel = createViewModel()
         advanceUntilIdle()
 
+        // Start learn mode
         viewModel.startLearnMode()
-        advanceUntilIdle()
+        advanceTimeBy(100)
 
+        assertTrue(viewModel.uiState.value.isActive)
+
+        // Stop learn mode
         viewModel.stopLearnMode()
-        advanceUntilIdle()
+        advanceTimeBy(15000)
 
         coVerify { settingsRepository.stopLearnMode() }
         assertFalse(viewModel.uiState.value.isActive)
@@ -191,14 +231,10 @@ class LearnModeViewModelTest {
 
     @Test
     fun `toggleDeviceSelection adds and removes device`() = runTest {
-        coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1))
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
-            learnModeActive = true,
-            learnModeStartedAt = System.currentTimeMillis() - 10000
-        )
+        viewModel = createViewModelWithDevices(listOf(testDevice1))
 
-        viewModel = createViewModel()
-        advanceUntilIdle()
+        // Verify device is discovered
+        assertFalse(viewModel.uiState.value.discoveredDevices.isEmpty())
 
         // Toggle to select
         viewModel.toggleDeviceSelection(testDevice1.id)
@@ -215,15 +251,10 @@ class LearnModeViewModelTest {
 
     @Test
     fun `toggleDeviceSelection does not select already whitelisted device`() = runTest {
-        coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1))
-        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(listOf(testDevice1.id))
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
-            learnModeActive = true,
-            learnModeStartedAt = System.currentTimeMillis() - 10000
+        viewModel = createViewModelWithDevices(
+            devices = listOf(testDevice1),
+            whitelistedIds = listOf(testDevice1.id)
         )
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
 
         viewModel.toggleDeviceSelection(testDevice1.id)
         advanceUntilIdle()
@@ -234,14 +265,7 @@ class LearnModeViewModelTest {
 
     @Test
     fun `updateDeviceLabel updates label and category`() = runTest {
-        coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1))
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
-            learnModeActive = true,
-            learnModeStartedAt = System.currentTimeMillis() - 10000
-        )
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
+        viewModel = createViewModelWithDevices(listOf(testDevice1))
 
         val newLabel = "My Custom Device"
         val newCategory = Constants.WHITELIST_CATEGORY_PARTNER
@@ -257,14 +281,7 @@ class LearnModeViewModelTest {
 
     @Test
     fun `showLabelDialog sets deviceToLabel`() = runTest {
-        coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1))
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
-            learnModeActive = true,
-            learnModeStartedAt = System.currentTimeMillis() - 10000
-        )
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
+        viewModel = createViewModelWithDevices(listOf(testDevice1))
 
         viewModel.showLabelDialog(testDevice1.id)
         advanceUntilIdle()
@@ -294,7 +311,7 @@ class LearnModeViewModelTest {
         advanceUntilIdle()
 
         viewModel.finishLearnMode()
-        advanceUntilIdle()
+        advanceTimeBy(15000) // Let stopLearnMode complete (called inside finishLearnMode)
 
         assertFalse(viewModel.uiState.value.showConfirmationDialog)
         assertNotNull(viewModel.uiState.value.errorMessage)
@@ -302,14 +319,7 @@ class LearnModeViewModelTest {
 
     @Test
     fun `finishLearnMode with selection shows confirmation dialog`() = runTest {
-        coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1))
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
-            learnModeActive = true,
-            learnModeStartedAt = System.currentTimeMillis() - 10000
-        )
-
-        viewModel = createViewModel()
-        advanceUntilIdle()
+        viewModel = createViewModelWithDevices(listOf(testDevice1))
 
         // Select a device
         viewModel.toggleDeviceSelection(testDevice1.id)
@@ -324,16 +334,10 @@ class LearnModeViewModelTest {
 
     @Test
     fun `confirmAddToWhitelist adds devices and shows success`() = runTest {
-        coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1, testDevice2))
         coEvery { whitelistRepository.addMultipleToWhitelist(any()) } returns listOf(1L, 2L)
         coEvery { settingsRepository.stopLearnMode() } just Runs
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings.copy(
-            learnModeActive = true,
-            learnModeStartedAt = System.currentTimeMillis() - 10000
-        )
 
-        viewModel = createViewModel()
-        advanceUntilIdle()
+        viewModel = createViewModelWithDevices(listOf(testDevice1, testDevice2))
 
         // Select devices
         viewModel.toggleDeviceSelection(testDevice1.id)
@@ -345,7 +349,7 @@ class LearnModeViewModelTest {
         advanceUntilIdle()
 
         viewModel.confirmAddToWhitelist()
-        advanceUntilIdle()
+        advanceTimeBy(15000) // Let stopLearnMode inside confirmAddToWhitelist complete
 
         coVerify { whitelistRepository.addMultipleToWhitelist(any()) }
         coVerify { settingsRepository.stopLearnMode() }

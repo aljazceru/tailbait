@@ -25,7 +25,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"
         tools:targetApi="34" />
 
-    <!-- Internet for Google Maps -->
+    <!-- Internet for OpenStreetMap tiles -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -52,11 +52,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.TailBait"
         tools:targetApi="31">
-
-        <!-- Google Maps API Key -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="${MAPS_API_KEY}" />
 
         <!-- Main Activity -->
         <activity

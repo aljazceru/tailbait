@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -15,7 +16,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.tailbait.R
 import com.tailbait.ui.components.EmptyView
-import com.tailbait.ui.components.KeyValueColumn
 import com.tailbait.ui.components.LoadingView
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,20 +67,47 @@ private fun AlertDetailContent(
     state: AlertDetailViewModel.AlertDetailUiState,
     onDeviceClick: (String) -> Unit
 ) {
+    val alert = state.alert ?: return
+    val alertLevel = AlertLevel.fromString(alert.alertLevel)
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Alert Info Section
+        // Alert header
         item {
             Card {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    KeyValueColumn(label = "Title", value = state.alert?.title ?: "Unknown")
-                    KeyValueColumn(label = "Message", value = state.alert?.message ?: "No message")
-                    KeyValueColumn(label = "Level", value = state.alert?.alertLevel ?: "Unknown")
-                    KeyValueColumn(label = "Timestamp", value = formatTimestamp(state.alert?.timestamp ?: 0))
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        AlertLevelBadge(
+                            alertLevel = alertLevel,
+                            isDismissed = alert.isDismissed
+                        )
+                        ThreatScoreIndicator(
+                            threatScore = alert.threatScore,
+                            size = 56.dp
+                        )
+                    }
+                    Text(
+                        text = alert.title,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        text = alert.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = formatTimestamp(alert.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

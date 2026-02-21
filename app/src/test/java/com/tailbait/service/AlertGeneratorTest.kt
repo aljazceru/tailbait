@@ -14,6 +14,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Unit tests for AlertGenerator.
@@ -25,15 +28,23 @@ import org.junit.Test
  * - Duplicate alert prevention (throttling)
  * - Alert count queries
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class AlertGeneratorTest {
 
     private lateinit var alertRepository: AlertRepository
+    private lateinit var notificationHelper: NotificationHelper
     private lateinit var alertGenerator: AlertGenerator
 
     @Before
     fun setup() {
         alertRepository = mockk()
-        alertGenerator = AlertGenerator(alertRepository)
+        notificationHelper = mockk(relaxed = true)
+
+        // Default: no previous alert for any device (first-time alert scenario)
+        coEvery { alertRepository.getLatestAlertForDevice(any()) } returns null
+
+        alertGenerator = AlertGenerator(alertRepository, notificationHelper)
     }
 
     @Test
@@ -365,6 +376,155 @@ class AlertGeneratorTest {
 
         // Then
         assertEquals(2, count)
+    }
+
+    // ==================== Smart Throttling Tests ====================
+
+    @Test
+    fun `generateAlert suppresses re-alert within 6 hours`() = runTest {
+        // Given - last alert was 2 hours ago, same score
+        val now = System.currentTimeMillis()
+        val twoHoursAgo = now - (2 * 60 * 60 * 1000L)
+        val previousAlert = AlertHistory(
+            id = 10,
+            alertLevel = Constants.ALERT_LEVEL_HIGH,
+            title = "Previous",
+            message = "Previous alert",
+            timestamp = twoHoursAgo,
+            deviceAddresses = "[\"AA:BB:CC:DD:EE:FF\"]",
+            locationIds = "[1,2,3]",
+            threatScore = 0.75,
+            detectionDetails = "{}"
+        )
+        val detectionResult = createTestDetectionResult(0.75)
+
+        coEvery {
+            alertRepository.getLatestAlertForDevice(any())
+        } returns previousAlert
+        coEvery {
+            alertRepository.insertAlertWithThrottling(any(), any())
+        } returns 1L
+
+        // When
+        val alertId = alertGenerator.generateAlert(detectionResult)
+
+        // Then - should be suppressed (< 6 hours)
+        assertNull("Should suppress re-alert within 6 hours", alertId)
+    }
+
+    @Test
+    fun `generateAlert suppresses re-alert within 72 hours without escalation`() = runTest {
+        // Given - last alert was 24 hours ago, same score (no escalation)
+        val now = System.currentTimeMillis()
+        val oneDayAgo = now - (24 * 60 * 60 * 1000L)
+        val previousAlert = AlertHistory(
+            id = 10,
+            alertLevel = Constants.ALERT_LEVEL_HIGH,
+            title = "Previous",
+            message = "Previous alert",
+            timestamp = oneDayAgo,
+            deviceAddresses = "[\"AA:BB:CC:DD:EE:FF\"]",
+            locationIds = "[1,2,3]",
+            threatScore = 0.75,
+            detectionDetails = "{}"
+        )
+        val detectionResult = createTestDetectionResult(0.80) // Only 0.05 increase, below 0.15 threshold
+
+        coEvery {
+            alertRepository.getLatestAlertForDevice(any())
+        } returns previousAlert
+        coEvery {
+            alertRepository.insertAlertWithThrottling(any(), any())
+        } returns 1L
+
+        // When
+        val alertId = alertGenerator.generateAlert(detectionResult)
+
+        // Then - should be suppressed (< 72 hours AND score increase < 0.15)
+        assertNull("Should suppress without significant escalation", alertId)
+    }
+
+    @Test
+    fun `generateAlert allows re-alert when score escalates significantly`() = runTest {
+        // Given - last alert was 12 hours ago, score jumped from 0.60 to 0.80 (+0.20)
+        val now = System.currentTimeMillis()
+        val twelveHoursAgo = now - (12 * 60 * 60 * 1000L)
+        val previousAlert = AlertHistory(
+            id = 10,
+            alertLevel = Constants.ALERT_LEVEL_MEDIUM,
+            title = "Previous",
+            message = "Previous alert",
+            timestamp = twelveHoursAgo,
+            deviceAddresses = "[\"AA:BB:CC:DD:EE:FF\"]",
+            locationIds = "[1,2,3]",
+            threatScore = 0.60,
+            detectionDetails = "{}"
+        )
+        val detectionResult = createTestDetectionResult(0.80) // +0.20, above 0.15 threshold
+
+        coEvery {
+            alertRepository.getLatestAlertForDevice(any())
+        } returns previousAlert
+        coEvery {
+            alertRepository.insertAlertWithThrottling(any(), any())
+        } returns 11L
+
+        // When
+        val alertId = alertGenerator.generateAlert(detectionResult)
+
+        // Then - should allow (score escalated >= 0.15)
+        assertNotNull("Should allow alert when score escalates", alertId)
+    }
+
+    @Test
+    fun `generateAlert allows periodic reminder after 72 hours`() = runTest {
+        // Given - last alert was 4 days ago
+        val now = System.currentTimeMillis()
+        val fourDaysAgo = now - (4 * 24 * 60 * 60 * 1000L)
+        val previousAlert = AlertHistory(
+            id = 10,
+            alertLevel = Constants.ALERT_LEVEL_HIGH,
+            title = "Previous",
+            message = "Previous alert",
+            timestamp = fourDaysAgo,
+            deviceAddresses = "[\"AA:BB:CC:DD:EE:FF\"]",
+            locationIds = "[1,2,3]",
+            threatScore = 0.75,
+            detectionDetails = "{}"
+        )
+        val detectionResult = createTestDetectionResult(0.75) // Same score
+
+        coEvery {
+            alertRepository.getLatestAlertForDevice(any())
+        } returns previousAlert
+        coEvery {
+            alertRepository.insertAlertWithThrottling(any(), any())
+        } returns 11L
+
+        // When
+        val alertId = alertGenerator.generateAlert(detectionResult)
+
+        // Then - should allow (>= 72 hours periodic reminder)
+        assertNotNull("Should allow periodic reminder after 72 hours", alertId)
+    }
+
+    @Test
+    fun `generateAlert allows first alert for new device`() = runTest {
+        // Given - no previous alert for this device
+        val detectionResult = createTestDetectionResult(0.75)
+
+        coEvery {
+            alertRepository.getLatestAlertForDevice(any())
+        } returns null
+        coEvery {
+            alertRepository.insertAlertWithThrottling(any(), any())
+        } returns 1L
+
+        // When
+        val alertId = alertGenerator.generateAlert(detectionResult)
+
+        // Then - should allow (first alert)
+        assertNotNull("Should allow first alert for new device", alertId)
     }
 
     // Helper functions

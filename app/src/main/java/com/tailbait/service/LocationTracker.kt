@@ -106,13 +106,17 @@ class LocationTracker @Inject constructor(
                 result.lastLocation?.let { location ->
                     Timber.d("Location update received: accuracy=${location.accuracy}m")
 
-                    // Only accept locations with accuracy < 100m
-                    _locationState.value = LocationState.LocationUpdated(location)
-                    Timber.i(
-                        "Location update: lat=${location.latitude}, " +
-                                "lon=${location.longitude}, " +
-                                "accuracy=${location.accuracy}m"
-                    )
+                    // Only accept locations with accuracy < 200m (matching repository max)
+                    if (location.accuracy <= 200f) {
+                        _locationState.value = LocationState.LocationUpdated(location)
+                        Timber.i(
+                            "Location update: lat=${location.latitude}, " +
+                                    "lon=${location.longitude}, " +
+                                    "accuracy=${location.accuracy}m"
+                        )
+                    } else {
+                        Timber.w("Dropped low accuracy location: ${location.accuracy}m > 200m")
+                    }
                 }
             }
 

@@ -191,6 +191,28 @@ interface LocationDao {
     ): List<Location>
 
     /**
+     * Find nearest location within a given radius, without any time constraint.
+     * Used by findOrCreateLocation to prevent duplicate locations across days.
+     *
+     * @param latMin Minimum latitude (box bound)
+     * @param latMax Maximum latitude (box bound)
+     * @param lonMin Minimum longitude (box bound)
+     * @param lonMax Maximum longitude (box bound)
+     * @return List of candidate locations (further filtering needed for exact distance)
+     */
+    @Query("""
+        SELECT * FROM locations
+        WHERE latitude BETWEEN :latMin AND :latMax
+          AND longitude BETWEEN :lonMin AND :lonMax
+        ORDER BY timestamp DESC
+        LIMIT 5
+    """)
+    suspend fun getNearbyCandidatesAllTime(
+        latMin: Double, latMax: Double,
+        lonMin: Double, lonMax: Double
+    ): List<Location>
+
+    /**
      * Update the timestamp of an existing location.
      * Used when reusing a nearby location to record the latest visit.
      *

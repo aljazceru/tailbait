@@ -1,5 +1,6 @@
 package com.tailbait.ui.screens.home
 
+import android.content.Context
 import com.tailbait.data.database.entities.AppSettings
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.repository.DeviceRepository
@@ -7,9 +8,11 @@ import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.data.repository.WhitelistRepository
 import com.tailbait.service.BleScannerManager
 import com.tailbait.util.PermissionHelper
+import androidx.lifecycle.viewModelScope
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
@@ -32,10 +35,12 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
 
-    // Test dispatcher
-    private val testDispatcher = StandardTestDispatcher()
+    // Use UnconfinedTestDispatcher so viewModelScope.launch executes eagerly,
+    // which avoids race conditions with the ViewModel's use of Dispatchers.IO.
+    private val testDispatcher = UnconfinedTestDispatcher()
 
     // Mocked dependencies
+    private lateinit var context: Context
     private lateinit var deviceRepository: DeviceRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var whitelistRepository: WhitelistRepository
@@ -44,6 +49,7 @@ class HomeViewModelTest {
 
     // StateFlows for mocking
     private val scanStateFlow = MutableStateFlow<BleScannerManager.ScanState>(BleScannerManager.ScanState.Idle)
+    private val lastScanTimeFlow = MutableStateFlow(0L)
     private val bluetoothPermissionFlow = MutableStateFlow(PermissionHelper.PermissionState.GRANTED)
     private val locationPermissionFlow = MutableStateFlow(PermissionHelper.PermissionState.GRANTED)
     private val backgroundLocationPermissionFlow = MutableStateFlow(PermissionHelper.PermissionState.GRANTED)
@@ -79,6 +85,7 @@ class HomeViewModelTest {
         Dispatchers.setMain(testDispatcher)
 
         // Initialize mocks
+        context = mockk(relaxed = true)
         deviceRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         whitelistRepository = mockk(relaxed = true)
@@ -87,6 +94,7 @@ class HomeViewModelTest {
 
         // Reset state flows
         scanStateFlow.value = BleScannerManager.ScanState.Idle
+        lastScanTimeFlow.value = 0L
         bluetoothPermissionFlow.value = PermissionHelper.PermissionState.GRANTED
         locationPermissionFlow.value = PermissionHelper.PermissionState.GRANTED
         backgroundLocationPermissionFlow.value = PermissionHelper.PermissionState.GRANTED
@@ -96,6 +104,8 @@ class HomeViewModelTest {
         coEvery { settingsRepository.getSettings() } returns flowOf(testSettings)
         coEvery { deviceRepository.getAllDevices() } returns flowOf(emptyList())
         every { bleScannerManager.scanState } returns scanStateFlow
+        every { bleScannerManager.lastScanTime } returns lastScanTimeFlow
+        every { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
         coEvery { permissionHelper.checkAllPermissions() } just Runs
         coEvery { permissionHelper.areEssentialPermissionsGranted() } returns true
         every { permissionHelper.bluetoothPermissionsState } returns bluetoothPermissionFlow
@@ -106,6 +116,17 @@ class HomeViewModelTest {
 
     @After
     fun tearDown() {
+        // Cancel the ViewModel's coroutine scope to prevent leaked coroutines.
+        // The ViewModel uses flowOn(Dispatchers.IO) which spawns a ProducerCoroutine
+        // on the IO thread. We must cancel the scope AND wait for the IO-thread
+        // cancellation to propagate before resetting Main, otherwise the IO coroutine
+        // tries to dispatch back to an already-reset Main dispatcher and throws
+        // IllegalStateException, which poisons the next test.
+        if (::viewModel.isInitialized) {
+            viewModel.viewModelScope.cancel()
+            // Give IO threads time to complete cancellation before Main is reset
+            Thread.sleep(50)
+        }
         Dispatchers.resetMain()
         clearAllMocks()
     }
@@ -116,8 +137,25 @@ class HomeViewModelTest {
             settingsRepository = settingsRepository,
             whitelistRepository = whitelistRepository,
             bleScannerManager = bleScannerManager,
-            permissionHelper = permissionHelper
+            permissionHelper = permissionHelper,
+            context = context
         )
+    }
+
+    /**
+     * Helper to advance past the 100ms debounce in HomeViewModel's initializeViewModel().
+     *
+     * The ViewModel uses flowOn(Dispatchers.IO) and debounce(100). With UnconfinedTestDispatcher
+     * as Main, the viewModelScope.launch executes eagerly, but the IO thread hop and debounce
+     * still need time. We sleep briefly to let the IO work complete, then advance virtual time
+     * past the debounce.
+     */
+    private fun TestScope.advanceUntilSettled() {
+        // Allow Dispatchers.IO work (withContext + flowOn) to complete on real threads
+        Thread.sleep(100)
+        advanceUntilIdle()
+        advanceTimeBy(200) // past the 100ms debounce
+        advanceUntilIdle()
     }
 
     @Test
@@ -132,7 +170,7 @@ class HomeViewModelTest {
     @Test
     fun `initial state loads correctly with no devices`() = runTest {
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
@@ -150,7 +188,7 @@ class HomeViewModelTest {
         coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1, testDevice2))
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
@@ -163,7 +201,7 @@ class HomeViewModelTest {
         coEvery { settingsRepository.updateTrackingEnabled(any()) } just Runs
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         // Initial state: tracking disabled
         assertFalse(viewModel.uiState.value.isTrackingEnabled)
@@ -183,7 +221,7 @@ class HomeViewModelTest {
         coEvery { settingsRepository.updateTrackingEnabled(any()) } just Runs
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         // Initial state: tracking enabled
         assertTrue(viewModel.uiState.value.isTrackingEnabled)
@@ -201,7 +239,7 @@ class HomeViewModelTest {
         coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         viewModel.toggleTracking()
         advanceUntilIdle()
@@ -219,7 +257,7 @@ class HomeViewModelTest {
         coEvery { bleScannerManager.performManualScan() } returns 5
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         viewModel.performManualScan()
         advanceUntilIdle()
@@ -232,7 +270,7 @@ class HomeViewModelTest {
         coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         viewModel.performManualScan()
         advanceUntilIdle()
@@ -250,7 +288,7 @@ class HomeViewModelTest {
         scanStateFlow.value = BleScannerManager.ScanState.Scanning(devicesFound = 3)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         val state = viewModel.uiState.value
         assertEquals(HomeViewModel.ScanStatus.Scanning, state.scanState)
@@ -263,7 +301,7 @@ class HomeViewModelTest {
         scanStateFlow.value = BleScannerManager.ScanState.Error(message = errorMessage)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         val state = viewModel.uiState.value
         assertEquals(HomeViewModel.ScanStatus.Error, state.scanState)
@@ -276,7 +314,7 @@ class HomeViewModelTest {
         coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         val state = viewModel.uiState.value
         assertFalse(state.permissionStatus.bluetoothGranted)
@@ -289,7 +327,7 @@ class HomeViewModelTest {
         coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         val state = viewModel.uiState.value
         assertFalse(state.permissionStatus.locationGranted)
@@ -299,7 +337,7 @@ class HomeViewModelTest {
     @Test
     fun `refreshPermissionStatus triggers permission check`() = runTest {
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         viewModel.refreshPermissionStatus()
         advanceUntilIdle()
@@ -314,7 +352,7 @@ class HomeViewModelTest {
         scanStateFlow.value = BleScannerManager.ScanState.Error(message = errorMessage)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         // Error should be present
         assertNotNull(viewModel.uiState.value.errorMessage)
@@ -328,7 +366,7 @@ class HomeViewModelTest {
     @Test
     fun `getScanStatusText returns correct text for Idle`() = runTest {
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         assertEquals("Idle", viewModel.getScanStatusText())
     }
@@ -338,7 +376,7 @@ class HomeViewModelTest {
         scanStateFlow.value = BleScannerManager.ScanState.Scanning(devicesFound = 5)
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         assertEquals("Scanning...", viewModel.getScanStatusText())
     }
@@ -348,7 +386,7 @@ class HomeViewModelTest {
         scanStateFlow.value = BleScannerManager.ScanState.Error(message = "Error")
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         assertEquals("Error", viewModel.getScanStatusText())
     }
@@ -356,7 +394,7 @@ class HomeViewModelTest {
     @Test
     fun `getPermissionStatusText returns correct text when all granted`() = runTest {
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         assertEquals("All permissions granted", viewModel.getPermissionStatusText())
     }
@@ -367,7 +405,7 @@ class HomeViewModelTest {
         coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         assertTrue(viewModel.getPermissionStatusText().contains("Bluetooth"))
     }
@@ -375,7 +413,7 @@ class HomeViewModelTest {
     @Test
     fun `canEnableTracking returns true when all permissions granted`() = runTest {
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         assertTrue(viewModel.canEnableTracking())
     }
@@ -386,7 +424,7 @@ class HomeViewModelTest {
         coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
         viewModel = createViewModel()
-        advanceUntilIdle()
+        advanceUntilSettled()
 
         assertFalse(viewModel.canEnableTracking())
     }

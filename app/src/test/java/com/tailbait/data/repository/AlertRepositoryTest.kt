@@ -512,21 +512,27 @@ class AlertRepositoryTest {
     }
 
     @Test
-    fun `getAlertStatistics returns list of alert statistics`() = runTest {
+    fun `getAlertStatistics returns map of alert level to count`() = runTest {
         // Given
-        val expectedStats = listOf(
+        val daoStats = listOf(
             AlertStatistic(AlertLevel.LOW, 1),
             AlertStatistic(AlertLevel.MEDIUM, 1),
             AlertStatistic(AlertLevel.HIGH, 1),
             AlertStatistic(AlertLevel.CRITICAL, 1)
         )
-        coEvery { alertHistoryDao.getAlertStatistics() } returns expectedStats
+        coEvery { alertHistoryDao.getAlertStatistics() } returns daoStats
 
         // When
         val actualStats = repository.getAlertStatistics()
 
-        // Then
-        assertEquals(expectedStats, actualStats)
+        // Then - production converts List<AlertStatistic> to Map<String, Int>
+        val expectedMap = mapOf(
+            AlertLevel.LOW to 1,
+            AlertLevel.MEDIUM to 1,
+            AlertLevel.HIGH to 1,
+            AlertLevel.CRITICAL to 1
+        )
+        assertEquals(expectedMap, actualStats)
         coVerify { alertHistoryDao.getAlertStatistics() }
     }
 

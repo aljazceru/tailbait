@@ -282,6 +282,21 @@ interface AlertHistoryDao {
     suspend fun dismissAllAlerts(dismissedAt: Long): Int
 
     /**
+     * Get the most recent alert for a specific device address string.
+     * Used for smart throttling: check previous alert score to decide on escalation.
+     *
+     * @param deviceAddresses The JSON device addresses string to match
+     * @return The most recent alert for this device, or null if none
+     */
+    @Query("""
+        SELECT * FROM alert_history
+        WHERE device_addresses = :deviceAddresses
+        ORDER BY timestamp DESC
+        LIMIT 1
+    """)
+    suspend fun getLatestAlertForDevice(deviceAddresses: String): AlertHistory?
+
+    /**
      * Delete alerts older than the specified timestamp.
      * Used for data retention cleanup.
      *

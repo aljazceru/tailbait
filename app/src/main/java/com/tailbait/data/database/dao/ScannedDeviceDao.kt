@@ -256,10 +256,12 @@ interface ScannedDeviceDao {
     /**
      * Get suspicious devices including their linked devices (MAC rotations).
      * This query considers all locations across all linked devices as one.
+     * Only considers device_location_records with timestamps >= sinceTimestamp.
      *
      * This is the CRITICAL query for detecting AirTags that rotate MACs.
      *
      * @param minLocationCount Minimum number of distinct locations required
+     * @param sinceTimestamp Only consider records after this timestamp (epoch ms)
      * @return Flow emitting list of suspicious devices
      */
     @RewriteQueriesToDropUnusedColumns
@@ -267,8 +269,9 @@ interface ScannedDeviceDao {
         SELECT sd.*,
             (SELECT COUNT(DISTINCT dlr.location_id)
              FROM device_location_records dlr
-             WHERE dlr.device_id = sd.id
-                OR dlr.device_id IN (SELECT id FROM scanned_devices WHERE linked_device_id = sd.id)
+             WHERE (dlr.device_id = sd.id
+                OR dlr.device_id IN (SELECT id FROM scanned_devices WHERE linked_device_id = sd.id))
+               AND dlr.timestamp >= :sinceTimestamp
             ) as total_location_count
         FROM scanned_devices sd
         WHERE sd.id NOT IN (SELECT device_id FROM whitelist_entries)
@@ -277,7 +280,7 @@ interface ScannedDeviceDao {
         HAVING total_location_count >= :minLocationCount
         ORDER BY total_location_count DESC
     """)
-    fun getSuspiciousDevicesWithLinked(minLocationCount: Int): Flow<List<ScannedDevice>>
+    fun getSuspiciousDevicesWithLinked(minLocationCount: Int, sinceTimestamp: Long): Flow<List<ScannedDevice>>
 
     /**
      * Update the linked_device_id for a device.

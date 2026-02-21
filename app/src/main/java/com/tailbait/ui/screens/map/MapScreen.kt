@@ -28,15 +28,11 @@ import java.util.*
 /**
  * Map Screen - Device Location Visualization
  *
- * This screen displays a Google Maps view showing:
+ * This screen displays an OpenStreetMap view showing:
  * - All detection locations as markers
  * - Device movement paths (polylines connecting locations)
- * - Marker clustering for performance (10+ markers)
  * - Filter by device and date range
  * - Click marker to see device details
- *
- * The screen is designed with Material Design 3 and supports both light and dark themes.
- * It uses Google Maps SDK and maps-compose library for Jetpack Compose integration.
  *
  * @param onNavigateBack Callback when back button is clicked
  * @param viewModel The ViewModel for this screen (injected by Hilt)

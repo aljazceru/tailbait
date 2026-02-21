@@ -101,16 +101,17 @@ class WhitelistRepositoryTest {
     }
 
     @Test
-    fun `removeFromWhitelist should delete entry by ID`() = runTest {
+    fun `removeFromWhitelist should delete entry by device ID`() = runTest {
         // Given
-        val entryId = 1L
-        coEvery { whitelistEntryDao.getById(entryId) } returns testEntry1
+        val deviceId = 1L
+        coEvery { whitelistEntryDao.deleteByDeviceId(deviceId) } returns 1
 
         // When
-        repository.removeFromWhitelist(entryId)
+        val result = repository.removeFromWhitelist(deviceId)
 
         // Then
-        coVerify { whitelistEntryDao.delete(testEntry1) }
+        assertEquals(1, result)
+        coVerify { whitelistEntryDao.deleteByDeviceId(deviceId) }
     }
 
     @Test
@@ -410,16 +411,17 @@ class WhitelistRepositoryTest {
     }
 
     @Test
-    fun `removeFromWhitelist should do nothing when entry does not exist`() = runTest {
+    fun `removeFromWhitelist should return zero when entry does not exist`() = runTest {
         // Given
-        val entryId = 999L
-        coEvery { whitelistEntryDao.getById(entryId) } returns null
+        val deviceId = 999L
+        coEvery { whitelistEntryDao.deleteByDeviceId(deviceId) } returns 0
 
         // When
-        repository.removeFromWhitelist(entryId)
+        val result = repository.removeFromWhitelist(deviceId)
 
         // Then
-        coVerify(exactly = 0) { whitelistEntryDao.delete(any()) }
+        assertEquals(0, result)
+        coVerify { whitelistEntryDao.deleteByDeviceId(deviceId) }
     }
 
     @Test

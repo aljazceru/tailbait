@@ -1,5 +1,7 @@
 package com.tailbait.service
 
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import app.cash.turbine.test
 import com.tailbait.data.database.entities.AppSettings
@@ -59,10 +61,8 @@ class BleScannerManagerTest {
     private val testSettings = AppSettings(
         id = 1,
         isTrackingEnabled = true,
-        trackingMode = Constants.TRACKING_MODE_CONTINUOUS,
         scanIntervalSeconds = 300,
         scanDurationSeconds = 30,
-        locationChangeThresholdMeters = 50.0,
         batteryOptimizationEnabled = false
     )
 
@@ -82,7 +82,17 @@ class BleScannerManagerTest {
         coEvery { deviceRepository.upsertDevice(any(), any(), any(), any()) } returns 1L
         coEvery { deviceRepository.insertDeviceLocationRecord(any(), any(), any(), any(), any(), any(), any()) } returns 1L
 
-        // Mock context for BLE scanner
+        // Mock context for BLE scanner - must return BluetoothManager to avoid ClassCastException
+        // Nordic BLE library's BleScanner uses the STRING-based getSystemService:
+        //   context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        // So we must mock that exact overload. The class-based overload is also mocked for safety.
+        val bluetoothManager = mockk<BluetoothManager>(relaxed = true)
+        val bluetoothAdapter = mockk<BluetoothAdapter>(relaxed = true)
+        every { context.getSystemService(Context.BLUETOOTH_SERVICE) } returns bluetoothManager
+        every { context.getSystemService(BluetoothManager::class.java) } returns bluetoothManager
+        every { bluetoothManager.adapter } returns bluetoothAdapter
+        every { bluetoothAdapter.isEnabled } returns true
+        every { bluetoothAdapter.bluetoothLeScanner } returns null
         every { context.applicationContext } returns context
         every { context.packageName } returns "com.tailbait.test"
 

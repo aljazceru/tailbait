@@ -2,6 +2,7 @@ package com.tailbait.data.repository
 
 import android.content.Context
 import com.tailbait.data.database.dao.LocationDao
+import com.tailbait.data.database.dao.UserPathDao
 import com.tailbait.data.database.entities.Location
 import io.mockk.*
 import kotlinx.coroutines.flow.first
@@ -26,6 +27,7 @@ class LocationRepositoryTest {
 
     private lateinit var context: Context
     private lateinit var locationDao: LocationDao
+    private lateinit var userPathDao: UserPathDao
     private lateinit var repository: LocationRepository
 
     private val testLocation1 = Location(
@@ -62,12 +64,13 @@ class LocationRepositoryTest {
     fun setup() {
         context = mockk(relaxed = true)
         locationDao = mockk(relaxed = true)
+        userPathDao = mockk(relaxed = true)
 
         // Setup context mock
         every { context.applicationContext } returns context
         every { context.packageName } returns "com.tailbait.test"
 
-        repository = LocationRepositoryImpl(context, locationDao)
+        repository = LocationRepositoryImpl(context, locationDao, userPathDao)
     }
 
     @After
@@ -323,6 +326,61 @@ class LocationRepositoryTest {
         assertEquals(3, result.size)
         assertTrue(result[0].timestamp < result[1].timestamp)
         assertTrue(result[1].timestamp < result[2].timestamp)
+    }
+
+    // ========== findOrCreateLocation Tests ==========
+
+    @Test
+    fun `findOrCreateLocation should reuse location from more than 24h ago`() = runTest {
+        // Given - an existing location created 3 days ago, within 50m
+        val now = System.currentTimeMillis()
+        val threeDaysAgo = now - (3 * 24 * 60 * 60 * 1000L)
+        val existingLocation = testLocation1.copy(
+            latitude = 37.7749,
+            longitude = -122.4194,
+            timestamp = threeDaysAgo
+        )
+        val newLocation = testLocation1.copy(
+            id = 0,
+            latitude = 37.7749,  // Same spot
+            longitude = -122.4194,
+            timestamp = now
+        )
+
+        // The all-time query should find the existing location
+        coEvery {
+            locationDao.getNearbyCandidatesAllTime(any(), any(), any(), any())
+        } returns listOf(existingLocation)
+        coEvery { locationDao.updateTimestamp(existingLocation.id, newLocation.timestamp) } just runs
+
+        // When
+        val (locationId, isNew) = repository.findOrCreateLocation(newLocation)
+
+        // Then - should reuse the old location, not create a new one
+        assertEquals(existingLocation.id, locationId)
+        assertFalse("Should reuse existing location", isNew)
+        coVerify { locationDao.updateTimestamp(existingLocation.id, newLocation.timestamp) }
+        coVerify(exactly = 0) { locationDao.insert(any()) }
+    }
+
+    @Test
+    fun `findOrCreateLocation should create new location when none nearby`() = runTest {
+        // Given
+        val now = System.currentTimeMillis()
+        val newLocation = testLocation1.copy(id = 0, timestamp = now)
+        val newId = 42L
+
+        coEvery {
+            locationDao.getNearbyCandidatesAllTime(any(), any(), any(), any())
+        } returns emptyList()
+        coEvery { locationDao.insert(newLocation) } returns newId
+
+        // When
+        val (locationId, isNew) = repository.findOrCreateLocation(newLocation)
+
+        // Then
+        assertEquals(newId, locationId)
+        assertTrue("Should create new location", isNew)
     }
 
     @Test

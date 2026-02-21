@@ -69,6 +69,20 @@ class DetectionAlgorithmTest {
             minDetectionDistanceMeters = 100.0
         )
 
+        // Default mock for getLinkedDevices (called during weak link discount calculation)
+        coEvery { deviceRepository.getLinkedDevices(any()) } returns emptyList()
+
+        // Default mock for computeBreakdown (called when building DetectionResult)
+        every {
+            threatScoreCalculator.computeBreakdown(any(), any(), any(), any(), any())
+        } returns mapOf(
+            "locationScore" to 0.5,
+            "distanceScore" to 0.5,
+            "timeScore" to 0.5,
+            "consistencyScore" to 0.5,
+            "deviceTypeScore" to 0.5
+        )
+
         // Create algorithm instance with mock shadowAnalyzer
         val shadowAnalyzer = mockk<ShadowAnalyzer>(relaxed = true)
         coEvery { shadowAnalyzer.findSuspiciousShadows(any(), any()) } returns emptyList()
@@ -96,14 +110,15 @@ class DetectionAlgorithmTest {
         // Arrange
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(emptyList())
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(emptyList())
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
 
         // Act
         val results = detectionAlgorithm.runDetection()
 
         // Assert
         assertTrue("Should return empty list when no suspicious devices", results.isEmpty())
-        coVerify { deviceRepository.getSuspiciousDevices(3) }
+        coVerify { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) }
     }
 
     @Test
@@ -116,11 +131,12 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
-        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations) } returns 0.75
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any()) } returns 0.75
 
         // Act
         val results = detectionAlgorithm.runDetection()
@@ -140,14 +156,15 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(listOf(1L))
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device))
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
 
         // Act
         val results = detectionAlgorithm.runDetection()
 
         // Assert
         assertTrue("Whitelisted device should be excluded", results.isEmpty())
-        coVerify(exactly = 0) { locationRepository.getLocationsForDevice(any()) }
+        coVerify(exactly = 0) { locationRepository.getLocationsForDeviceWithLinked(any()) }
     }
 
     @Test
@@ -160,10 +177,11 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
 
         // Act
         val results = detectionAlgorithm.runDetection()
@@ -188,10 +206,11 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
 
         // Act
         val results = detectionAlgorithm.runDetection()
@@ -210,11 +229,12 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
-        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations) } returns 0.3 // Below 0.5 threshold
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any()) } returns 0.3 // Below 0.5 threshold
 
         // Act
         val results = detectionAlgorithm.runDetection()
@@ -238,14 +258,15 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device1, device2))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations1)
-        coEvery { locationRepository.getLocationsForDevice(2) } returns flowOf(locations2)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device1, device2))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations1
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(2) } returns locations2
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords1
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(2) } returns deviceRecords2
-        coEvery { threatScoreCalculator.calculateEnhanced(device1, locations1, any(), deviceRecords1, userLocations) } returns 0.75
-        coEvery { threatScoreCalculator.calculateEnhanced(device2, locations2, any(), deviceRecords2, userLocations) } returns 0.85
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords1
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(2) } returns deviceRecords2
+        coEvery { threatScoreCalculator.calculateEnhanced(device1, locations1, any(), deviceRecords1, userLocations, any()) } returns 0.75
+        coEvery { threatScoreCalculator.calculateEnhanced(device2, locations2, any(), deviceRecords2, userLocations, any()) } returns 0.85
 
         // Act
         val results = detectionAlgorithm.runDetection()
@@ -270,17 +291,18 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device1, device2, device3))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations1)
-        coEvery { locationRepository.getLocationsForDevice(2) } returns flowOf(locations2)
-        coEvery { locationRepository.getLocationsForDevice(3) } returns flowOf(locations3)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device1, device2, device3))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations1
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(2) } returns locations2
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(3) } returns locations3
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords1
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(2) } returns deviceRecords2
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(3) } returns deviceRecords3
-        coEvery { threatScoreCalculator.calculateEnhanced(device1, locations1, any(), deviceRecords1, userLocations) } returns 0.65
-        coEvery { threatScoreCalculator.calculateEnhanced(device2, locations2, any(), deviceRecords2, userLocations) } returns 0.90
-        coEvery { threatScoreCalculator.calculateEnhanced(device3, locations3, any(), deviceRecords3, userLocations) } returns 0.75
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords1
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(2) } returns deviceRecords2
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(3) } returns deviceRecords3
+        coEvery { threatScoreCalculator.calculateEnhanced(device1, locations1, any(), deviceRecords1, userLocations, any()) } returns 0.65
+        coEvery { threatScoreCalculator.calculateEnhanced(device2, locations2, any(), deviceRecords2, userLocations, any()) } returns 0.90
+        coEvery { threatScoreCalculator.calculateEnhanced(device3, locations3, any(), deviceRecords3, userLocations, any()) } returns 0.75
 
         // Act
         val results = detectionAlgorithm.runDetection()
@@ -309,11 +331,12 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
-        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations) } returns 0.75
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any()) } returns 0.75
 
         // Act
         val results = detectionAlgorithm.runDetection()
@@ -339,11 +362,12 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
-        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations) } returns 0.75
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any()) } returns 0.75
 
         // Act
         val results = detectionAlgorithm.runDetection()
@@ -361,6 +385,7 @@ class DetectionAlgorithmTest {
         // Arrange
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(listOf(1L))
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
 
         // Act
         val result = detectionAlgorithm.runDetectionForDevice(1L)
@@ -375,6 +400,7 @@ class DetectionAlgorithmTest {
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
         coEvery { deviceRepository.getDeviceById(999L) } returns null
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
 
         // Act
         val result = detectionAlgorithm.runDetectionForDevice(999L)
@@ -394,10 +420,11 @@ class DetectionAlgorithmTest {
         coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
         coEvery { deviceRepository.getDeviceById(1L) } returns device
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
-        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations) } returns 0.75
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+        coEvery { threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any()) } returns 0.75
 
         // Act
         val result = detectionAlgorithm.runDetectionForDevice(1L)
@@ -406,6 +433,198 @@ class DetectionAlgorithmTest {
         assertNotNull("Should return detection result", result)
         assertEquals("Should return correct device", device, result?.device)
         assertEquals("Should return correct threat score", 0.75, result?.threatScore ?: 0.0, 0.01)
+    }
+
+    // ==================== Location Clustering Tests ====================
+
+    @Test
+    fun `runDetection - neighborhood locations should cluster and exclude device`() = runTest {
+        // Arrange: device seen at 7 GPS points spread ~30m apart in a line, spanning ~180m total.
+        // Without clustering: 7 locations, max distance 180m > 100m threshold → detected.
+        // With 100m clustering: collapses to 2 clusters → below threshold of 3 → excluded.
+        val device = createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Neighbor Phone", "PHONE")
+        val baseTime = System.currentTimeMillis()
+        // ~30m apart (0.00027 degrees latitude ≈ 30m)
+        val locations = listOf(
+            createLocation(1, 40.00000, -74.0000, baseTime),
+            createLocation(2, 40.00027, -74.0000, baseTime + 1000),  // ~30m
+            createLocation(3, 40.00054, -74.0000, baseTime + 2000),  // ~60m
+            createLocation(4, 40.00081, -74.0000, baseTime + 3000),  // ~90m
+            createLocation(5, 40.00108, -74.0000, baseTime + 4000),  // ~120m
+            createLocation(6, 40.00135, -74.0000, baseTime + 5000),  // ~150m
+            createLocation(7, 40.00162, -74.0000, baseTime + 6000)   // ~180m
+        )
+        val deviceRecords = createDeviceLocationRecords(1, 7)
+        val userLocations = createUserLocations(5)
+
+        coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
+        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
+        coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+
+        // Act
+        val results = detectionAlgorithm.runDetection()
+
+        // Assert - clusters reduce below threshold, device excluded
+        assertTrue("Neighborhood locations should cluster and device should be excluded", results.isEmpty())
+    }
+
+    @Test
+    fun `runDetection - distant locations should survive clustering`() = runTest {
+        // Arrange: device at 3 truly distant locations (home, office, gym)
+        val device = createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Stalker Tracker", "TRACKER")
+        val baseTime = System.currentTimeMillis()
+        // 3 locations each >1km apart - should remain 3 clusters
+        val locations = listOf(
+            createLocation(1, 40.0000, -74.0000, baseTime),        // Home
+            createLocation(2, 40.0100, -74.0100, baseTime + 1000), // ~1.4km away
+            createLocation(3, 40.0200, -74.0200, baseTime + 2000)  // ~2.8km away
+        )
+        val deviceRecords = createDeviceLocationRecords(1, 3)
+        val userLocations = createUserLocations(5)
+
+        coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
+        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
+        coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+        coEvery { threatScoreCalculator.calculateEnhanced(any(), any(), any(), any(), any(), any()) } returns 0.75
+
+        // Act
+        val results = detectionAlgorithm.runDetection()
+
+        // Assert - 3 distant locations survive clustering, device is detected
+        assertEquals("Distant locations should survive clustering", 1, results.size)
+    }
+
+    // ==================== Companion Device Detection Tests ====================
+
+    @Test
+    fun `runDetection - own phone at all user locations with strong RSSI should be skipped`() = runTest {
+        // Arrange: device seen at 10 of 10 user locations (100% coverage) with RSSI -30
+        // This is the user's own phone - should be detected as companion and skipped
+        val device = createTestDevice(1, "49:C5:A3:00:00:00", "My iPhone", "PHONE").copy(
+            highestRssi = -30
+        )
+        val baseTime = System.currentTimeMillis()
+        // 10 user locations spread far apart (home, office, gym, etc.)
+        val userLocations = List(10) { i ->
+            createLocation(
+                id = (i + 100).toLong(),
+                latitude = 40.0 + (i * 0.05),  // ~5km apart
+                longitude = -74.0 + (i * 0.05),
+                timestamp = baseTime + (i * 3600000L)
+            )
+        }
+        // Device was at ALL of those locations
+        val deviceLocations = userLocations.mapIndexed { i, loc ->
+            createLocation(i.toLong() + 1, loc.latitude, loc.longitude, loc.timestamp)
+        }
+        val deviceRecords = createDeviceLocationRecords(1, 10)
+
+        coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
+        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns deviceLocations
+        coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+
+        // Act
+        val results = detectionAlgorithm.runDetection()
+
+        // Assert - should be identified as companion device and skipped
+        assertTrue("Own phone should be detected as companion device", results.isEmpty())
+    }
+
+    @Test
+    fun `runDetection - device at most but not all locations with weak RSSI should not be skipped`() = runTest {
+        // Arrange: device at 4 of 10 locations (40%) with weak RSSI - not a companion
+        val device = createTestDevice(1, "DD:EE:FF:00:00:00", "Stalker Tag", "TRACKER").copy(
+            highestRssi = -75
+        )
+        val baseTime = System.currentTimeMillis()
+        val userLocations = List(10) { i ->
+            createLocation(
+                id = (i + 100).toLong(),
+                latitude = 40.0 + (i * 0.05),
+                longitude = -74.0 + (i * 0.05),
+                timestamp = baseTime + (i * 3600000L)
+            )
+        }
+        // Device only at 4 of the 10 locations, far apart
+        val deviceLocations = listOf(
+            createLocation(1, userLocations[0].latitude, userLocations[0].longitude, baseTime),
+            createLocation(2, userLocations[3].latitude, userLocations[3].longitude, baseTime + 3600000L),
+            createLocation(3, userLocations[6].latitude, userLocations[6].longitude, baseTime + 7200000L),
+            createLocation(4, userLocations[9].latitude, userLocations[9].longitude, baseTime + 10800000L)
+        )
+        val deviceRecords = createDeviceLocationRecords(1, 4)
+
+        coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
+        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns deviceLocations
+        coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+        coEvery { threatScoreCalculator.calculateEnhanced(any(), any(), any(), any(), any(), any()) } returns 0.75
+
+        // Act
+        val results = detectionAlgorithm.runDetection()
+
+        // Assert - NOT a companion device, should be detected
+        assertEquals("Non-companion device should be detected", 1, results.size)
+    }
+
+    // ==================== Detection Window Scoping Tests ====================
+
+    @Test
+    fun `runDetection - stale locations outside detection window should be excluded`() = runTest {
+        // Arrange: device has 5 locations total, but only 2 are within the 3-day detection window.
+        // The other 3 are from 30 days ago. Without window scoping, device passes threshold of 3.
+        // With window scoping, only 2 recent locations count → below threshold → excluded.
+        val device = createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Old History Device", "PHONE")
+        val now = System.currentTimeMillis()
+        val thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000L)
+        val oneDayAgo = now - (24 * 60 * 60 * 1000L)
+
+        // 3 old locations (outside 3-day window) + 2 recent ones
+        val locations = listOf(
+            createLocation(1, 40.000, -74.000, thirtyDaysAgo),               // old
+            createLocation(2, 40.010, -74.010, thirtyDaysAgo + 3600000L),    // old
+            createLocation(3, 40.020, -74.020, thirtyDaysAgo + 7200000L),    // old
+            createLocation(4, 40.030, -74.030, oneDayAgo),                   // recent
+            createLocation(5, 40.040, -74.040, now)                          // recent
+        )
+        // Records match the location timestamps
+        val deviceRecords = listOf(
+            DeviceLocationRecord(1, 1, 1, -70, thirtyDaysAgo, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(2, 1, 2, -70, thirtyDaysAgo + 3600000L, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(3, 1, 3, -70, thirtyDaysAgo + 7200000L, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(4, 1, 4, -70, oneDayAgo, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(5, 1, 5, -70, now, scanTriggerType = "PERIODIC")
+        )
+        val userLocations = createUserLocations(5)
+
+        coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
+        coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
+        coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+
+        // Act
+        val results = detectionAlgorithm.runDetection()
+
+        // Assert - only 2 recent locations, below threshold of 3
+        assertTrue("Stale locations outside detection window should be excluded", results.isEmpty())
     }
 
     // ==================== Settings Integration Tests ====================
@@ -421,17 +640,18 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(customSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(5) } returns flowOf(listOf(device))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(5), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
-        coEvery { threatScoreCalculator.calculateEnhanced(any(), any(), any(), any(), any()) } returns 0.75
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+        coEvery { threatScoreCalculator.calculateEnhanced(any(), any(), any(), any(), any(), any()) } returns 0.75
 
         // Act
         detectionAlgorithm.runDetection()
 
         // Assert
-        coVerify { deviceRepository.getSuspiciousDevices(5) }
+        coVerify { deviceRepository.getSuspiciousDevicesWithLinked(eq(5), any()) }
     }
 
     @Test
@@ -451,10 +671,11 @@ class DetectionAlgorithmTest {
 
         coEvery { settingsRepository.getSettings() } returns flowOf(customSettings)
         coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-        coEvery { deviceRepository.getSuspiciousDevices(3) } returns flowOf(listOf(device))
-        coEvery { locationRepository.getLocationsForDevice(1) } returns flowOf(locations)
+        coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
+        coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
         coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-        coEvery { deviceRepository.getDeviceLocationRecordsForDevice(1) } returns deviceRecords
+        coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
+        coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
 
         // Act
         val results = detectionAlgorithm.runDetection()

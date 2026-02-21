@@ -78,6 +78,14 @@ interface AlertRepository {
     suspend fun hasSimilarRecentAlert(deviceAddresses: String, afterTimestamp: Long): Boolean
 
     /**
+     * Get the most recent alert for a specific device address string.
+     *
+     * @param deviceAddresses The JSON device addresses string to match
+     * @return The most recent alert for this device, or null
+     */
+    suspend fun getLatestAlertForDevice(deviceAddresses: String): AlertHistory?
+
+    /**
      * Get an alert by its ID.
      *
      * @param alertId The alert ID
@@ -350,6 +358,10 @@ class AlertRepositoryImpl @Inject constructor(
         return recentAlerts.any { alert ->
             alert.deviceAddresses == deviceAddresses
         }
+    }
+
+    override suspend fun getLatestAlertForDevice(deviceAddresses: String): AlertHistory? {
+        return alertHistoryDao.getLatestAlertForDevice(deviceAddresses)
     }
 
     override suspend fun getAlertById(alertId: Long): AlertHistory? {

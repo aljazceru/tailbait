@@ -276,6 +276,24 @@ interface DeviceLocationRecordDao {
     suspend fun deleteAll()
 
     /**
+     * Get all records for a device AND its linked child devices.
+     *
+     * When a device rotates its MAC address, historical records are stored under
+     * child device IDs. This query aggregates records across all linked devices
+     * to give a complete picture for detection scoring.
+     *
+     * @param deviceId The primary device ID
+     * @return List of all records for the device and its linked children
+     */
+    @Query("""
+        SELECT * FROM device_location_records
+        WHERE device_id = :deviceId
+           OR device_id IN (SELECT id FROM scanned_devices WHERE linked_device_id = :deviceId)
+        ORDER BY timestamp DESC
+    """)
+    suspend fun getRecordsForDeviceWithLinked(deviceId: Long): List<DeviceLocationRecord>
+
+    /**
      * Optimized query for map data to avoid N+1 problem.
      * Joins all necessary tables and filters at the database level.
      */

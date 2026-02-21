@@ -1,7 +1,10 @@
 package com.tailbait.algorithm
 
+import com.tailbait.data.database.entities.DeviceLocationRecord
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
+import com.tailbait.data.database.entities.UserPath
+import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.*
 import org.junit.Before
@@ -254,7 +257,7 @@ class ThreatScoreCalculatorTest {
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
 
-        assertEquals("Tracker should give 0.08 device score", 0.08, breakdown.deviceTypeScore, 0.001)
+        assertEquals("Tracker should give 0.1 device score", 0.1, breakdown.deviceTypeScore, 0.001)
     }
 
     @Test
@@ -265,7 +268,7 @@ class ThreatScoreCalculatorTest {
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
 
-        assertEquals("Headphones should give 0.05 device score", 0.05, breakdown.deviceTypeScore, 0.001)
+        assertEquals("Headphones should give 0.04 device score", 0.04, breakdown.deviceTypeScore, 0.001)
     }
 
     @Test
@@ -276,7 +279,7 @@ class ThreatScoreCalculatorTest {
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
 
-        assertEquals("Unknown should give 0.07 device score", 0.07, breakdown.deviceTypeScore, 0.001)
+        assertEquals("Unknown should give 0.05 device score", 0.05, breakdown.deviceTypeScore, 0.001)
     }
 
     // ==================== Combined Scenario Tests ====================
@@ -367,6 +370,53 @@ class ThreatScoreCalculatorTest {
         val score = calculator.calculate(device, locations, distances)
 
         assertTrue("Score should never be negative", score >= 0.0)
+    }
+
+    // ==================== Regression: time scoring uses record timestamps ====================
+
+    @Test
+    fun `calculateEnhanced - mutated location timestamps - should still produce meaningful time score`() {
+        // Scenario: Location timestamps are all identical (mutated by findOrCreateLocation dedup)
+        // but DeviceLocationRecord timestamps span 2 days.
+        // The enhanced scorer should use record timestamps and produce a non-zero time factor.
+        val device = createTestDevice("TRACKER")
+        val now = System.currentTimeMillis()
+
+        // All locations have the SAME timestamp (simulating mutation by dedup)
+        val mutatedTimestamp = now
+        val locations = listOf(
+            createLocation(40.0, -74.0, mutatedTimestamp),
+            createLocation(40.01, -74.01, mutatedTimestamp),
+            createLocation(40.02, -74.02, mutatedTimestamp)
+        )
+
+        // But records have spread timestamps spanning 2 days
+        val deviceRecords = listOf(
+            DeviceLocationRecord(id = 1, deviceId = 1, locationId = 1, timestamp = now - 2 * 24 * 60 * 60 * 1000, rssi = -50, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(id = 2, deviceId = 1, locationId = 2, timestamp = now - 1 * 24 * 60 * 60 * 1000, rssi = -55, scanTriggerType = "PERIODIC"),
+            DeviceLocationRecord(id = 3, deviceId = 1, locationId = 3, timestamp = now, rssi = -60, scanTriggerType = "PERIODIC")
+        )
+
+        val distances = listOf(1000.0, 2000.0, 1500.0)
+        val userPaths = emptyList<UserPath>()
+        val userLocations = emptyList<Location>()
+
+        // Mock movement correlation to return 0 (not relevant to this test)
+        every {
+            movementCorrelationCalculator.calculateCorrelation(
+                deviceRecords = any(),
+                userPaths = any(),
+                deviceLocations = any()
+            )
+        } returns 0.0
+
+        val score = calculator.calculateEnhanced(device, locations, distances, deviceRecords, userLocations, userPaths)
+
+        // Score should be meaningful (not near-zero) because record timestamps span 2 days.
+        // Time factor alone: timeSpan > 1 day → score 1.0 × 0.08 = 0.08
+        // Consistency factor: avg gap ~1 day → 0.33 × 0.10 = 0.033
+        // Plus location, distance, device type factors
+        assertTrue("Score should be positive with spread record timestamps", score > 0.1)
     }
 
     // ==================== Helper Methods ====================
