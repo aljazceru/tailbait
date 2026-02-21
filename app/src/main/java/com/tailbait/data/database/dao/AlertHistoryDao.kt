@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.Flow
  */
 @Dao
 interface AlertHistoryDao {
-
     /**
      * Insert a new alert into the database.
      *
@@ -77,11 +76,13 @@ interface AlertHistoryDao {
      *
      * @return Flow emitting list of active alerts
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE is_dismissed = 0
         ORDER BY timestamp DESC, threat_score DESC
-    """)
+    """,
+    )
     fun getActiveAlerts(): Flow<List<AlertHistory>>
 
     /**
@@ -89,11 +90,13 @@ interface AlertHistoryDao {
      *
      * @return Flow emitting list of dismissed alerts
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE is_dismissed = 1
         ORDER BY dismissed_at DESC
-    """)
+    """,
+    )
     fun getDismissedAlerts(): Flow<List<AlertHistory>>
 
     /**
@@ -102,11 +105,13 @@ interface AlertHistoryDao {
      * @param sinceTimestamp Timestamp threshold (alerts after this time)
      * @return Flow emitting list of recent alerts
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE timestamp >= :sinceTimestamp
         ORDER BY timestamp DESC, threat_score DESC
-    """)
+    """,
+    )
     fun getRecentAlerts(sinceTimestamp: Long): Flow<List<AlertHistory>>
 
     /**
@@ -115,12 +120,14 @@ interface AlertHistoryDao {
      * @param sinceTimestamp Timestamp threshold (alerts after this time)
      * @return Flow emitting list of recent active alerts
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE is_dismissed = 0
         AND timestamp >= :sinceTimestamp
         ORDER BY timestamp DESC, threat_score DESC
-    """)
+    """,
+    )
     fun getRecentActiveAlerts(sinceTimestamp: Long): Flow<List<AlertHistory>>
 
     /**
@@ -129,11 +136,13 @@ interface AlertHistoryDao {
      * @param alertLevel The severity level (e.g., "LOW", "MEDIUM", "HIGH", "CRITICAL")
      * @return Flow emitting list of alerts at the specified level
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE alert_level = :alertLevel
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getAlertsByLevel(alertLevel: String): Flow<List<AlertHistory>>
 
     /**
@@ -142,12 +151,14 @@ interface AlertHistoryDao {
      * @param alertLevel The severity level
      * @return Flow emitting list of active alerts at the specified level
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE alert_level = :alertLevel
         AND is_dismissed = 0
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getActiveAlertsByLevel(alertLevel: String): Flow<List<AlertHistory>>
 
     /**
@@ -156,11 +167,13 @@ interface AlertHistoryDao {
      * @param minThreatScore Minimum threat score (0.0 to 1.0)
      * @return Flow emitting list of high-threat alerts
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE threat_score >= :minThreatScore
         ORDER BY threat_score DESC, timestamp DESC
-    """)
+    """,
+    )
     fun getHighThreatAlerts(minThreatScore: Double): Flow<List<AlertHistory>>
 
     /**
@@ -170,12 +183,17 @@ interface AlertHistoryDao {
      * @param endTimestamp End of time range (inclusive)
      * @return Flow emitting list of alerts within the time range
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE timestamp >= :startTimestamp AND timestamp <= :endTimestamp
         ORDER BY timestamp DESC
-    """)
-    fun getAlertsByTimeRange(startTimestamp: Long, endTimestamp: Long): Flow<List<AlertHistory>>
+    """,
+    )
+    fun getAlertsByTimeRange(
+        startTimestamp: Long,
+        endTimestamp: Long,
+    ): Flow<List<AlertHistory>>
 
     /**
      * Get the most recent alert.
@@ -198,10 +216,12 @@ interface AlertHistoryDao {
      *
      * @return Flow emitting active alert count
      */
-    @Query("""
+    @Query(
+        """
         SELECT COUNT(*) FROM alert_history
         WHERE is_dismissed = 0
-    """)
+    """,
+    )
     fun getActiveAlertCount(): Flow<Int>
 
     /**
@@ -210,10 +230,12 @@ interface AlertHistoryDao {
      * @param alertLevel The severity level
      * @return Flow emitting count of alerts at the specified level
      */
-    @Query("""
+    @Query(
+        """
         SELECT COUNT(*) FROM alert_history
         WHERE alert_level = :alertLevel
-    """)
+    """,
+    )
     fun getAlertCountByLevel(alertLevel: String): Flow<Int>
 
     /**
@@ -222,11 +244,13 @@ interface AlertHistoryDao {
      * @param alertLevel The severity level
      * @return Flow emitting count of active alerts at the specified level
      */
-    @Query("""
+    @Query(
+        """
         SELECT COUNT(*) FROM alert_history
         WHERE alert_level = :alertLevel
         AND is_dismissed = 0
-    """)
+    """,
+    )
     fun getActiveAlertCountByLevel(alertLevel: String): Flow<Int>
 
     /**
@@ -235,11 +259,13 @@ interface AlertHistoryDao {
      *
      * @return List of alert statistics (alert level and count pairs)
      */
-    @Query("""
+    @Query(
+        """
         SELECT alert_level, COUNT(*) as count
         FROM alert_history
         GROUP BY alert_level
-    """)
+    """,
+    )
     suspend fun getAlertStatistics(): List<AlertStatistic>
 
     /**
@@ -248,12 +274,17 @@ interface AlertHistoryDao {
      * @param alertId The alert ID to dismiss
      * @param dismissedAt Timestamp when the alert was dismissed
      */
-    @Query("""
+    @Query(
+        """
         UPDATE alert_history
         SET is_dismissed = 1, dismissed_at = :dismissedAt
         WHERE id = :alertId
-    """)
-    suspend fun dismissAlert(alertId: Long, dismissedAt: Long)
+    """,
+    )
+    suspend fun dismissAlert(
+        alertId: Long,
+        dismissedAt: Long,
+    )
 
     /**
      * Mark multiple alerts as dismissed.
@@ -261,12 +292,17 @@ interface AlertHistoryDao {
      * @param alertIds List of alert IDs to dismiss
      * @param dismissedAt Timestamp when the alerts were dismissed
      */
-    @Query("""
+    @Query(
+        """
         UPDATE alert_history
         SET is_dismissed = 1, dismissed_at = :dismissedAt
         WHERE id IN (:alertIds)
-    """)
-    suspend fun dismissAlerts(alertIds: List<Long>, dismissedAt: Long)
+    """,
+    )
+    suspend fun dismissAlerts(
+        alertIds: List<Long>,
+        dismissedAt: Long,
+    )
 
     /**
      * Mark all active alerts as dismissed.
@@ -274,11 +310,13 @@ interface AlertHistoryDao {
      * @param dismissedAt Timestamp when the alerts were dismissed
      * @return Number of alerts dismissed
      */
-    @Query("""
+    @Query(
+        """
         UPDATE alert_history
         SET is_dismissed = 1, dismissed_at = :dismissedAt
         WHERE is_dismissed = 0
-    """)
+    """,
+    )
     suspend fun dismissAllAlerts(dismissedAt: Long): Int
 
     /**
@@ -288,12 +326,14 @@ interface AlertHistoryDao {
      * @param deviceAddresses The JSON device addresses string to match
      * @return The most recent alert for this device, or null if none
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM alert_history
         WHERE device_addresses = :deviceAddresses
         ORDER BY timestamp DESC
         LIMIT 1
-    """)
+    """,
+    )
     suspend fun getLatestAlertForDevice(deviceAddresses: String): AlertHistory?
 
     /**
@@ -312,10 +352,12 @@ interface AlertHistoryDao {
      * @param beforeTimestamp Delete dismissed alerts before this timestamp
      * @return Number of alerts deleted
      */
-    @Query("""
+    @Query(
+        """
         DELETE FROM alert_history
         WHERE is_dismissed = 1 AND dismissed_at < :beforeTimestamp
-    """)
+    """,
+    )
     suspend fun deleteOldDismissedAlerts(beforeTimestamp: Long): Int
 
     /**

@@ -23,7 +23,6 @@ import com.tailbait.data.database.entities.ScannedDevice
  * scoring produces a match. Minimum 2 components required.
  */
 object ShadowKeyGenerator {
-
     /** Maximum number of possible components in a shadow key. */
     const val MAX_COMPONENTS = 8
 
@@ -70,18 +69,19 @@ object ShadowKeyGenerator {
         device.serviceUuids?.let { uuids ->
             if (uuids.isNotBlank()) {
                 // Extract short UUIDs, sort for stability
-                val shortUuids = uuids.split(",")
-                    .map { it.trim().uppercase() }
-                    .filter { it.isNotBlank() }
-                    .map { uuid ->
-                        if (uuid.startsWith("0000") && uuid.length >= 8) {
-                            uuid.substring(4, 8)
-                        } else {
-                            uuid.take(8)
+                val shortUuids =
+                    uuids.split(",")
+                        .map { it.trim().uppercase() }
+                        .filter { it.isNotBlank() }
+                        .map { uuid ->
+                            if (uuid.startsWith("0000") && uuid.length >= 8) {
+                                uuid.substring(4, 8)
+                            } else {
+                                uuid.take(8)
+                            }
                         }
-                    }
-                    .sorted()
-                    .joinToString(",")
+                        .sorted()
+                        .joinToString(",")
                 if (shortUuids.isNotBlank()) {
                     components.add("U:$shortUuids")
                 }

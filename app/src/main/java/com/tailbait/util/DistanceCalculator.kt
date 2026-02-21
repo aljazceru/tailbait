@@ -25,7 +25,7 @@ object DistanceCalculator {
         lat1: Double,
         lon1: Double,
         lat2: Double,
-        lon2: Double
+        lon2: Double,
     ): Double {
         // Convert latitude and longitude from degrees to radians
         val lat1Rad = Math.toRadians(lat1)
@@ -34,7 +34,8 @@ object DistanceCalculator {
         val deltaLon = Math.toRadians(lon2 - lon1)
 
         // Haversine formula
-        val a = sin(deltaLat / 2).pow(2) +
+        val a =
+            sin(deltaLat / 2).pow(2) +
                 cos(lat1Rad) * cos(lat2Rad) *
                 sin(deltaLon / 2).pow(2)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
@@ -52,13 +53,13 @@ object DistanceCalculator {
      */
     fun calculateDistance(
         location1: com.tailbait.data.database.entities.Location,
-        location2: com.tailbait.data.database.entities.Location
+        location2: com.tailbait.data.database.entities.Location,
     ): Double {
         return calculateDistance(
             location1.latitude,
             location1.longitude,
             location2.latitude,
-            location2.longitude
+            location2.longitude,
         )
     }
 
@@ -77,7 +78,7 @@ object DistanceCalculator {
         lon1: Double,
         lat2: Double,
         lon2: Double,
-        thresholdMeters: Double
+        thresholdMeters: Double,
     ): Boolean {
         return calculateDistance(lat1, lon1, lat2, lon2) <= thresholdMeters
     }
@@ -95,14 +96,15 @@ object DistanceCalculator {
         lat1: Double,
         lon1: Double,
         lat2: Double,
-        lon2: Double
+        lon2: Double,
     ): Double {
         val lat1Rad = Math.toRadians(lat1)
         val lat2Rad = Math.toRadians(lat2)
         val deltaLon = Math.toRadians(lon2 - lon1)
 
         val y = sin(deltaLon) * cos(lat2Rad)
-        val x = cos(lat1Rad) * sin(lat2Rad) -
+        val x =
+            cos(lat1Rad) * sin(lat2Rad) -
                 sin(lat1Rad) * cos(lat2Rad) * cos(deltaLon)
         val bearingRad = atan2(y, x)
         val bearingDeg = Math.toDegrees(bearingRad)

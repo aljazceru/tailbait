@@ -1,14 +1,13 @@
 package com.tailbait.ui.screens.whitelist
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,8 +24,6 @@ import com.tailbait.data.database.entities.WhitelistEntry
 import com.tailbait.data.repository.WhitelistRepository
 import com.tailbait.ui.components.EmptyView
 import com.tailbait.ui.components.LoadingView
-import com.tailbait.ui.components.KeyValueRow
-import com.tailbait.ui.theme.TailBaitDimensions
 import com.tailbait.ui.theme.TailBaitShapeTokens
 import com.tailbait.ui.theme.TailBaitTheme
 import java.text.SimpleDateFormat
@@ -49,10 +46,11 @@ import java.util.*
  * @param viewModel The ViewModel for this screen (injected by Hilt)
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod")
 @Composable
 fun WhitelistScreen(
     onNavigateBack: () -> Unit,
-    viewModel: WhitelistViewModel = hiltViewModel()
+    viewModel: WhitelistViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var searchActive by remember { mutableStateOf(false) }
@@ -66,7 +64,7 @@ fun WhitelistScreen(
             onDismiss = { viewModel.hideAddDialog() },
             onConfirm = { deviceId, label, category, notes ->
                 viewModel.addToWhitelist(deviceId, label, category, notes)
-            }
+            },
         )
     }
 
@@ -79,9 +77,9 @@ fun WhitelistScreen(
                     entryId = uiState.editingEntry!!.id,
                     label = label,
                     category = category,
-                    notes = notes
+                    notes = notes,
                 )
-            }
+            },
         )
     }
 
@@ -91,7 +89,7 @@ fun WhitelistScreen(
             onDismiss = { viewModel.hideDeleteConfirmation() },
             onConfirm = {
                 viewModel.removeFromWhitelist(uiState.deletingEntry!!.entry.id)
-            }
+            },
         )
     }
 
@@ -103,7 +101,7 @@ fun WhitelistScreen(
         uiState.errorMessage?.let { message ->
             snackbarHostState.showSnackbar(
                 message = message,
-                duration = SnackbarDuration.Short
+                duration = SnackbarDuration.Short,
             )
             viewModel.clearError()
         }
@@ -119,7 +117,7 @@ fun WhitelistScreen(
                     onCloseSearch = {
                         searchActive = false
                         viewModel.clearSearch()
-                    }
+                    },
                 )
             } else {
                 TopAppBar(
@@ -128,7 +126,7 @@ fun WhitelistScreen(
                         IconButton(onClick = onNavigateBack) {
                             Icon(
                                 imageVector = Icons.Filled.ArrowBack,
-                                contentDescription = "Navigate back"
+                                contentDescription = "Navigate back",
                             )
                         }
                     },
@@ -137,16 +135,17 @@ fun WhitelistScreen(
                         IconButton(onClick = { searchActive = true }) {
                             Icon(
                                 imageVector = Icons.Outlined.Search,
-                                contentDescription = "Search whitelist"
+                                contentDescription = "Search whitelist",
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    colors =
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                 )
             }
         },
@@ -156,19 +155,20 @@ fun WhitelistScreen(
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = null
+                        contentDescription = null,
                     )
                 },
                 text = { Text("Add Device") },
-                shape = TailBaitShapeTokens.FabShape
+                shape = TailBaitShapeTokens.FabShape,
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
         ) {
             // Statistics Card
             if (!searchActive) {
@@ -176,7 +176,7 @@ fun WhitelistScreen(
                     totalCount = uiState.totalCount,
                     ownCount = uiState.ownCount,
                     partnerCount = uiState.partnerCount,
-                    trustedCount = uiState.trustedCount
+                    trustedCount = uiState.trustedCount,
                 )
             }
 
@@ -186,7 +186,7 @@ fun WhitelistScreen(
                 onCategorySelected = { viewModel.selectCategory(it) },
                 ownCount = uiState.ownCount,
                 partnerCount = uiState.partnerCount,
-                trustedCount = uiState.trustedCount
+                trustedCount = uiState.trustedCount,
             )
 
             // Content
@@ -197,26 +197,34 @@ fun WhitelistScreen(
                 uiState.filteredEntries.isEmpty() -> {
                     EmptyView(
                         icon = Icons.Outlined.Shield,
-                        title = if (uiState.searchQuery.isNotBlank()) {
-                            "No Results"
-                        } else if (uiState.selectedCategory != null) {
-                            "No Devices in this Category"
-                        } else {
-                            "No Whitelisted Devices"
-                        },
-                        message = if (uiState.searchQuery.isNotBlank()) {
-                            "No devices match your search query"
-                        } else if (uiState.selectedCategory != null) {
-                            "Add devices to this category to see them here"
-                        } else {
-                            "Add trusted devices to exclude them from stalking detection"
-                        },
-                        actionButtonText = if (uiState.searchQuery.isBlank() && uiState.selectedCategory == null) {
-                            "Add Device"
-                        } else null,
-                        onActionClick = if (uiState.searchQuery.isBlank() && uiState.selectedCategory == null) {
-                            { viewModel.showAddDialog() }
-                        } else null
+                        title =
+                            if (uiState.searchQuery.isNotBlank()) {
+                                "No Results"
+                            } else if (uiState.selectedCategory != null) {
+                                "No Devices in this Category"
+                            } else {
+                                "No Whitelisted Devices"
+                            },
+                        message =
+                            if (uiState.searchQuery.isNotBlank()) {
+                                "No devices match your search query"
+                            } else if (uiState.selectedCategory != null) {
+                                "Add devices to this category to see them here"
+                            } else {
+                                "Add trusted devices to exclude them from stalking detection"
+                            },
+                        actionButtonText =
+                            if (uiState.searchQuery.isBlank() && uiState.selectedCategory == null) {
+                                "Add Device"
+                            } else {
+                                null
+                            },
+                        onActionClick =
+                            if (uiState.searchQuery.isBlank() && uiState.selectedCategory == null) {
+                                { viewModel.showAddDialog() }
+                            } else {
+                                null
+                            },
                     )
                 }
                 else -> {
@@ -227,7 +235,7 @@ fun WhitelistScreen(
                         },
                         onDeleteClick = { entry ->
                             viewModel.showDeleteConfirmation(entry)
-                        }
+                        },
                     )
                 }
             }
@@ -243,7 +251,7 @@ fun WhitelistScreen(
 private fun SearchTopBar(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    onCloseSearch: () -> Unit
+    onCloseSearch: () -> Unit,
 ) {
     TopAppBar(
         title = {
@@ -253,19 +261,20 @@ private fun SearchTopBar(
                 placeholder = { Text("Search by label, name, or address") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                    unfocusedIndicatorColor = MaterialTheme.colorScheme.outlineVariant
-                )
+                colors =
+                    TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedIndicatorColor = MaterialTheme.colorScheme.outlineVariant,
+                    ),
             )
         },
         navigationIcon = {
             IconButton(onClick = onCloseSearch) {
                 Icon(
                     imageVector = Icons.Filled.ArrowBack,
-                    contentDescription = "Close search"
+                    contentDescription = "Close search",
                 )
             }
         },
@@ -274,11 +283,11 @@ private fun SearchTopBar(
                 IconButton(onClick = { onSearchQueryChange("") }) {
                     Icon(
                         imageVector = Icons.Default.Clear,
-                        contentDescription = "Clear search"
+                        contentDescription = "Clear search",
                     )
                 }
             }
-        }
+        },
     )
 }
 
@@ -290,41 +299,44 @@ private fun WhitelistStatisticsCard(
     totalCount: Int,
     ownCount: Int,
     partnerCount: Int,
-    trustedCount: Int
+    trustedCount: Int,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceAround
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
         ) {
             StatisticItem(
                 label = "Total",
                 count = totalCount,
-                icon = Icons.Outlined.Shield
+                icon = Icons.Outlined.Shield,
             )
             StatisticItem(
                 label = "My Devices",
                 count = ownCount,
-                icon = Icons.Outlined.Smartphone
+                icon = Icons.Outlined.Smartphone,
             )
             StatisticItem(
                 label = "Partner",
                 count = partnerCount,
-                icon = Icons.Outlined.Favorite
+                icon = Icons.Outlined.Favorite,
             )
             StatisticItem(
                 label = "Trusted",
                 count = trustedCount,
-                icon = Icons.Outlined.VerifiedUser
+                icon = Icons.Outlined.VerifiedUser,
             )
         }
     }
@@ -337,28 +349,28 @@ private fun WhitelistStatisticsCard(
 private fun StatisticItem(
     label: String,
     count: Int,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(24.dp),
-            tint = MaterialTheme.colorScheme.onPrimaryContainer
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
         )
         Text(
             text = count.toString(),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
         )
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
         )
     }
 }
@@ -373,12 +385,12 @@ private fun CategoryFilterChips(
     onCategorySelected: (String?) -> Unit,
     ownCount: Int,
     partnerCount: Int,
-    trustedCount: Int
+    trustedCount: Int,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // All chip
         item {
@@ -386,15 +398,18 @@ private fun CategoryFilterChips(
                 selected = selectedCategory == null,
                 onClick = { onCategorySelected(null) },
                 label = { Text("All") },
-                leadingIcon = if (selectedCategory == null) {
-                    {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                } else null
+                leadingIcon =
+                    if (selectedCategory == null) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    },
             )
         }
 
@@ -404,15 +419,18 @@ private fun CategoryFilterChips(
                 selected = selectedCategory == WhitelistRepository.Category.OWN,
                 onClick = { onCategorySelected(WhitelistRepository.Category.OWN) },
                 label = { Text("My Devices ($ownCount)") },
-                leadingIcon = if (selectedCategory == WhitelistRepository.Category.OWN) {
-                    {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                } else null
+                leadingIcon =
+                    if (selectedCategory == WhitelistRepository.Category.OWN) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    },
             )
         }
 
@@ -422,15 +440,18 @@ private fun CategoryFilterChips(
                 selected = selectedCategory == WhitelistRepository.Category.PARTNER,
                 onClick = { onCategorySelected(WhitelistRepository.Category.PARTNER) },
                 label = { Text("Partner ($partnerCount)") },
-                leadingIcon = if (selectedCategory == WhitelistRepository.Category.PARTNER) {
-                    {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                } else null
+                leadingIcon =
+                    if (selectedCategory == WhitelistRepository.Category.PARTNER) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    },
             )
         }
 
@@ -440,15 +461,18 @@ private fun CategoryFilterChips(
                 selected = selectedCategory == WhitelistRepository.Category.TRUSTED,
                 onClick = { onCategorySelected(WhitelistRepository.Category.TRUSTED) },
                 label = { Text("Trusted ($trustedCount)") },
-                leadingIcon = if (selectedCategory == WhitelistRepository.Category.TRUSTED) {
-                    {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                } else null
+                leadingIcon =
+                    if (selectedCategory == WhitelistRepository.Category.TRUSTED) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    },
             )
         }
     }
@@ -461,20 +485,21 @@ private fun CategoryFilterChips(
 private fun WhitelistContent(
     entries: List<WhitelistRepository.WhitelistEntryWithDevice>,
     onEntryClick: (WhitelistRepository.WhitelistEntryWithDevice) -> Unit,
-    onDeleteClick: (WhitelistRepository.WhitelistEntryWithDevice) -> Unit
+    onDeleteClick: (WhitelistRepository.WhitelistEntryWithDevice) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 80.dp) // Space for FAB
+        // Space for FAB
+        contentPadding = PaddingValues(bottom = 80.dp),
     ) {
         items(
             items = entries,
-            key = { it.entry.id }
+            key = { it.entry.id },
         ) { entry ->
             WhitelistEntryCard(
                 entry = entry,
                 onClick = { onEntryClick(entry) },
-                onDeleteClick = { onDeleteClick(entry) }
+                onDeleteClick = { onDeleteClick(entry) },
             )
         }
     }
@@ -487,39 +512,42 @@ private fun WhitelistContent(
 private fun WhitelistEntryCard(
     entry: WhitelistRepository.WhitelistEntryWithDevice,
     onClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .clickable(onClick = onClick),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.Top,
         ) {
             // Main content
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // Label with category badge
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
                         text = entry.entry.label,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
 
                     CategoryBadge(category = entry.entry.category)
@@ -530,7 +558,7 @@ private fun WhitelistEntryCard(
                     Text(
                         text = entry.device.name,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -539,7 +567,7 @@ private fun WhitelistEntryCard(
                     text = entry.device.address,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 // Notes (if present)
@@ -549,7 +577,7 @@ private fun WhitelistEntryCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
 
@@ -557,25 +585,25 @@ private fun WhitelistEntryCard(
                 Text(
                     text = "Added: ${formatTimestamp(entry.entry.createdAt)}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 // Learn mode indicator
                 if (entry.entry.addedViaLearnMode) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.School,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.tertiary
+                            tint = MaterialTheme.colorScheme.tertiary,
                         )
                         Text(
                             text = "Added via Learn Mode",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.tertiary
+                            color = MaterialTheme.colorScheme.tertiary,
                         )
                     }
                 }
@@ -584,13 +612,14 @@ private fun WhitelistEntryCard(
             // Delete button
             IconButton(
                 onClick = onDeleteClick,
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
+                colors =
+                    IconButtonDefaults.iconButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Delete,
-                    contentDescription = "Remove from whitelist"
+                    contentDescription = "Remove from whitelist",
                 )
             }
         }
@@ -602,55 +631,61 @@ private fun WhitelistEntryCard(
  */
 @Composable
 private fun CategoryBadge(category: String) {
-    val (backgroundColor, textColor, icon) = when (category) {
-        WhitelistRepository.Category.OWN -> Triple(
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
-            Icons.Outlined.Smartphone
-        )
-        WhitelistRepository.Category.PARTNER -> Triple(
-            MaterialTheme.colorScheme.tertiaryContainer,
-            MaterialTheme.colorScheme.onTertiaryContainer,
-            Icons.Outlined.Favorite
-        )
-        WhitelistRepository.Category.TRUSTED -> Triple(
-            MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.onSecondaryContainer,
-            Icons.Outlined.VerifiedUser
-        )
-        else -> Triple(
-            MaterialTheme.colorScheme.surfaceVariant,
-            MaterialTheme.colorScheme.onSurfaceVariant,
-            Icons.Outlined.Shield
-        )
-    }
+    val (backgroundColor, textColor, icon) =
+        when (category) {
+            WhitelistRepository.Category.OWN ->
+                Triple(
+                    MaterialTheme.colorScheme.primaryContainer,
+                    MaterialTheme.colorScheme.onPrimaryContainer,
+                    Icons.Outlined.Smartphone,
+                )
+            WhitelistRepository.Category.PARTNER ->
+                Triple(
+                    MaterialTheme.colorScheme.tertiaryContainer,
+                    MaterialTheme.colorScheme.onTertiaryContainer,
+                    Icons.Outlined.Favorite,
+                )
+            WhitelistRepository.Category.TRUSTED ->
+                Triple(
+                    MaterialTheme.colorScheme.secondaryContainer,
+                    MaterialTheme.colorScheme.onSecondaryContainer,
+                    Icons.Outlined.VerifiedUser,
+                )
+            else ->
+                Triple(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                    Icons.Outlined.Shield,
+                )
+        }
 
     Surface(
         color = backgroundColor,
         shape = MaterialTheme.shapes.small,
-        tonalElevation = 0.dp
+        tonalElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
-                tint = textColor
+                tint = textColor,
             )
             Text(
-                text = when (category) {
-                    WhitelistRepository.Category.OWN -> "OWN"
-                    WhitelistRepository.Category.PARTNER -> "PARTNER"
-                    WhitelistRepository.Category.TRUSTED -> "TRUSTED"
-                    else -> category
-                },
+                text =
+                    when (category) {
+                        WhitelistRepository.Category.OWN -> "OWN"
+                        WhitelistRepository.Category.PARTNER -> "PARTNER"
+                        WhitelistRepository.Category.TRUSTED -> "TRUSTED"
+                        else -> category
+                    },
                 style = MaterialTheme.typography.labelSmall,
                 color = textColor,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
         }
     }
@@ -680,26 +715,29 @@ private fun WhitelistScreenPreview() {
 private fun WhitelistEntryCardPreview() {
     TailBaitTheme {
         WhitelistEntryCard(
-            entry = WhitelistRepository.WhitelistEntryWithDevice(
-                entry = WhitelistEntry(
-                    id = 1,
-                    deviceId = 1,
-                    label = "My iPhone",
-                    category = WhitelistRepository.Category.OWN,
-                    notes = "Personal device - iPhone 15 Pro",
-                    addedViaLearnMode = false,
-                    createdAt = System.currentTimeMillis()
+            entry =
+                WhitelistRepository.WhitelistEntryWithDevice(
+                    entry =
+                        WhitelistEntry(
+                            id = 1,
+                            deviceId = 1,
+                            label = "My iPhone",
+                            category = WhitelistRepository.Category.OWN,
+                            notes = "Personal device - iPhone 15 Pro",
+                            addedViaLearnMode = false,
+                            createdAt = System.currentTimeMillis(),
+                        ),
+                    device =
+                        ScannedDevice(
+                            id = 1,
+                            address = "AA:BB:CC:DD:EE:FF",
+                            name = "iPhone 15 Pro",
+                            firstSeen = System.currentTimeMillis(),
+                            lastSeen = System.currentTimeMillis(),
+                        ),
                 ),
-                device = ScannedDevice(
-                    id = 1,
-                    address = "AA:BB:CC:DD:EE:FF",
-                    name = "iPhone 15 Pro",
-                    firstSeen = System.currentTimeMillis(),
-                    lastSeen = System.currentTimeMillis()
-                )
-            ),
             onClick = {},
-            onDeleteClick = {}
+            onDeleteClick = {},
         )
     }
 }
@@ -712,7 +750,7 @@ private fun WhitelistStatisticsCardPreview() {
             totalCount = 8,
             ownCount = 3,
             partnerCount = 2,
-            trustedCount = 3
+            trustedCount = 3,
         )
     }
 }

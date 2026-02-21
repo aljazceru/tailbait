@@ -12,61 +12,68 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.accompanist.permissions.*
 import com.tailbait.ui.theme.TailBaitDimensions
 import com.tailbait.ui.theme.TailBaitShapeTokens
 import com.tailbait.util.PermissionHelper
-import com.google.accompanist.permissions.*
 
 /**
  * Main permission request screen that guides users through granting required permissions.
  * Uses Accompanist Permissions library for Compose-friendly permission handling.
  */
 @OptIn(ExperimentalPermissionsApi::class)
+@Suppress("LongMethod")
 @Composable
 fun PermissionRequestScreen(
     onPermissionsGranted: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: PermissionRequestViewModel = hiltViewModel()
+    viewModel: PermissionRequestViewModel = hiltViewModel(),
 ) {
     val permissionHelper = viewModel.permissionHelper
 
     // Define permission states using Accompanist
-    val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        rememberMultiplePermissionsState(
-            permissions = listOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT
+    val bluetoothPermissions =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            rememberMultiplePermissionsState(
+                permissions =
+                    listOf(
+                        Manifest.permission.BLUETOOTH_SCAN,
+                        Manifest.permission.BLUETOOTH_CONNECT,
+                    ),
             )
+        } else {
+            null
+        }
+
+    val locationPermissions =
+        rememberMultiplePermissionsState(
+            permissions =
+                listOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ),
         )
-    } else {
-        null
-    }
 
-    val locationPermissions = rememberMultiplePermissionsState(
-        permissions = listOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
-    )
+    val backgroundLocationPermission =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            rememberPermissionState(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        } else {
+            null
+        }
 
-    val backgroundLocationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        rememberPermissionState(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-    } else {
-        null
-    }
-
-    val notificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
-    } else {
-        null
-    }
+    val notificationPermission =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            rememberPermissionState(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            null
+        }
 
     // Track permission grant states
     LaunchedEffect(
         bluetoothPermissions?.allPermissionsGranted,
         locationPermissions.allPermissionsGranted,
         backgroundLocationPermission?.status?.isGranted,
-        notificationPermission?.status?.isGranted
+        notificationPermission?.status?.isGranted,
     ) {
         permissionHelper.updatePermissionStates()
 
@@ -83,11 +90,12 @@ fun PermissionRequestScreen(
     var showNotificationRationaleDialog by remember { mutableStateOf(false) }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(TailBaitDimensions.SpacingLG),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(TailBaitDimensions.SpacingLG),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingXXXL))
 
@@ -95,7 +103,7 @@ fun PermissionRequestScreen(
         Text(
             text = "Required Permissions",
             style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingSM))
@@ -104,7 +112,7 @@ fun PermissionRequestScreen(
             text = "To protect you from potential tracking devices, we need the following permissions:",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingXXXL))
@@ -123,49 +131,51 @@ fun PermissionRequestScreen(
                         bluetoothPermissions.launchMultiplePermissionRequest()
                     }
                 },
-                onShowRationale = { showBluetoothRationaleDialog = true }
+                onShowRationale = { showBluetoothRationaleDialog = true },
             )
 
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingLG))
         }
 
         // Location Permissions
-    PermissionCard(
-        title = "Location Access",
-        description = permissionHelper.getShortPermissionRationale(
-            PermissionHelper.PermissionGroup.LOCATION
-        ),
-        isGranted = locationPermissions.allPermissionsGranted,
-        isRequired = true,
-        onRequestPermission = {
-            if (locationPermissions.shouldShowRationale) {
-                showLocationRationaleDialog = true
+        PermissionCard(
+            title = "Location Access",
+            description =
+                permissionHelper.getShortPermissionRationale(
+                    PermissionHelper.PermissionGroup.LOCATION,
+                ),
+            isGranted = locationPermissions.allPermissionsGranted,
+            isRequired = true,
+            onRequestPermission = {
+                if (locationPermissions.shouldShowRationale) {
+                    showLocationRationaleDialog = true
                 } else {
                     locationPermissions.launchMultiplePermissionRequest()
                 }
             },
-            onShowRationale = { showLocationRationaleDialog = true }
+            onShowRationale = { showLocationRationaleDialog = true },
         )
 
         Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingLG))
 
         // Background Location Permission (Android 10+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && backgroundLocationPermission != null) {
-        PermissionCard(
-            title = "Background Location",
-            description = permissionHelper.getShortPermissionRationale(
-                PermissionHelper.PermissionGroup.BACKGROUND_LOCATION
-            ),
-            isGranted = backgroundLocationPermission.status.isGranted,
-            isRequired = false,
-            onRequestPermission = {
-                if (backgroundLocationPermission.status.shouldShowRationale) {
-                    showBackgroundLocationRationaleDialog = true
+            PermissionCard(
+                title = "Background Location",
+                description =
+                    permissionHelper.getShortPermissionRationale(
+                        PermissionHelper.PermissionGroup.BACKGROUND_LOCATION,
+                    ),
+                isGranted = backgroundLocationPermission.status.isGranted,
+                isRequired = false,
+                onRequestPermission = {
+                    if (backgroundLocationPermission.status.shouldShowRationale) {
+                        showBackgroundLocationRationaleDialog = true
                     } else {
                         backgroundLocationPermission.launchPermissionRequest()
                     }
                 },
-                onShowRationale = { showBackgroundLocationRationaleDialog = true }
+                onShowRationale = { showBackgroundLocationRationaleDialog = true },
             )
 
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingLG))
@@ -173,21 +183,22 @@ fun PermissionRequestScreen(
 
         // Notification Permission (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && notificationPermission != null) {
-        PermissionCard(
-            title = "Notifications",
-            description = permissionHelper.getShortPermissionRationale(
-                PermissionHelper.PermissionGroup.NOTIFICATIONS
-            ),
-            isGranted = notificationPermission.status.isGranted,
-            isRequired = true,
-            onRequestPermission = {
-                if (notificationPermission.status.shouldShowRationale) {
-                    showNotificationRationaleDialog = true
+            PermissionCard(
+                title = "Notifications",
+                description =
+                    permissionHelper.getShortPermissionRationale(
+                        PermissionHelper.PermissionGroup.NOTIFICATIONS,
+                    ),
+                isGranted = notificationPermission.status.isGranted,
+                isRequired = true,
+                onRequestPermission = {
+                    if (notificationPermission.status.shouldShowRationale) {
+                        showNotificationRationaleDialog = true
                     } else {
                         notificationPermission.launchPermissionRequest()
                     }
                 },
-                onShowRationale = { showNotificationRationaleDialog = true }
+                onShowRationale = { showNotificationRationaleDialog = true },
             )
 
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingLG))
@@ -199,18 +210,20 @@ fun PermissionRequestScreen(
         Button(
             onClick = onPermissionsGranted,
             enabled = permissionHelper.areEssentialPermissionsGranted(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(TailBaitDimensions.ButtonHeight),
-            shape = TailBaitShapeTokens.ButtonShape
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(TailBaitDimensions.ButtonHeight),
+            shape = TailBaitShapeTokens.ButtonShape,
         ) {
             Text(
-                text = if (permissionHelper.areEssentialPermissionsGranted()) {
-                    "Continue"
-                } else {
-                    "Grant Required Permissions First"
-                },
-                style = MaterialTheme.typography.bodyLarge
+                text =
+                    if (permissionHelper.areEssentialPermissionsGranted()) {
+                        "Continue"
+                    } else {
+                        "Grant Required Permissions First"
+                    },
+                style = MaterialTheme.typography.bodyLarge,
             )
         }
 
@@ -219,18 +232,19 @@ fun PermissionRequestScreen(
         // Info text
         if (!permissionHelper.areEssentialPermissionsGranted()) {
             Text(
-                text = "Please grant all required permissions to continue. " +
+                text =
+                    "Please grant all required permissions to continue. " +
                         "Tap on each permission card to learn more.",
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else if (!permissionHelper.hasBackgroundLocationPermission()) {
             Text(
                 text = "Tip: Grant background location permission for 24/7 protection.",
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -246,7 +260,7 @@ fun PermissionRequestScreen(
             onConfirm = {
                 showBluetoothRationaleDialog = false
                 bluetoothPermissions?.launchMultiplePermissionRequest()
-            }
+            },
         )
     }
 
@@ -258,7 +272,7 @@ fun PermissionRequestScreen(
             onConfirm = {
                 showLocationRationaleDialog = false
                 locationPermissions.launchMultiplePermissionRequest()
-            }
+            },
         )
     }
 
@@ -270,7 +284,7 @@ fun PermissionRequestScreen(
             onConfirm = {
                 showBackgroundLocationRationaleDialog = false
                 backgroundLocationPermission?.launchPermissionRequest()
-            }
+            },
         )
     }
 
@@ -282,7 +296,7 @@ fun PermissionRequestScreen(
             onConfirm = {
                 showNotificationRationaleDialog = false
                 notificationPermission?.launchPermissionRequest()
-            }
+            },
         )
     }
 }

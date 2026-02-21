@@ -5,7 +5,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import kotlin.system.measureTimeMillis
 
 /**
  * Performance tests for database operations.
@@ -27,7 +26,6 @@ import kotlin.system.measureTimeMillis
  */
 @RunWith(AndroidJUnit4::class)
 class DaoPerformanceTest {
-
     // TODO: Setup test database with large dataset
     // private lateinit var database: TailBaitDatabase
 
@@ -37,25 +35,28 @@ class DaoPerformanceTest {
     }
 
     @Test
-    fun batchInsert_completes_within_time_limit() = runTest {
-        // TODO: Test batch insertion performance
-        // val devices = List(100) { createTestDevice(it) }
-        // val duration = measureTimeMillis {
-        //     scannedDeviceDao.insertAll(devices)
-        // }
-        // assertTrue(duration < 100) // 100ms limit
-    }
+    fun batchInsert_completes_within_time_limit() =
+        runTest {
+            // TODO: Test batch insertion performance
+            // val devices = List(100) { createTestDevice(it) }
+            // val duration = measureTimeMillis {
+            //     scannedDeviceDao.insertAll(devices)
+            // }
+            // assertTrue(duration < 100) // 100ms limit
+        }
 
     @Test
-    fun suspiciousDeviceQuery_scales_efficiently() = runTest {
-        // TODO: Test complex query with large dataset
-        // Insert 1000 devices with various location records
-        // Measure query time
-        // Verify < 100ms
-    }
+    fun suspiciousDeviceQuery_scales_efficiently() =
+        runTest {
+            // TODO: Test complex query with large dataset
+            // Insert 1000 devices with various location records
+            // Measure query time
+            // Verify < 100ms
+        }
 
     @Test
-    fun indexedQueries_outperform_sequential_scan() = runTest {
-        // TODO: Compare indexed vs non-indexed query performance
-    }
+    fun indexedQueries_outperform_sequential_scan() =
+        runTest {
+            // TODO: Compare indexed vs non-indexed query performance
+        }
 }

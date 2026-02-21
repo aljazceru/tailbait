@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.tailbait.data.dto
 
 /**
@@ -15,5 +17,5 @@ data class DeviceLocationMapData(
     val rssi: Int,
     val deviceAddress: String,
     val deviceType: String?,
-    val manufacturerData: String?
+    val manufacturerData: String?,
 )

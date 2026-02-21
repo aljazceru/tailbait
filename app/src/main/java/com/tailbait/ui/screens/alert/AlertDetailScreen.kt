@@ -22,7 +22,7 @@ import com.tailbait.ui.components.LoadingView
 @Composable
 fun AlertDetailScreen(
     navController: NavController,
-    viewModel: AlertDetailViewModel = hiltViewModel()
+    viewModel: AlertDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -34,12 +34,12 @@ fun AlertDetailScreen(
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(
                             imageVector = Icons.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back_button_desc)
+                            contentDescription = stringResource(R.string.back_button_desc),
                         )
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             when {
@@ -49,7 +49,7 @@ fun AlertDetailScreen(
                 uiState.errorMessage != null -> {
                     EmptyView(
                         title = "Error Loading Alert",
-                        message = uiState.errorMessage
+                        message = uiState.errorMessage,
                     )
                 }
                 uiState.alert != null -> {
@@ -65,16 +65,17 @@ fun AlertDetailScreen(
 @Composable
 private fun AlertDetailContent(
     state: AlertDetailViewModel.AlertDetailUiState,
-    onDeviceClick: (String) -> Unit
+    onDeviceClick: (String) -> Unit,
 ) {
     val alert = state.alert ?: return
     val alertLevel = AlertLevel.fromString(alert.alertLevel)
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // Alert header
         item {
@@ -83,30 +84,30 @@ private fun AlertDetailContent(
                     Row(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         AlertLevelBadge(
                             alertLevel = alertLevel,
-                            isDismissed = alert.isDismissed
+                            isDismissed = alert.isDismissed,
                         )
                         ThreatScoreIndicator(
                             threatScore = alert.threatScore,
-                            size = 56.dp
+                            size = 56.dp,
                         )
                     }
                     Text(
                         text = alert.title,
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.titleLarge,
                     )
                     Text(
                         text = alert.message,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         text = formatTimestamp(alert.timestamp),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -119,7 +120,7 @@ private fun AlertDetailContent(
                 distanceScore = state.threatScoreBreakdown?.distanceScore ?: 0.0,
                 timeScore = state.threatScoreBreakdown?.timeScore ?: 0.0,
                 consistencyScore = state.threatScoreBreakdown?.consistencyScore ?: 0.0,
-                deviceTypeScore = state.threatScoreBreakdown?.deviceTypeScore ?: 0.0
+                deviceTypeScore = state.threatScoreBreakdown?.deviceTypeScore ?: 0.0,
             )
         }
 
@@ -128,7 +129,7 @@ private fun AlertDetailContent(
             Text(
                 text = "Involved Devices",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 8.dp),
             )
         }
 
@@ -137,7 +138,7 @@ private fun AlertDetailContent(
             InvolvedDeviceCard(
                 deviceAddress = device.address,
                 deviceName = device.name,
-                onClick = { onDeviceClick(device.address) }
+                onClick = { onDeviceClick(device.address) },
             )
         }
     }

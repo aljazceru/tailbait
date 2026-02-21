@@ -5,7 +5,6 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ShadowKeyGeneratorTest {
-
     private fun device(
         manufacturerId: Int? = null,
         deviceType: String? = null,
@@ -14,7 +13,7 @@ class ShadowKeyGeneratorTest {
         findMySeparated: Boolean = false,
         beaconType: String? = null,
         txPowerLevel: Int? = null,
-        serviceUuids: String? = null
+        serviceUuids: String? = null,
     ) = ScannedDevice(
         id = 1L,
         address = "AA:BB:CC:DD:EE:FF",
@@ -28,20 +27,21 @@ class ShadowKeyGeneratorTest {
         findMySeparated = findMySeparated,
         beaconType = beaconType,
         txPowerLevel = txPowerLevel,
-        serviceUuids = serviceUuids
+        serviceUuids = serviceUuids,
     )
 
     @Test
     fun `AirTag generates correct shadow key`() {
-        val airtag = device(
-            manufacturerId = 0x004C,
-            deviceType = "TRACKER",
-            appleContinuityType = 0x12,
-            isTracker = true,
-            findMySeparated = true,
-            beaconType = "FIND_MY",
-            txPowerLevel = -7
-        )
+        val airtag =
+            device(
+                manufacturerId = 0x004C,
+                deviceType = "TRACKER",
+                appleContinuityType = 0x12,
+                isTracker = true,
+                findMySeparated = true,
+                beaconType = "FIND_MY",
+                txPowerLevel = -7,
+            )
 
         val key = ShadowKeyGenerator.generate(airtag)
 
@@ -57,17 +57,19 @@ class ShadowKeyGeneratorTest {
 
     @Test
     fun `iPhone generates different key than AirTag`() {
-        val airtag = device(
-            manufacturerId = 0x004C,
-            deviceType = "TRACKER",
-            appleContinuityType = 0x12,
-            isTracker = true
-        )
-        val iphone = device(
-            manufacturerId = 0x004C,
-            deviceType = "PHONE",
-            appleContinuityType = 0x10
-        )
+        val airtag =
+            device(
+                manufacturerId = 0x004C,
+                deviceType = "TRACKER",
+                appleContinuityType = 0x12,
+                isTracker = true,
+            )
+        val iphone =
+            device(
+                manufacturerId = 0x004C,
+                deviceType = "PHONE",
+                appleContinuityType = 0x10,
+            )
 
         val airtagKey = ShadowKeyGenerator.generate(airtag)
         val iphoneKey = ShadowKeyGenerator.generate(iphone)
@@ -79,13 +81,14 @@ class ShadowKeyGeneratorTest {
 
     @Test
     fun `two AirTags with different MACs produce same shadow key`() {
-        val airtag1 = device(
-            manufacturerId = 0x004C,
-            deviceType = "TRACKER",
-            appleContinuityType = 0x12,
-            isTracker = true,
-            beaconType = "FIND_MY"
-        )
+        val airtag1 =
+            device(
+                manufacturerId = 0x004C,
+                deviceType = "TRACKER",
+                appleContinuityType = 0x12,
+                isTracker = true,
+                beaconType = "FIND_MY",
+            )
         // Same properties, different MAC (not relevant to shadow key)
         val airtag2 = airtag1.copy(id = 2L, address = "11:22:33:44:55:66")
 
@@ -105,10 +108,11 @@ class ShadowKeyGeneratorTest {
 
     @Test
     fun `device with exactly 2 components returns valid key`() {
-        val minimal = device(
-            manufacturerId = 0x004C,
-            deviceType = "PHONE"
-        )
+        val minimal =
+            device(
+                manufacturerId = 0x004C,
+                deviceType = "PHONE",
+            )
         val key = ShadowKeyGenerator.generate(minimal)
         assertNotNull("Should return key with 2 components", key)
         assertEquals("M:004C|T:PHONE", key)
@@ -130,12 +134,13 @@ class ShadowKeyGeneratorTest {
     @Test
     fun `components are sorted for stability`() {
         // Even if properties are set in different orders, the key should be the same
-        val device = device(
-            manufacturerId = 0x004C,
-            deviceType = "TRACKER",
-            isTracker = true,
-            beaconType = "FIND_MY"
-        )
+        val device =
+            device(
+                manufacturerId = 0x004C,
+                deviceType = "TRACKER",
+                isTracker = true,
+                beaconType = "FIND_MY",
+            )
 
         val key = ShadowKeyGenerator.generate(device)
         assertNotNull(key)
@@ -147,12 +152,13 @@ class ShadowKeyGeneratorTest {
 
     @Test
     fun `Samsung SmartTag generates correct key`() {
-        val smartTag = device(
-            manufacturerId = 0x0075,
-            deviceType = "TRACKER",
-            isTracker = true,
-            serviceUuids = "0000FD5A-0000-1000-8000-00805F9B34FB"
-        )
+        val smartTag =
+            device(
+                manufacturerId = 0x0075,
+                deviceType = "TRACKER",
+                isTracker = true,
+                serviceUuids = "0000FD5A-0000-1000-8000-00805F9B34FB",
+            )
 
         val key = ShadowKeyGenerator.generate(smartTag)
 
@@ -165,11 +171,12 @@ class ShadowKeyGeneratorTest {
 
     @Test
     fun `UNKNOWN device type is excluded from key`() {
-        val unknown = device(
-            manufacturerId = 0x004C,
-            deviceType = "UNKNOWN",
-            txPowerLevel = -7
-        )
+        val unknown =
+            device(
+                manufacturerId = 0x004C,
+                deviceType = "UNKNOWN",
+                txPowerLevel = -7,
+            )
 
         val key = ShadowKeyGenerator.generate(unknown)
         assertNotNull(key)
@@ -178,11 +185,12 @@ class ShadowKeyGeneratorTest {
 
     @Test
     fun `zero manufacturer ID is excluded from key`() {
-        val zero = device(
-            manufacturerId = 0,
-            deviceType = "PHONE",
-            txPowerLevel = -7
-        )
+        val zero =
+            device(
+                manufacturerId = 0,
+                deviceType = "PHONE",
+                txPowerLevel = -7,
+            )
 
         val key = ShadowKeyGenerator.generate(zero)
         assertNotNull(key)

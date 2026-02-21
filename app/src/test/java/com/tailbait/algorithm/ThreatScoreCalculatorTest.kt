@@ -29,7 +29,6 @@ import org.junit.Test
  * - Verify threat score breakdown matches total score
  */
 class ThreatScoreCalculatorTest {
-
     private lateinit var calculator: ThreatScoreCalculator
     private lateinit var movementCorrelationCalculator: MovementCorrelationCalculator
 
@@ -127,11 +126,14 @@ class ThreatScoreCalculatorTest {
     fun `calculate - less than 1 hour span - should give low time score`() {
         val device = createTestDevice("PHONE")
         val baseTime = System.currentTimeMillis()
-        val locations = listOf(
-            createLocation(40.0, -74.0, baseTime),
-            createLocation(40.01, -74.01, baseTime + 30 * 60 * 1000), // +30 min
-            createLocation(40.02, -74.02, baseTime + 45 * 60 * 1000)  // +45 min
-        )
+        val locations =
+            listOf(
+                createLocation(40.0, -74.0, baseTime),
+                // +30 min
+                createLocation(40.01, -74.01, baseTime + 30 * 60 * 1000),
+                // +45 min
+                createLocation(40.02, -74.02, baseTime + 45 * 60 * 1000),
+            )
         val distances = createDistancesFromLocations(locations)
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
@@ -144,11 +146,14 @@ class ThreatScoreCalculatorTest {
     fun `calculate - 1 to 24 hours span - should give medium time score`() {
         val device = createTestDevice("PHONE")
         val baseTime = System.currentTimeMillis()
-        val locations = listOf(
-            createLocation(40.0, -74.0, baseTime),
-            createLocation(40.01, -74.01, baseTime + 6 * 60 * 60 * 1000), // +6 hours
-            createLocation(40.02, -74.02, baseTime + 12 * 60 * 60 * 1000) // +12 hours
-        )
+        val locations =
+            listOf(
+                createLocation(40.0, -74.0, baseTime),
+                // +6 hours
+                createLocation(40.01, -74.01, baseTime + 6 * 60 * 60 * 1000),
+                // +12 hours
+                createLocation(40.02, -74.02, baseTime + 12 * 60 * 60 * 1000),
+            )
         val distances = createDistancesFromLocations(locations)
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
@@ -161,11 +166,14 @@ class ThreatScoreCalculatorTest {
     fun `calculate - more than 1 day span - should give high time score`() {
         val device = createTestDevice("PHONE")
         val baseTime = System.currentTimeMillis()
-        val locations = listOf(
-            createLocation(40.0, -74.0, baseTime),
-            createLocation(40.01, -74.01, baseTime + 1 * 24 * 60 * 60 * 1000), // +1 day
-            createLocation(40.02, -74.02, baseTime + 3 * 24 * 60 * 60 * 1000)  // +3 days
-        )
+        val locations =
+            listOf(
+                createLocation(40.0, -74.0, baseTime),
+                // +1 day
+                createLocation(40.01, -74.01, baseTime + 1 * 24 * 60 * 60 * 1000),
+                // +3 days
+                createLocation(40.02, -74.02, baseTime + 3 * 24 * 60 * 60 * 1000),
+            )
         val distances = createDistancesFromLocations(locations)
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
@@ -181,12 +189,13 @@ class ThreatScoreCalculatorTest {
         val device = createTestDevice("PHONE")
         val baseTime = System.currentTimeMillis()
         // Detections every 30 minutes (very regular)
-        val locations = listOf(
-            createLocation(40.0, -74.0, baseTime),
-            createLocation(40.01, -74.01, baseTime + 30 * 60 * 1000),
-            createLocation(40.02, -74.02, baseTime + 60 * 60 * 1000),
-            createLocation(40.03, -74.03, baseTime + 90 * 60 * 1000)
-        )
+        val locations =
+            listOf(
+                createLocation(40.0, -74.0, baseTime),
+                createLocation(40.01, -74.01, baseTime + 30 * 60 * 1000),
+                createLocation(40.02, -74.02, baseTime + 60 * 60 * 1000),
+                createLocation(40.03, -74.03, baseTime + 90 * 60 * 1000),
+            )
         val distances = createDistancesFromLocations(locations)
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
@@ -200,12 +209,13 @@ class ThreatScoreCalculatorTest {
         val device = createTestDevice("PHONE")
         val baseTime = System.currentTimeMillis()
         // Irregular intervals: 30min, 6 hours, 2 days
-        val locations = listOf(
-            createLocation(40.0, -74.0, baseTime),
-            createLocation(40.01, -74.01, baseTime + 30 * 60 * 1000),
-            createLocation(40.02, -74.02, baseTime + 6 * 60 * 60 * 1000 + 30 * 60 * 1000),
-            createLocation(40.03, -74.03, baseTime + 2 * 24 * 60 * 60 * 1000 + 6 * 60 * 60 * 1000)
-        )
+        val locations =
+            listOf(
+                createLocation(40.0, -74.0, baseTime),
+                createLocation(40.01, -74.01, baseTime + 30 * 60 * 1000),
+                createLocation(40.02, -74.02, baseTime + 6 * 60 * 60 * 1000 + 30 * 60 * 1000),
+                createLocation(40.03, -74.03, baseTime + 2 * 24 * 60 * 60 * 1000 + 6 * 60 * 60 * 1000),
+            )
         val distances = createDistancesFromLocations(locations)
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
@@ -294,16 +304,17 @@ class ThreatScoreCalculatorTest {
         // - Phone device
         val device = createTestDevice("PHONE")
         val baseTime = System.currentTimeMillis()
-        val locations = listOf(
-            createLocation(40.0, -74.0, baseTime),
-            createLocation(40.01, -74.01, baseTime + 6 * 60 * 60 * 1000),
-            createLocation(40.02, -74.02, baseTime + 12 * 60 * 60 * 1000),
-            createLocation(40.03, -74.03, baseTime + 18 * 60 * 60 * 1000),
-            createLocation(40.04, -74.04, baseTime + 24 * 60 * 60 * 1000),
-            createLocation(40.05, -74.05, baseTime + 30 * 60 * 60 * 1000),
-            createLocation(40.06, -74.06, baseTime + 36 * 60 * 60 * 1000),
-            createLocation(40.07, -74.07, baseTime + 48 * 60 * 60 * 1000)
-        )
+        val locations =
+            listOf(
+                createLocation(40.0, -74.0, baseTime),
+                createLocation(40.01, -74.01, baseTime + 6 * 60 * 60 * 1000),
+                createLocation(40.02, -74.02, baseTime + 12 * 60 * 60 * 1000),
+                createLocation(40.03, -74.03, baseTime + 18 * 60 * 60 * 1000),
+                createLocation(40.04, -74.04, baseTime + 24 * 60 * 60 * 1000),
+                createLocation(40.05, -74.05, baseTime + 30 * 60 * 60 * 1000),
+                createLocation(40.06, -74.06, baseTime + 36 * 60 * 60 * 1000),
+                createLocation(40.07, -74.07, baseTime + 48 * 60 * 60 * 1000),
+            )
         val distances = createDistancesFromLocations(locations)
 
         val score = calculator.calculate(device, locations, distances)
@@ -320,11 +331,14 @@ class ThreatScoreCalculatorTest {
         // - Headphones device
         val device = createTestDevice("HEADPHONES")
         val baseTime = System.currentTimeMillis()
-        val locations = listOf(
-            createLocation(40.0, -74.0, baseTime),
-            createLocation(40.001, -74.001, baseTime + 20 * 60 * 1000), // ~100m, +20min
-            createLocation(40.002, -74.002, baseTime + 40 * 60 * 1000)  // ~200m, +40min
-        )
+        val locations =
+            listOf(
+                createLocation(40.0, -74.0, baseTime),
+                // ~100m, +20min
+                createLocation(40.001, -74.001, baseTime + 20 * 60 * 1000),
+                // ~200m, +40min
+                createLocation(40.002, -74.002, baseTime + 40 * 60 * 1000),
+            )
         val distances = createDistancesFromLocations(locations)
 
         val score = calculator.calculate(device, locations, distances)
@@ -340,7 +354,8 @@ class ThreatScoreCalculatorTest {
 
         val breakdown = calculator.calculateWithBreakdown(device, locations, distances)
 
-        val sum = breakdown.locationCountScore +
+        val sum =
+            breakdown.locationCountScore +
                 breakdown.distanceScore +
                 breakdown.timeCorrelationScore +
                 breakdown.consistencyScore +
@@ -384,18 +399,41 @@ class ThreatScoreCalculatorTest {
 
         // All locations have the SAME timestamp (simulating mutation by dedup)
         val mutatedTimestamp = now
-        val locations = listOf(
-            createLocation(40.0, -74.0, mutatedTimestamp),
-            createLocation(40.01, -74.01, mutatedTimestamp),
-            createLocation(40.02, -74.02, mutatedTimestamp)
-        )
+        val locations =
+            listOf(
+                createLocation(40.0, -74.0, mutatedTimestamp),
+                createLocation(40.01, -74.01, mutatedTimestamp),
+                createLocation(40.02, -74.02, mutatedTimestamp),
+            )
 
         // But records have spread timestamps spanning 2 days
-        val deviceRecords = listOf(
-            DeviceLocationRecord(id = 1, deviceId = 1, locationId = 1, timestamp = now - 2 * 24 * 60 * 60 * 1000, rssi = -50, scanTriggerType = "PERIODIC"),
-            DeviceLocationRecord(id = 2, deviceId = 1, locationId = 2, timestamp = now - 1 * 24 * 60 * 60 * 1000, rssi = -55, scanTriggerType = "PERIODIC"),
-            DeviceLocationRecord(id = 3, deviceId = 1, locationId = 3, timestamp = now, rssi = -60, scanTriggerType = "PERIODIC")
-        )
+        val deviceRecords =
+            listOf(
+                DeviceLocationRecord(
+                    id = 1,
+                    deviceId = 1,
+                    locationId = 1,
+                    timestamp = now - 2 * 24 * 60 * 60 * 1000,
+                    rssi = -50,
+                    scanTriggerType = "PERIODIC",
+                ),
+                DeviceLocationRecord(
+                    id = 2,
+                    deviceId = 1,
+                    locationId = 2,
+                    timestamp = now - 1 * 24 * 60 * 60 * 1000,
+                    rssi = -55,
+                    scanTriggerType = "PERIODIC",
+                ),
+                DeviceLocationRecord(
+                    id = 3,
+                    deviceId = 1,
+                    locationId = 3,
+                    timestamp = now,
+                    rssi = -60,
+                    scanTriggerType = "PERIODIC",
+                ),
+            )
 
         val distances = listOf(1000.0, 2000.0, 1500.0)
         val userPaths = emptyList<UserPath>()
@@ -406,7 +444,7 @@ class ThreatScoreCalculatorTest {
             movementCorrelationCalculator.calculateCorrelation(
                 deviceRecords = any(),
                 userPaths = any(),
-                deviceLocations = any()
+                deviceLocations = any(),
             )
         } returns 0.0
 
@@ -429,14 +467,14 @@ class ThreatScoreCalculatorTest {
             firstSeen = System.currentTimeMillis(),
             lastSeen = System.currentTimeMillis(),
             detectionCount = 1,
-            deviceType = deviceType
+            deviceType = deviceType,
         )
     }
 
     private fun createLocation(
         latitude: Double,
         longitude: Double,
-        timestamp: Long
+        timestamp: Long,
     ): Location {
         return Location(
             id = 0,
@@ -445,7 +483,7 @@ class ThreatScoreCalculatorTest {
             accuracy = 10.0f,
             altitude = null,
             timestamp = timestamp,
-            provider = "GPS"
+            provider = "GPS",
         )
     }
 
@@ -453,14 +491,15 @@ class ThreatScoreCalculatorTest {
         count: Int,
         intervalHours: Long,
         baseLatitude: Double = 40.0,
-        baseLongitude: Double = -74.0
+        baseLongitude: Double = -74.0,
     ): List<Location> {
         val baseTime = System.currentTimeMillis()
         return List(count) { i ->
             createLocation(
-                latitude = baseLatitude + (i * 0.01), // ~1.1km per 0.01 degrees
+                // ~1.1km per 0.01 degrees
+                latitude = baseLatitude + (i * 0.01),
                 longitude = baseLongitude + (i * 0.01),
-                timestamp = baseTime + (i * intervalHours * 60 * 60 * 1000)
+                timestamp = baseTime + (i * intervalHours * 60 * 60 * 1000),
             )
         }
     }

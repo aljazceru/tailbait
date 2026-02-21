@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.tailbait.ui.theme
 
 import androidx.compose.ui.unit.dp
@@ -6,7 +8,6 @@ import androidx.compose.ui.unit.dp
  * TailBait dimension system - consistent spacing, sizing, and elevation
  */
 object TailBaitDimensions {
-
     // ═══════════════════════════════════════════════════════════════════════
     // SPACING SCALE
     // ═══════════════════════════════════════════════════════════════════════

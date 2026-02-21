@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.Flow
  */
 @Dao
 interface DeviceLocationRecordDao {
-
     /**
      * Insert a new device-location record into the database.
      *
@@ -79,11 +78,13 @@ interface DeviceLocationRecordDao {
      * @param deviceId The device ID to query
      * @return Flow emitting list of records for the device
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE device_id = :deviceId
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getRecordsForDevice(deviceId: Long): Flow<List<DeviceLocationRecord>>
 
     /**
@@ -92,11 +93,13 @@ interface DeviceLocationRecordDao {
      * @param locationId The location ID to query
      * @return Flow emitting list of records at the location
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE location_id = :locationId
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getRecordsAtLocation(locationId: Long): Flow<List<DeviceLocationRecord>>
 
     /**
@@ -106,12 +109,17 @@ interface DeviceLocationRecordDao {
      * @param locationId The location ID
      * @return Flow emitting list of records for the device-location pair
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE device_id = :deviceId AND location_id = :locationId
         ORDER BY timestamp DESC
-    """)
-    fun getRecordsForDeviceAtLocation(deviceId: Long, locationId: Long): Flow<List<DeviceLocationRecord>>
+    """,
+    )
+    fun getRecordsForDeviceAtLocation(
+        deviceId: Long,
+        locationId: Long,
+    ): Flow<List<DeviceLocationRecord>>
 
     /**
      * Get count of distinct locations where a device has been seen.
@@ -120,10 +128,12 @@ interface DeviceLocationRecordDao {
      * @param deviceId The device ID
      * @return Flow emitting count of distinct locations
      */
-    @Query("""
+    @Query(
+        """
         SELECT COUNT(DISTINCT location_id) FROM device_location_records
         WHERE device_id = :deviceId
-    """)
+    """,
+    )
     fun getDistinctLocationCountForDevice(deviceId: Long): Flow<Int>
 
     /**
@@ -132,10 +142,12 @@ interface DeviceLocationRecordDao {
      * @param locationId The location ID
      * @return Flow emitting count of distinct devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT COUNT(DISTINCT device_id) FROM device_location_records
         WHERE location_id = :locationId
-    """)
+    """,
+    )
     fun getDeviceCountAtLocation(locationId: Long): Flow<Int>
 
     /**
@@ -145,12 +157,17 @@ interface DeviceLocationRecordDao {
      * @param endTimestamp End of time range (inclusive)
      * @return Flow emitting list of records within the time range
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE timestamp >= :startTimestamp AND timestamp <= :endTimestamp
         ORDER BY timestamp DESC
-    """)
-    fun getRecordsByTimeRange(startTimestamp: Long, endTimestamp: Long): Flow<List<DeviceLocationRecord>>
+    """,
+    )
+    fun getRecordsByTimeRange(
+        startTimestamp: Long,
+        endTimestamp: Long,
+    ): Flow<List<DeviceLocationRecord>>
 
     /**
      * Get recent records within a time window.
@@ -158,11 +175,13 @@ interface DeviceLocationRecordDao {
      * @param sinceTimestamp Timestamp threshold (records after this time)
      * @return Flow emitting list of recent records
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE timestamp >= :sinceTimestamp
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getRecentRecords(sinceTimestamp: Long): Flow<List<DeviceLocationRecord>>
 
     /**
@@ -171,11 +190,13 @@ interface DeviceLocationRecordDao {
      * @param scanTriggerType The scan trigger type (e.g., "MANUAL", "CONTINUOUS", "PERIODIC")
      * @return Flow emitting list of records from the specified scan type
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE scan_trigger_type = :scanTriggerType
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getRecordsByScanType(scanTriggerType: String): Flow<List<DeviceLocationRecord>>
 
     /**
@@ -184,11 +205,13 @@ interface DeviceLocationRecordDao {
      *
      * @return Flow emitting list of records with location changes
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE location_changed = 1
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getRecordsWithLocationChange(): Flow<List<DeviceLocationRecord>>
 
     /**
@@ -198,11 +221,13 @@ interface DeviceLocationRecordDao {
      * @param minRssi Minimum RSSI threshold (e.g., -60 for very close devices)
      * @return Flow emitting list of records with strong signals
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE rssi >= :minRssi
         ORDER BY rssi DESC, timestamp DESC
-    """)
+    """,
+    )
     fun getRecordsWithStrongSignal(minRssi: Int): Flow<List<DeviceLocationRecord>>
 
     /**
@@ -211,10 +236,12 @@ interface DeviceLocationRecordDao {
      * @param deviceId The device ID
      * @return Average RSSI value, or null if no records exist
      */
-    @Query("""
+    @Query(
+        """
         SELECT AVG(rssi) FROM device_location_records
         WHERE device_id = :deviceId
-    """)
+    """,
+    )
     suspend fun getAverageRssiForDevice(deviceId: Long): Double?
 
     /**
@@ -223,12 +250,14 @@ interface DeviceLocationRecordDao {
      * @param deviceId The device ID
      * @return The most recent record, or null if no records exist
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE device_id = :deviceId
         ORDER BY timestamp DESC
         LIMIT 1
-    """)
+    """,
+    )
     suspend fun getLatestRecordForDevice(deviceId: Long): DeviceLocationRecord?
 
     /**
@@ -267,7 +296,6 @@ interface DeviceLocationRecordDao {
     @Query("DELETE FROM device_location_records WHERE location_id = :locationId")
     suspend fun deleteRecordsAtLocation(locationId: Long): Int
 
-
     /**
      * Delete all device-location records.
      * WARNING: This removes all device detection history.
@@ -285,19 +313,22 @@ interface DeviceLocationRecordDao {
      * @param deviceId The primary device ID
      * @return List of all records for the device and its linked children
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM device_location_records
         WHERE device_id = :deviceId
            OR device_id IN (SELECT id FROM scanned_devices WHERE linked_device_id = :deviceId)
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     suspend fun getRecordsForDeviceWithLinked(deviceId: Long): List<DeviceLocationRecord>
 
     /**
      * Optimized query for map data to avoid N+1 problem.
      * Joins all necessary tables and filters at the database level.
      */
-    @Query("""
+    @Query(
+        """
         SELECT 
             dlr.id,
             dlr.device_id as deviceId,
@@ -317,11 +348,11 @@ interface DeviceLocationRecordDao {
           AND (:startTimestamp IS NULL OR dlr.timestamp >= :startTimestamp)
           AND (:endTimestamp IS NULL OR dlr.timestamp <= :endTimestamp)
         ORDER BY dlr.timestamp DESC
-    """)
+    """,
+    )
     fun getMapData(
         deviceId: Long? = null,
         startTimestamp: Long? = null,
-        endTimestamp: Long? = null
+        endTimestamp: Long? = null,
     ): Flow<List<DeviceLocationMapData>>
 }
-

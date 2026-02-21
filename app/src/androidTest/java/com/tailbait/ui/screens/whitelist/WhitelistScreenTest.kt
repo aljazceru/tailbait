@@ -21,49 +21,54 @@ import org.junit.Test
  * - Dialog interactions
  */
 class WhitelistScreenTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val testDevice1 = ScannedDevice(
-        id = 1L,
-        address = "AA:BB:CC:DD:EE:FF",
-        name = "Test Device 1",
-        firstSeen = 1000L,
-        lastSeen = 2000L
-    )
-
-    private val testDevice2 = ScannedDevice(
-        id = 2L,
-        address = "11:22:33:44:55:66",
-        name = "Test Device 2",
-        firstSeen = 1500L,
-        lastSeen = 2500L
-    )
-
-    private val testEntry1 = WhitelistRepository.WhitelistEntryWithDevice(
-        entry = WhitelistEntry(
+    private val testDevice1 =
+        ScannedDevice(
             id = 1L,
-            deviceId = 1L,
-            label = "My Phone",
-            category = WhitelistRepository.Category.OWN,
-            notes = "Personal device",
-            addedViaLearnMode = false
-        ),
-        device = testDevice1
-    )
+            address = "AA:BB:CC:DD:EE:FF",
+            name = "Test Device 1",
+            firstSeen = 1000L,
+            lastSeen = 2000L,
+        )
 
-    private val testEntry2 = WhitelistRepository.WhitelistEntryWithDevice(
-        entry = WhitelistEntry(
+    private val testDevice2 =
+        ScannedDevice(
             id = 2L,
-            deviceId = 2L,
-            label = "Partner's Watch",
-            category = WhitelistRepository.Category.PARTNER,
-            notes = null,
-            addedViaLearnMode = true
-        ),
-        device = testDevice2
-    )
+            address = "11:22:33:44:55:66",
+            name = "Test Device 2",
+            firstSeen = 1500L,
+            lastSeen = 2500L,
+        )
+
+    private val testEntry1 =
+        WhitelistRepository.WhitelistEntryWithDevice(
+            entry =
+                WhitelistEntry(
+                    id = 1L,
+                    deviceId = 1L,
+                    label = "My Phone",
+                    category = WhitelistRepository.Category.OWN,
+                    notes = "Personal device",
+                    addedViaLearnMode = false,
+                ),
+            device = testDevice1,
+        )
+
+    private val testEntry2 =
+        WhitelistRepository.WhitelistEntryWithDevice(
+            entry =
+                WhitelistEntry(
+                    id = 2L,
+                    deviceId = 2L,
+                    label = "Partner's Watch",
+                    category = WhitelistRepository.Category.PARTNER,
+                    notes = null,
+                    addedViaLearnMode = true,
+                ),
+            device = testDevice2,
+        )
 
     @Before
     fun setup() {
@@ -80,7 +85,7 @@ class WhitelistScreenTest {
                 WhitelistEntryCard(
                     entry = testEntry1,
                     onClick = {},
-                    onDeleteClick = {}
+                    onDeleteClick = {},
                 )
             }
         }
@@ -101,7 +106,7 @@ class WhitelistScreenTest {
                 WhitelistEntryCard(
                     entry = testEntry2,
                     onClick = {},
-                    onDeleteClick = {}
+                    onDeleteClick = {},
                 )
             }
         }
@@ -119,7 +124,7 @@ class WhitelistScreenTest {
                     totalCount = 10,
                     ownCount = 4,
                     partnerCount = 3,
-                    trustedCount = 3
+                    trustedCount = 3,
                 )
             }
         }
@@ -159,7 +164,7 @@ class WhitelistScreenTest {
                 AddToWhitelistDialog(
                     devices = devices,
                     onDismiss = {},
-                    onConfirm = { _, _, _, _ -> }
+                    onConfirm = { _, _, _, _ -> },
                 )
             }
         }
@@ -179,7 +184,7 @@ class WhitelistScreenTest {
                 AddToWhitelistDialog(
                     devices = emptyList(),
                     onDismiss = {},
-                    onConfirm = { _, _, _, _ -> }
+                    onConfirm = { _, _, _, _ -> },
                 )
             }
         }
@@ -197,7 +202,7 @@ class WhitelistScreenTest {
                 EditWhitelistDialog(
                     entry = testEntry1.entry,
                     onDismiss = {},
-                    onConfirm = { _, _, _ -> }
+                    onConfirm = { _, _, _ -> },
                 )
             }
         }
@@ -216,7 +221,7 @@ class WhitelistScreenTest {
                 DeleteWhitelistConfirmationDialog(
                     entry = testEntry1,
                     onDismiss = {},
-                    onConfirm = {}
+                    onConfirm = {},
                 )
             }
         }
@@ -239,7 +244,7 @@ class WhitelistScreenTest {
                 WhitelistEntryCard(
                     entry = testEntry1,
                     onClick = { clicked = true },
-                    onDeleteClick = {}
+                    onDeleteClick = {},
                 )
             }
         }
@@ -260,7 +265,7 @@ class WhitelistScreenTest {
                 WhitelistEntryCard(
                     entry = testEntry1,
                     onClick = {},
-                    onDeleteClick = { deleteClicked = true }
+                    onDeleteClick = { deleteClicked = true },
                 )
             }
         }
@@ -281,7 +286,7 @@ class WhitelistScreenTest {
                 AddToWhitelistDialog(
                     devices = listOf(testDevice1),
                     onDismiss = { dismissed = true },
-                    onConfirm = { _, _, _, _ -> }
+                    onConfirm = { _, _, _, _ -> },
                 )
             }
         }
@@ -302,7 +307,7 @@ class WhitelistScreenTest {
                 EditWhitelistDialog(
                     entry = testEntry1.entry,
                     onDismiss = { dismissed = true },
-                    onConfirm = { _, _, _ -> }
+                    onConfirm = { _, _, _ -> },
                 )
             }
         }
@@ -323,7 +328,7 @@ class WhitelistScreenTest {
                 DeleteWhitelistConfirmationDialog(
                     entry = testEntry1,
                     onDismiss = {},
-                    onConfirm = { confirmed = true }
+                    onConfirm = { confirmed = true },
                 )
             }
         }
@@ -347,7 +352,7 @@ class WhitelistScreenTest {
                     onCategorySelected = {},
                     ownCount = 3,
                     partnerCount = 2,
-                    trustedCount = 4
+                    trustedCount = 4,
                 )
             }
         }
@@ -370,7 +375,7 @@ class WhitelistScreenTest {
                     onCategorySelected = { selectedCategory = it },
                     ownCount = 3,
                     partnerCount = 2,
-                    trustedCount = 4
+                    trustedCount = 4,
                 )
             }
         }
@@ -387,16 +392,17 @@ class WhitelistScreenTest {
     @Test
     fun whitelistEntryCard_handlesNullDeviceName() {
         // Given
-        val entryWithoutName = testEntry1.copy(
-            device = testDevice1.copy(name = null)
-        )
+        val entryWithoutName =
+            testEntry1.copy(
+                device = testDevice1.copy(name = null),
+            )
 
         composeTestRule.setContent {
             BleTrackerTheme {
                 WhitelistEntryCard(
                     entry = entryWithoutName,
                     onClick = {},
-                    onDeleteClick = {}
+                    onDeleteClick = {},
                 )
             }
         }
@@ -409,16 +415,17 @@ class WhitelistScreenTest {
     @Test
     fun whitelistEntryCard_handlesNullNotes() {
         // Given
-        val entryWithoutNotes = testEntry1.copy(
-            entry = testEntry1.entry.copy(notes = null)
-        )
+        val entryWithoutNotes =
+            testEntry1.copy(
+                entry = testEntry1.entry.copy(notes = null),
+            )
 
         composeTestRule.setContent {
             BleTrackerTheme {
                 WhitelistEntryCard(
                     entry = entryWithoutNotes,
                     onClick = {},
-                    onDeleteClick = {}
+                    onDeleteClick = {},
                 )
             }
         }

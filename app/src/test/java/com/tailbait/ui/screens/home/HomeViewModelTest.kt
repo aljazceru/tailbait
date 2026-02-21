@@ -1,6 +1,7 @@
 package com.tailbait.ui.screens.home
 
 import android.content.Context
+import androidx.lifecycle.viewModelScope
 import com.tailbait.data.database.entities.AppSettings
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.repository.DeviceRepository
@@ -8,7 +9,6 @@ import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.data.repository.WhitelistRepository
 import com.tailbait.service.BleScannerManager
 import com.tailbait.util.PermissionHelper
-import androidx.lifecycle.viewModelScope
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,7 +34,6 @@ import org.junit.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
-
     // Use UnconfinedTestDispatcher so viewModelScope.launch executes eagerly,
     // which avoids race conditions with the ViewModel's use of Dispatchers.IO.
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -59,26 +58,29 @@ class HomeViewModelTest {
     private lateinit var viewModel: HomeViewModel
 
     // Test data
-    private val testDevice1 = ScannedDevice(
-        id = 1L,
-        address = "AA:BB:CC:DD:EE:FF",
-        name = "Test Device 1",
-        firstSeen = System.currentTimeMillis() - 10000,
-        lastSeen = System.currentTimeMillis()
-    )
+    private val testDevice1 =
+        ScannedDevice(
+            id = 1L,
+            address = "AA:BB:CC:DD:EE:FF",
+            name = "Test Device 1",
+            firstSeen = System.currentTimeMillis() - 10000,
+            lastSeen = System.currentTimeMillis(),
+        )
 
-    private val testDevice2 = ScannedDevice(
-        id = 2L,
-        address = "11:22:33:44:55:66",
-        name = "Test Device 2",
-        firstSeen = System.currentTimeMillis() - 5000,
-        lastSeen = System.currentTimeMillis()
-    )
+    private val testDevice2 =
+        ScannedDevice(
+            id = 2L,
+            address = "11:22:33:44:55:66",
+            name = "Test Device 2",
+            firstSeen = System.currentTimeMillis() - 5000,
+            lastSeen = System.currentTimeMillis(),
+        )
 
-    private val testSettings = AppSettings(
-        id = 1,
-        isTrackingEnabled = false
-    )
+    private val testSettings =
+        AppSettings(
+            id = 1,
+            isTrackingEnabled = false,
+        )
 
     @Before
     fun setup() {
@@ -138,7 +140,7 @@ class HomeViewModelTest {
             whitelistRepository = whitelistRepository,
             bleScannerManager = bleScannerManager,
             permissionHelper = permissionHelper,
-            context = context
+            context = context,
         )
     }
 
@@ -159,275 +161,296 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `initial state is loading`() = runTest {
-        viewModel = createViewModel()
+    fun `initial state is loading`() =
+        runTest {
+            viewModel = createViewModel()
 
-        // State starts as loading before data is collected
-        val initialState = viewModel.uiState.value
-        assertTrue(initialState.isLoading)
-    }
-
-    @Test
-    fun `initial state loads correctly with no devices`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-        assertFalse(state.isTrackingEnabled)
-        assertEquals(HomeViewModel.ScanStatus.Idle, state.scanState)
-        assertEquals(0, state.totalDevicesFound)
-        assertEquals(0, state.devicesFoundInCurrentScan)
-        assertNull(state.lastScanTimestamp)
-        assertTrue(state.permissionStatus.allEssentialGranted)
-        assertNull(state.errorMessage)
-    }
+            // State starts as loading before data is collected
+            val initialState = viewModel.uiState.value
+            assertTrue(initialState.isLoading)
+        }
 
     @Test
-    fun `state loads with devices correctly`() = runTest {
-        coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1, testDevice2))
+    fun `initial state loads correctly with no devices`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-        assertEquals(2, state.totalDevicesFound)
-        assertEquals(testDevice2.lastSeen, state.lastScanTimestamp) // Most recent
-    }
-
-    @Test
-    fun `toggleTracking enables tracking when disabled`() = runTest {
-        coEvery { settingsRepository.updateTrackingEnabled(any()) } just Runs
-
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        // Initial state: tracking disabled
-        assertFalse(viewModel.uiState.value.isTrackingEnabled)
-
-        // Toggle tracking
-        viewModel.toggleTracking()
-        advanceUntilIdle()
-
-        // Verify that updateTrackingEnabled was called with true
-        coVerify { settingsRepository.updateTrackingEnabled(true) }
-    }
+            val state = viewModel.uiState.value
+            assertFalse(state.isLoading)
+            assertFalse(state.isTrackingEnabled)
+            assertEquals(HomeViewModel.ScanStatus.Idle, state.scanState)
+            assertEquals(0, state.totalDevicesFound)
+            assertEquals(0, state.devicesFoundInCurrentScan)
+            assertNull(state.lastScanTimestamp)
+            assertTrue(state.permissionStatus.allEssentialGranted)
+            assertNull(state.errorMessage)
+        }
 
     @Test
-    fun `toggleTracking disables tracking when enabled`() = runTest {
-        val enabledSettings = testSettings.copy(isTrackingEnabled = true)
-        coEvery { settingsRepository.getSettings() } returns flowOf(enabledSettings)
-        coEvery { settingsRepository.updateTrackingEnabled(any()) } just Runs
+    fun `state loads with devices correctly`() =
+        runTest {
+            coEvery { deviceRepository.getAllDevices() } returns flowOf(listOf(testDevice1, testDevice2))
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        // Initial state: tracking enabled
-        assertTrue(viewModel.uiState.value.isTrackingEnabled)
-
-        // Toggle tracking
-        viewModel.toggleTracking()
-        advanceUntilIdle()
-
-        // Verify that updateTrackingEnabled was called with false
-        coVerify { settingsRepository.updateTrackingEnabled(false) }
-    }
+            val state = viewModel.uiState.value
+            assertFalse(state.isLoading)
+            assertEquals(2, state.totalDevicesFound)
+            assertEquals(testDevice2.lastSeen, state.lastScanTimestamp) // Most recent
+        }
 
     @Test
-    fun `toggleTracking fails without permissions`() = runTest {
-        coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
+    fun `toggleTracking enables tracking when disabled`() =
+        runTest {
+            coEvery { settingsRepository.updateTrackingEnabled(any()) } just Runs
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        viewModel.toggleTracking()
-        advanceUntilIdle()
+            // Initial state: tracking disabled
+            assertFalse(viewModel.uiState.value.isTrackingEnabled)
 
-        // Should not enable tracking
-        coVerify(exactly = 0) { settingsRepository.updateTrackingEnabled(true) }
+            // Toggle tracking
+            viewModel.toggleTracking()
+            advanceUntilIdle()
 
-        // Should show error
-        assertNotNull(viewModel.uiState.value.errorMessage)
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("permissions"))
-    }
-
-    @Test
-    fun `performManualScan triggers scan successfully`() = runTest {
-        coEvery { bleScannerManager.performManualScan() } returns 5
-
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        viewModel.performManualScan()
-        advanceUntilIdle()
-
-        coVerify { bleScannerManager.performManualScan() }
-    }
+            // Verify that updateTrackingEnabled was called with true
+            coVerify { settingsRepository.updateTrackingEnabled(true) }
+        }
 
     @Test
-    fun `performManualScan fails without permissions`() = runTest {
-        coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
+    fun `toggleTracking disables tracking when enabled`() =
+        runTest {
+            val enabledSettings = testSettings.copy(isTrackingEnabled = true)
+            coEvery { settingsRepository.getSettings() } returns flowOf(enabledSettings)
+            coEvery { settingsRepository.updateTrackingEnabled(any()) } just Runs
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        viewModel.performManualScan()
-        advanceUntilIdle()
+            // Initial state: tracking enabled
+            assertTrue(viewModel.uiState.value.isTrackingEnabled)
 
-        // Should not trigger scan
-        coVerify(exactly = 0) { bleScannerManager.performManualScan() }
+            // Toggle tracking
+            viewModel.toggleTracking()
+            advanceUntilIdle()
 
-        // Should show error
-        assertNotNull(viewModel.uiState.value.errorMessage)
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("permissions"))
-    }
-
-    @Test
-    fun `scan state updates correctly when scanning`() = runTest {
-        scanStateFlow.value = BleScannerManager.ScanState.Scanning(devicesFound = 3)
-
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        val state = viewModel.uiState.value
-        assertEquals(HomeViewModel.ScanStatus.Scanning, state.scanState)
-        assertEquals(3, state.devicesFoundInCurrentScan)
-    }
+            // Verify that updateTrackingEnabled was called with false
+            coVerify { settingsRepository.updateTrackingEnabled(false) }
+        }
 
     @Test
-    fun `scan state updates correctly on error`() = runTest {
-        val errorMessage = "Bluetooth adapter not available"
-        scanStateFlow.value = BleScannerManager.ScanState.Error(message = errorMessage)
+    fun `toggleTracking fails without permissions`() =
+        runTest {
+            coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        val state = viewModel.uiState.value
-        assertEquals(HomeViewModel.ScanStatus.Error, state.scanState)
-        assertEquals(errorMessage, state.errorMessage)
-    }
+            viewModel.toggleTracking()
+            advanceUntilIdle()
 
-    @Test
-    fun `permission status reflects missing bluetooth permission`() = runTest {
-        bluetoothPermissionFlow.value = PermissionHelper.PermissionState.DENIED
-        coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
+            // Should not enable tracking
+            coVerify(exactly = 0) { settingsRepository.updateTrackingEnabled(true) }
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        val state = viewModel.uiState.value
-        assertFalse(state.permissionStatus.bluetoothGranted)
-        assertFalse(state.permissionStatus.allEssentialGranted)
-    }
+            // Should show error
+            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertTrue(viewModel.uiState.value.errorMessage!!.contains("permissions"))
+        }
 
     @Test
-    fun `permission status reflects missing location permission`() = runTest {
-        locationPermissionFlow.value = PermissionHelper.PermissionState.DENIED
-        coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
+    fun `performManualScan triggers scan successfully`() =
+        runTest {
+            coEvery { bleScannerManager.performManualScan() } returns 5
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        val state = viewModel.uiState.value
-        assertFalse(state.permissionStatus.locationGranted)
-        assertFalse(state.permissionStatus.allEssentialGranted)
-    }
+            viewModel.performManualScan()
+            advanceUntilIdle()
 
-    @Test
-    fun `refreshPermissionStatus triggers permission check`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        viewModel.refreshPermissionStatus()
-        advanceUntilIdle()
-
-        // Should call checkAllPermissions at least twice (once in init, once in refresh)
-        coVerify(atLeast = 2) { permissionHelper.checkAllPermissions() }
-    }
+            coVerify { bleScannerManager.performManualScan() }
+        }
 
     @Test
-    fun `clearError clears error message`() = runTest {
-        val errorMessage = "Test error"
-        scanStateFlow.value = BleScannerManager.ScanState.Error(message = errorMessage)
+    fun `performManualScan fails without permissions`() =
+        runTest {
+            coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        // Error should be present
-        assertNotNull(viewModel.uiState.value.errorMessage)
+            viewModel.performManualScan()
+            advanceUntilIdle()
 
-        viewModel.clearError()
+            // Should not trigger scan
+            coVerify(exactly = 0) { bleScannerManager.performManualScan() }
 
-        // Error should be cleared
-        assertNull(viewModel.uiState.value.errorMessage)
-    }
-
-    @Test
-    fun `getScanStatusText returns correct text for Idle`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        assertEquals("Idle", viewModel.getScanStatusText())
-    }
+            // Should show error
+            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertTrue(viewModel.uiState.value.errorMessage!!.contains("permissions"))
+        }
 
     @Test
-    fun `getScanStatusText returns correct text for Scanning`() = runTest {
-        scanStateFlow.value = BleScannerManager.ScanState.Scanning(devicesFound = 5)
+    fun `scan state updates correctly when scanning`() =
+        runTest {
+            scanStateFlow.value = BleScannerManager.ScanState.Scanning(devicesFound = 3)
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        assertEquals("Scanning...", viewModel.getScanStatusText())
-    }
-
-    @Test
-    fun `getScanStatusText returns correct text for Error`() = runTest {
-        scanStateFlow.value = BleScannerManager.ScanState.Error(message = "Error")
-
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        assertEquals("Error", viewModel.getScanStatusText())
-    }
+            val state = viewModel.uiState.value
+            assertEquals(HomeViewModel.ScanStatus.Scanning, state.scanState)
+            assertEquals(3, state.devicesFoundInCurrentScan)
+        }
 
     @Test
-    fun `getPermissionStatusText returns correct text when all granted`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilSettled()
+    fun `scan state updates correctly on error`() =
+        runTest {
+            val errorMessage = "Bluetooth adapter not available"
+            scanStateFlow.value = BleScannerManager.ScanState.Error(message = errorMessage)
 
-        assertEquals("All permissions granted", viewModel.getPermissionStatusText())
-    }
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-    @Test
-    fun `getPermissionStatusText returns correct text when missing bluetooth`() = runTest {
-        bluetoothPermissionFlow.value = PermissionHelper.PermissionState.DENIED
-        coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
-
-        viewModel = createViewModel()
-        advanceUntilSettled()
-
-        assertTrue(viewModel.getPermissionStatusText().contains("Bluetooth"))
-    }
+            val state = viewModel.uiState.value
+            assertEquals(HomeViewModel.ScanStatus.Error, state.scanState)
+            assertEquals(errorMessage, state.errorMessage)
+        }
 
     @Test
-    fun `canEnableTracking returns true when all permissions granted`() = runTest {
-        viewModel = createViewModel()
-        advanceUntilSettled()
+    fun `permission status reflects missing bluetooth permission`() =
+        runTest {
+            bluetoothPermissionFlow.value = PermissionHelper.PermissionState.DENIED
+            coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
-        assertTrue(viewModel.canEnableTracking())
-    }
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.permissionStatus.bluetoothGranted)
+            assertFalse(state.permissionStatus.allEssentialGranted)
+        }
 
     @Test
-    fun `canEnableTracking returns false when permissions missing`() = runTest {
-        bluetoothPermissionFlow.value = PermissionHelper.PermissionState.DENIED
-        coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
+    fun `permission status reflects missing location permission`() =
+        runTest {
+            locationPermissionFlow.value = PermissionHelper.PermissionState.DENIED
+            coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
 
-        viewModel = createViewModel()
-        advanceUntilSettled()
+            viewModel = createViewModel()
+            advanceUntilSettled()
 
-        assertFalse(viewModel.canEnableTracking())
-    }
+            val state = viewModel.uiState.value
+            assertFalse(state.permissionStatus.locationGranted)
+            assertFalse(state.permissionStatus.allEssentialGranted)
+        }
+
+    @Test
+    fun `refreshPermissionStatus triggers permission check`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            viewModel.refreshPermissionStatus()
+            advanceUntilIdle()
+
+            // Should call checkAllPermissions at least twice (once in init, once in refresh)
+            coVerify(atLeast = 2) { permissionHelper.checkAllPermissions() }
+        }
+
+    @Test
+    fun `clearError clears error message`() =
+        runTest {
+            val errorMessage = "Test error"
+            scanStateFlow.value = BleScannerManager.ScanState.Error(message = errorMessage)
+
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            // Error should be present
+            assertNotNull(viewModel.uiState.value.errorMessage)
+
+            viewModel.clearError()
+
+            // Error should be cleared
+            assertNull(viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun `getScanStatusText returns correct text for Idle`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            assertEquals("Idle", viewModel.getScanStatusText())
+        }
+
+    @Test
+    fun `getScanStatusText returns correct text for Scanning`() =
+        runTest {
+            scanStateFlow.value = BleScannerManager.ScanState.Scanning(devicesFound = 5)
+
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            assertEquals("Scanning...", viewModel.getScanStatusText())
+        }
+
+    @Test
+    fun `getScanStatusText returns correct text for Error`() =
+        runTest {
+            scanStateFlow.value = BleScannerManager.ScanState.Error(message = "Error")
+
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            assertEquals("Error", viewModel.getScanStatusText())
+        }
+
+    @Test
+    fun `getPermissionStatusText returns correct text when all granted`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            assertEquals("All permissions granted", viewModel.getPermissionStatusText())
+        }
+
+    @Test
+    fun `getPermissionStatusText returns correct text when missing bluetooth`() =
+        runTest {
+            bluetoothPermissionFlow.value = PermissionHelper.PermissionState.DENIED
+            coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
+
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            assertTrue(viewModel.getPermissionStatusText().contains("Bluetooth"))
+        }
+
+    @Test
+    fun `canEnableTracking returns true when all permissions granted`() =
+        runTest {
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            assertTrue(viewModel.canEnableTracking())
+        }
+
+    @Test
+    fun `canEnableTracking returns false when permissions missing`() =
+        runTest {
+            bluetoothPermissionFlow.value = PermissionHelper.PermissionState.DENIED
+            coEvery { permissionHelper.areEssentialPermissionsGranted() } returns false
+
+            viewModel = createViewModel()
+            advanceUntilSettled()
+
+            assertFalse(viewModel.canEnableTracking())
+        }
 
     // Note: onCleared() is protected and cannot be tested directly.
     // ViewModel cleanup is tested implicitly through other tests.

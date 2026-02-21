@@ -21,13 +21,13 @@ import com.tailbait.data.database.entities.AppSettings
 import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.service.TailBaitService
 import com.tailbait.ui.navigation.NavigationGraph
-import timber.log.Timber
 import com.tailbait.ui.navigation.Screen
 import com.tailbait.ui.screens.settings.SettingsViewModel
 import com.tailbait.ui.theme.TailBaitTheme
 import com.tailbait.util.PermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -44,7 +44,6 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
@@ -60,11 +59,12 @@ class MainActivity : ComponentActivity() {
             val themeMode by settingsRepository.getThemeMode().collectAsState(initial = AppSettings.THEME_SYSTEM)
 
             // Determine dark theme based on user preference
-            val darkTheme = when (themeMode) {
-                AppSettings.THEME_LIGHT -> false
-                AppSettings.THEME_DARK -> true
-                else -> isSystemInDarkTheme() // SYSTEM or unknown defaults to system
-            }
+            val darkTheme =
+                when (themeMode) {
+                    AppSettings.THEME_LIGHT -> false
+                    AppSettings.THEME_DARK -> true
+                    else -> isSystemInDarkTheme() // SYSTEM or unknown defaults to system
+                }
 
             TailBaitTheme(darkTheme = darkTheme) {
                 BLETrackerApp()
@@ -85,9 +85,10 @@ class MainActivity : ComponentActivity() {
 
                 if (settings.isTrackingEnabled && permissionHelper.hasLocationPermissions()) {
                     Timber.i("Restoring tracking service (tracking was enabled)")
-                    val intent = Intent(this@MainActivity, TailBaitService::class.java).apply {
-                        action = TailBaitService.ACTION_START_TRACKING
-                    }
+                    val intent =
+                        Intent(this@MainActivity, TailBaitService::class.java).apply {
+                            action = TailBaitService.ACTION_START_TRACKING
+                        }
                     ContextCompat.startForegroundService(this@MainActivity, intent)
                 } else if (settings.isTrackingEnabled) {
                     Timber.w("Cannot restore tracking: location permissions not granted")
@@ -154,32 +155,35 @@ fun BLETrackerApp() {
     val permissionHelper = remember { PermissionHelper(context) }
 
     // Check if this is the first launch
-    val isFirstLaunch = remember {
-        SettingsViewModel.isFirstLaunch(context)
-    }
+    val isFirstLaunch =
+        remember {
+            SettingsViewModel.isFirstLaunch(context)
+        }
 
     // Track if onboarding has been completed in this session
     var onboardingCompleted by remember { mutableStateOf(false) }
 
     // Check current permission states
-    val hasAllPermissions = remember {
-        permissionHelper.areEssentialPermissionsGranted()
-    }
+    val hasAllPermissions =
+        remember {
+            permissionHelper.areEssentialPermissionsGranted()
+        }
 
     // Determine start destination
-    val startDestination = when {
-        isFirstLaunch && !onboardingCompleted -> Screen.Onboarding.route
-        !hasAllPermissions -> Screen.Permissions.route
-        else -> Screen.Home.route
-    }
+    val startDestination =
+        when {
+            isFirstLaunch && !onboardingCompleted -> Screen.Onboarding.route
+            !hasAllPermissions -> Screen.Permissions.route
+            else -> Screen.Home.route
+        }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = MaterialTheme.colorScheme.background,
     ) {
         NavigationGraph(
             navController = navController,
-            startDestination = startDestination
+            startDestination = startDestination,
         )
     }
 

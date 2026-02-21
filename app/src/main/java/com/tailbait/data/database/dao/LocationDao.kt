@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.Flow
  */
 @Dao
 interface LocationDao {
-
     /**
      * Insert a new location into the database.
      *
@@ -85,12 +84,14 @@ interface LocationDao {
      * @param deviceId The device ID to query
      * @return Flow emitting list of locations where the device was seen
      */
-    @Query("""
+    @Query(
+        """
         SELECT l.* FROM locations l
         INNER JOIN device_location_records dlr ON l.id = dlr.location_id
         WHERE dlr.device_id = :deviceId
         ORDER BY l.timestamp DESC
-    """)
+    """,
+    )
     fun getLocationsForDevice(deviceId: Long): Flow<List<Location>>
 
     /**
@@ -99,12 +100,14 @@ interface LocationDao {
      * @param deviceId The device ID to query
      * @return List of locations where the device was seen
      */
-    @Query("""
+    @Query(
+        """
         SELECT DISTINCT l.* FROM locations l
         INNER JOIN device_location_records dlr ON l.id = dlr.location_id
         WHERE dlr.device_id = :deviceId
         ORDER BY dlr.timestamp DESC
-    """)
+    """,
+    )
     suspend fun getLocationsForDeviceOnce(deviceId: Long): List<Location>
 
     /**
@@ -114,13 +117,15 @@ interface LocationDao {
      * @param deviceId The device ID to query
      * @return List of locations where the device (or linked devices) was seen
      */
-    @Query("""
+    @Query(
+        """
         SELECT DISTINCT l.* FROM locations l
         INNER JOIN device_location_records dlr ON l.id = dlr.location_id
         WHERE dlr.device_id = :deviceId
            OR dlr.device_id IN (SELECT id FROM scanned_devices WHERE linked_device_id = :deviceId)
         ORDER BY dlr.timestamp DESC
-    """)
+    """,
+    )
     suspend fun getLocationsForDeviceWithLinked(deviceId: Long): List<Location>
 
     /**
@@ -130,12 +135,17 @@ interface LocationDao {
      * @param endTimestamp End of time range (inclusive)
      * @return Flow emitting list of locations within the time range
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         WHERE timestamp >= :startTimestamp AND timestamp <= :endTimestamp
         ORDER BY timestamp DESC
-    """)
-    fun getLocationsByTimeRange(startTimestamp: Long, endTimestamp: Long): Flow<List<Location>>
+    """,
+    )
+    fun getLocationsByTimeRange(
+        startTimestamp: Long,
+        endTimestamp: Long,
+    ): Flow<List<Location>>
 
     /**
      * Get recent locations within a time window.
@@ -143,11 +153,13 @@ interface LocationDao {
      * @param sinceTimestamp Timestamp threshold (locations after this time)
      * @return Flow emitting list of recent locations
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         WHERE timestamp >= :sinceTimestamp
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getRecentLocations(sinceTimestamp: Long): Flow<List<Location>>
 
     /**
@@ -157,12 +169,14 @@ interface LocationDao {
      * @param sinceTimestamp Timestamp threshold
      * @return List of recent locations
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         WHERE timestamp >= :sinceTimestamp
         ORDER BY timestamp DESC
         LIMIT 100
-    """)
+    """,
+    )
     suspend fun getRecentLocationsOnce(sinceTimestamp: Long): List<Location>
 
     /**
@@ -176,18 +190,22 @@ interface LocationDao {
      * @param sinceTimestamp Only consider locations more recent than this
      * @return List of candidate locations (further filtering needed for exact distance)
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         WHERE latitude BETWEEN :latMin AND :latMax
           AND longitude BETWEEN :lonMin AND :lonMax
           AND timestamp >= :sinceTimestamp
         ORDER BY timestamp DESC
         LIMIT 5
-    """)
+    """,
+    )
     suspend fun getNearbyCandidates(
-        latMin: Double, latMax: Double,
-        lonMin: Double, lonMax: Double,
-        sinceTimestamp: Long
+        latMin: Double,
+        latMax: Double,
+        lonMin: Double,
+        lonMax: Double,
+        sinceTimestamp: Long,
     ): List<Location>
 
     /**
@@ -200,16 +218,20 @@ interface LocationDao {
      * @param lonMax Maximum longitude (box bound)
      * @return List of candidate locations (further filtering needed for exact distance)
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         WHERE latitude BETWEEN :latMin AND :latMax
           AND longitude BETWEEN :lonMin AND :lonMax
         ORDER BY timestamp DESC
         LIMIT 5
-    """)
+    """,
+    )
     suspend fun getNearbyCandidatesAllTime(
-        latMin: Double, latMax: Double,
-        lonMin: Double, lonMax: Double
+        latMin: Double,
+        latMax: Double,
+        lonMin: Double,
+        lonMax: Double,
     ): List<Location>
 
     /**
@@ -220,7 +242,10 @@ interface LocationDao {
      * @param timestamp New timestamp
      */
     @Query("UPDATE locations SET timestamp = :timestamp WHERE id = :locationId")
-    suspend fun updateTimestamp(locationId: Long, timestamp: Long)
+    suspend fun updateTimestamp(
+        locationId: Long,
+        timestamp: Long,
+    )
 
     /**
      * Get count of all stored locations.
@@ -236,11 +261,13 @@ interface LocationDao {
      * @param maxAccuracyMeters Maximum accuracy in meters
      * @return Flow emitting list of high-accuracy locations
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         WHERE accuracy <= :maxAccuracyMeters
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getHighAccuracyLocations(maxAccuracyMeters: Float): Flow<List<Location>>
 
     /**
@@ -249,11 +276,13 @@ interface LocationDao {
      * @param provider Location provider (e.g., "GPS", "NETWORK", "FUSED")
      * @return Flow emitting list of locations from the specified provider
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         WHERE provider = :provider
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getLocationsByProvider(provider: String): Flow<List<Location>>
 
     /**
@@ -263,12 +292,14 @@ interface LocationDao {
      * @param limit Maximum number of location clusters to return
      * @return List of representative locations from distinct clusters
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         GROUP BY ROUND(latitude, 3), ROUND(longitude, 3)
         ORDER BY timestamp DESC
         LIMIT :limit
-    """)
+    """,
+    )
     suspend fun getLocationClusters(limit: Int = 100): List<Location>
 
     /**
@@ -297,16 +328,18 @@ interface LocationDao {
      * @param maxLon Maximum longitude
      * @return Flow emitting list of locations within the bounding box
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM locations
         WHERE latitude BETWEEN :minLat AND :maxLat
         AND longitude BETWEEN :minLon AND :maxLon
         ORDER BY timestamp DESC
-    """)
+    """,
+    )
     fun getLocationsInBounds(
         minLat: Double,
         maxLat: Double,
         minLon: Double,
-        maxLon: Double
+        maxLon: Double,
     ): Flow<List<Location>>
 }

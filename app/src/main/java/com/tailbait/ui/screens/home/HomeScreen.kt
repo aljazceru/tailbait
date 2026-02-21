@@ -3,7 +3,6 @@ package com.tailbait.ui.screens.home
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,7 +19,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.tailbait.ui.components.EmptyView
 import com.tailbait.ui.components.KeyValueRow
 import com.tailbait.ui.components.LoadingView
 import com.tailbait.ui.components.SectionTitle
@@ -56,7 +54,7 @@ fun HomeScreen(
     onNavigateToPermissions: () -> Unit,
     onNavigateToAlerts: () -> Unit = {},
     onNavigateToMap: () -> Unit = {},
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -67,22 +65,23 @@ fun HomeScreen(
                     Text(
                         text = "TailBait",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             imageVector = Icons.Outlined.Settings,
-                            contentDescription = "Settings"
+                            contentDescription = "Settings",
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
             )
         },
         floatingActionButton = {
@@ -92,21 +91,22 @@ fun HomeScreen(
                     onClick = { viewModel.performManualScan() },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = TailBaitShapeTokens.FabShape
+                    shape = TailBaitShapeTokens.FabShape,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Search,
-                        contentDescription = "Manual Scan"
+                        contentDescription = "Manual Scan",
                     )
                 }
             }
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
     ) { paddingValues ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
         ) {
             when {
                 uiState.isLoading -> {
@@ -120,7 +120,7 @@ fun HomeScreen(
                         onNavigateToPermissions = onNavigateToPermissions,
                         onNavigateToAlerts = onNavigateToAlerts,
                         onNavigateToMap = onNavigateToMap,
-                        onClearError = { viewModel.clearError() }
+                        onClearError = { viewModel.clearError() },
                     )
                 }
             }
@@ -139,24 +139,25 @@ private fun HomeContent(
     onNavigateToPermissions: () -> Unit,
     onNavigateToAlerts: () -> Unit,
     onNavigateToMap: () -> Unit,
-    onClearError: () -> Unit
+    onClearError: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(TailBaitDimensions.SpacingLG),
-        verticalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingLG)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(TailBaitDimensions.SpacingLG),
+        verticalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingLG),
     ) {
         // Error message (if any)
         AnimatedVisibility(
             visible = uiState.errorMessage != null,
             enter = fadeIn(),
-            exit = fadeOut()
+            exit = fadeOut(),
         ) {
             ErrorBanner(
                 message = uiState.errorMessage ?: "",
-                onDismiss = onClearError
+                onDismiss = onClearError,
             )
         }
 
@@ -164,7 +165,7 @@ private fun HomeContent(
         if (!uiState.permissionStatus.allEssentialGranted) {
             PermissionStatusCard(
                 permissionStatus = uiState.permissionStatus,
-                onNavigateToPermissions = onNavigateToPermissions
+                onNavigateToPermissions = onNavigateToPermissions,
             )
         }
 
@@ -172,14 +173,14 @@ private fun HomeContent(
         ScanningStatusCard(
             scanState = uiState.scanState,
             isTrackingEnabled = uiState.isTrackingEnabled,
-            devicesFoundInCurrentScan = uiState.devicesFoundInCurrentScan
+            devicesFoundInCurrentScan = uiState.devicesFoundInCurrentScan,
         )
 
         // Tracking control button
         TrackingControlButton(
             isTrackingEnabled = uiState.isTrackingEnabled,
             canEnableTracking = uiState.permissionStatus.allEssentialGranted,
-            onToggleTracking = onToggleTracking
+            onToggleTracking = onToggleTracking,
         )
 
         // Statistics card
@@ -188,7 +189,7 @@ private fun HomeContent(
             knownDevicesCount = uiState.knownDevicesCount,
             unknownDevicesCount = uiState.unknownDevicesCount,
             lastScanTimestamp = uiState.lastScanTimestamp,
-            onViewDevices = onNavigateToDeviceList
+            onViewDevices = onNavigateToDeviceList,
         )
 
         // Quick actions
@@ -198,7 +199,7 @@ private fun HomeContent(
             onNavigateToMap = onNavigateToMap,
             totalDevices = uiState.totalDevicesFound,
             knownDevices = uiState.knownDevicesCount,
-            unknownDevices = uiState.unknownDevicesCount
+            unknownDevices = uiState.unknownDevicesCount,
         )
     }
 }
@@ -209,46 +210,49 @@ private fun HomeContent(
 @Composable
 private fun ErrorBanner(
     message: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth(),
         shape = TailBaitShapeTokens.CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Warning,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium)
+                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
                 )
                 Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingMD))
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    color = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
             IconButton(onClick = onDismiss) {
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Dismiss",
-                    tint = MaterialTheme.colorScheme.onErrorContainer
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
         }
@@ -261,37 +265,40 @@ private fun ErrorBanner(
 @Composable
 private fun PermissionStatusCard(
     permissionStatus: HomeViewModel.PermissionStatus,
-    onNavigateToPermissions: () -> Unit
+    onNavigateToPermissions: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth(),
         shape = TailBaitShapeTokens.CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Security,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium)
+                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
                 )
                 Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingMD))
                 Text(
                     text = "Permissions Required",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
 
@@ -300,34 +307,35 @@ private fun PermissionStatusCard(
             // Permission items
             PermissionItem(
                 name = "Bluetooth",
-                granted = permissionStatus.bluetoothGranted
+                granted = permissionStatus.bluetoothGranted,
             )
             PermissionItem(
                 name = "Location",
-                granted = permissionStatus.locationGranted
+                granted = permissionStatus.locationGranted,
             )
             PermissionItem(
                 name = "Notifications",
-                granted = permissionStatus.notificationGranted
+                granted = permissionStatus.notificationGranted,
             )
             PermissionItem(
                 name = "Background Location (Optional)",
                 granted = permissionStatus.backgroundLocationGranted,
-                isOptional = true
+                isOptional = true,
             )
 
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingMD))
 
             Button(
                 onClick = onNavigateToPermissions,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(TailBaitDimensions.ButtonHeight),
-                shape = TailBaitShapeTokens.ButtonShape
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(TailBaitDimensions.ButtonHeight),
+                shape = TailBaitShapeTokens.ButtonShape,
             ) {
                 Text(
                     text = "Grant Permissions",
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.labelLarge,
                 )
             }
         }
@@ -341,31 +349,33 @@ private fun PermissionStatusCard(
 private fun PermissionItem(
     name: String,
     granted: Boolean,
-    isOptional: Boolean = false
+    isOptional: Boolean = false,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = TailBaitDimensions.SpacingXS),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = TailBaitDimensions.SpacingXS),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = name,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onTertiaryContainer
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
         )
         Icon(
             imageVector = if (granted) Icons.Filled.CheckCircle else Icons.Outlined.Cancel,
             contentDescription = if (granted) "Granted" else "Not granted",
-            tint = if (granted) {
-                MaterialTheme.colorScheme.primary
-            } else if (isOptional) {
-                MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.5f)
-            } else {
-                MaterialTheme.colorScheme.error
-            },
-            modifier = Modifier.size(TailBaitDimensions.IconSizeSmall)
+            tint =
+                if (granted) {
+                    MaterialTheme.colorScheme.primary
+                } else if (isOptional) {
+                    MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+            modifier = Modifier.size(TailBaitDimensions.IconSizeSmall),
         )
     }
 }
@@ -377,62 +387,71 @@ private fun PermissionItem(
 private fun ScanningStatusCard(
     scanState: HomeViewModel.ScanStatus,
     isTrackingEnabled: Boolean,
-    devicesFoundInCurrentScan: Int
+    devicesFoundInCurrentScan: Int,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth(),
         shape = TailBaitShapeTokens.CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = when (scanState) {
-                // Use primary container but we will apply brush background internally if possible or just stick to solid for now
-                HomeViewModel.ScanStatus.Scanning -> MaterialTheme.colorScheme.primaryContainer
-                HomeViewModel.ScanStatus.Error -> MaterialTheme.colorScheme.errorContainer
-                else -> MaterialTheme.colorScheme.surface
-            }
-        ),
-        elevation = CardDefaults.elevatedCardElevation(
-            defaultElevation = if (scanState == HomeViewModel.ScanStatus.Scanning) 8.dp else 2.dp
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    when (scanState) {
+                        // Use primary container but we will apply brush background internally if possible or just stick to solid for now
+                        HomeViewModel.ScanStatus.Scanning -> MaterialTheme.colorScheme.primaryContainer
+                        HomeViewModel.ScanStatus.Error -> MaterialTheme.colorScheme.errorContainer
+                        else -> MaterialTheme.colorScheme.surface
+                    },
+            ),
+        elevation =
+            CardDefaults.elevatedCardElevation(
+                defaultElevation = if (scanState == HomeViewModel.ScanStatus.Scanning) 8.dp else 2.dp,
+            ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Status icon
             Icon(
-                imageVector = when (scanState) {
-                    HomeViewModel.ScanStatus.Scanning -> Icons.Outlined.BluetoothSearching
-                    HomeViewModel.ScanStatus.Error -> Icons.Filled.Error
-                    else -> if (isTrackingEnabled) Icons.Outlined.Bluetooth else Icons.Outlined.BluetoothDisabled
-                },
+                imageVector =
+                    when (scanState) {
+                        HomeViewModel.ScanStatus.Scanning -> Icons.Outlined.BluetoothSearching
+                        HomeViewModel.ScanStatus.Error -> Icons.Filled.Error
+                        else -> if (isTrackingEnabled) Icons.Outlined.Bluetooth else Icons.Outlined.BluetoothDisabled
+                    },
                 contentDescription = null,
                 modifier = Modifier.size(TailBaitDimensions.IconSizeXL),
-                tint = when (scanState) {
-                    HomeViewModel.ScanStatus.Scanning -> MaterialTheme.colorScheme.primary
-                    HomeViewModel.ScanStatus.Error -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                tint =
+                    when (scanState) {
+                        HomeViewModel.ScanStatus.Scanning -> MaterialTheme.colorScheme.primary
+                        HomeViewModel.ScanStatus.Error -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
 
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingMD))
 
             // Status text
             Text(
-                text = when (scanState) {
-                    HomeViewModel.ScanStatus.Scanning -> "Scanning..."
-                    HomeViewModel.ScanStatus.Error -> "Scan Error"
-                    else -> if (isTrackingEnabled) "Tracking Active" else "Tracking Inactive"
-                },
+                text =
+                    when (scanState) {
+                        HomeViewModel.ScanStatus.Scanning -> "Scanning..."
+                        HomeViewModel.ScanStatus.Error -> "Scan Error"
+                        else -> if (isTrackingEnabled) "Tracking Active" else "Tracking Inactive"
+                    },
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = when (scanState) {
-                    HomeViewModel.ScanStatus.Scanning -> MaterialTheme.colorScheme.onPrimaryContainer
-                    HomeViewModel.ScanStatus.Error -> MaterialTheme.colorScheme.onErrorContainer
-                    else -> MaterialTheme.colorScheme.onSurface
-                }
+                color =
+                    when (scanState) {
+                        HomeViewModel.ScanStatus.Scanning -> MaterialTheme.colorScheme.onPrimaryContainer
+                        HomeViewModel.ScanStatus.Error -> MaterialTheme.colorScheme.onErrorContainer
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
             )
 
             // Show devices found in current scan if scanning
@@ -441,12 +460,12 @@ private fun ScanningStatusCard(
                 Text(
                     text = "$devicesFoundInCurrentScan devices found",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
 
                 Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingMD))
                 LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -460,32 +479,35 @@ private fun ScanningStatusCard(
 private fun TrackingControlButton(
     isTrackingEnabled: Boolean,
     canEnableTracking: Boolean,
-    onToggleTracking: () -> Unit
+    onToggleTracking: () -> Unit,
 ) {
     Button(
         onClick = onToggleTracking,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(TailBaitDimensions.ButtonHeight),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TailBaitDimensions.ButtonHeight),
         enabled = canEnableTracking || isTrackingEnabled,
         shape = TailBaitShapeTokens.ButtonShape,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isTrackingEnabled) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.primary
-            }
-        )
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor =
+                    if (isTrackingEnabled) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+            ),
     ) {
         Icon(
             imageVector = if (isTrackingEnabled) Icons.Filled.Stop else Icons.Filled.PlayArrow,
             contentDescription = null,
-            modifier = Modifier.size(TailBaitDimensions.IconSizeMedium)
+            modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
         )
         Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingSM))
         Text(
             text = if (isTrackingEnabled) "Stop Tracking" else "Start Tracking",
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleMedium,
         )
     }
 }
@@ -499,24 +521,27 @@ private fun StatisticsCard(
     knownDevicesCount: Int,
     unknownDevicesCount: Int,
     lastScanTimestamp: Long?,
-    onViewDevices: () -> Unit
+    onViewDevices: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth(),
         shape = TailBaitShapeTokens.CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
         ) {
             SectionTitle(
-                title = "Statistics"
+                title = "Statistics",
             )
 
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingMD))
@@ -524,40 +549,40 @@ private fun StatisticsCard(
             KeyValueRow(
                 label = "Total Devices Found",
                 value = totalDevicesFound.toString(),
-                valueColor = MaterialTheme.colorScheme.primary
+                valueColor = MaterialTheme.colorScheme.primary,
             )
 
             if (totalDevicesFound > 0) {
                 KeyValueRow(
                     label = "Known Devices",
                     value = knownDevicesCount.toString(),
-                    valueColor = MaterialTheme.colorScheme.tertiary
+                    valueColor = MaterialTheme.colorScheme.tertiary,
                 )
 
                 KeyValueRow(
                     label = "Unknown Devices",
                     value = unknownDevicesCount.toString(),
-                    valueColor = MaterialTheme.colorScheme.secondary
+                    valueColor = MaterialTheme.colorScheme.secondary,
                 )
             }
 
             KeyValueRow(
                 label = "Last Scan",
-                value = lastScanTimestamp?.let { formatTimestamp(it) } ?: "Never"
+                value = lastScanTimestamp?.let { formatTimestamp(it) } ?: "Never",
             )
 
             if (totalDevicesFound > 0) {
                 Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingMD))
                 TextButton(
                     onClick = onViewDevices,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("View All Devices")
                     Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingXS))
                     Icon(
                         imageVector = Icons.Filled.ArrowForward,
                         contentDescription = null,
-                        modifier = Modifier.size(TailBaitDimensions.IconSizeSmall)
+                        modifier = Modifier.size(TailBaitDimensions.IconSizeSmall),
                     )
                 }
             }
@@ -575,10 +600,10 @@ private fun QuickActionsSection(
     onNavigateToMap: () -> Unit,
     totalDevices: Int,
     knownDevices: Int = 0,
-    unknownDevices: Int = 0
+    unknownDevices: Int = 0,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     ) {
         SectionTitle(title = "Quick Actions")
 
@@ -586,18 +611,19 @@ private fun QuickActionsSection(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingMD)
+            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingMD),
         ) {
             QuickActionCard(
                 title = "Devices",
-                subtitle = if (totalDevices > 0) {
-                    "$totalDevices total • $knownDevices known • $unknownDevices unknown"
-                } else {
-                    "No devices found"
-                },
+                subtitle =
+                    if (totalDevices > 0) {
+                        "$totalDevices total • $knownDevices known • $unknownDevices unknown"
+                    } else {
+                        "No devices found"
+                    },
                 icon = Icons.Outlined.Devices,
                 onClick = onNavigateToDeviceList,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
 
             QuickActionCard(
@@ -605,7 +631,7 @@ private fun QuickActionsSection(
                 subtitle = "View alerts",
                 icon = Icons.Outlined.NotificationsNone,
                 onClick = onNavigateToAlerts,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
         }
 
@@ -613,14 +639,14 @@ private fun QuickActionsSection(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingMD)
+            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingMD),
         ) {
             QuickActionCard(
                 title = "Map",
                 subtitle = "View locations",
                 icon = Icons.Outlined.Map,
                 onClick = onNavigateToMap,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
 
             // Placeholder for future quick action
@@ -638,40 +664,43 @@ private fun QuickActionCard(
     subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier
-            .clickable { onClick() },
+        modifier =
+            modifier
+                .clickable { onClick() },
         shape = TailBaitShapeTokens.CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(TailBaitDimensions.IconSizeLarge),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingSM))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -702,24 +731,26 @@ private fun formatTimestamp(timestamp: Long): String {
 private fun HomeScreenIdlePreview() {
     TailBaitTheme {
         HomeContent(
-            uiState = HomeViewModel.HomeUiState(
-                isLoading = false,
-                isTrackingEnabled = false,
-                scanState = HomeViewModel.ScanStatus.Idle,
-                totalDevicesFound = 0,
-                permissionStatus = HomeViewModel.PermissionStatus(
-                    bluetoothGranted = true,
-                    locationGranted = true,
-                    notificationGranted = true,
-                    allEssentialGranted = true
-                )
-            ),
+            uiState =
+                HomeViewModel.HomeUiState(
+                    isLoading = false,
+                    isTrackingEnabled = false,
+                    scanState = HomeViewModel.ScanStatus.Idle,
+                    totalDevicesFound = 0,
+                    permissionStatus =
+                        HomeViewModel.PermissionStatus(
+                            bluetoothGranted = true,
+                            locationGranted = true,
+                            notificationGranted = true,
+                            allEssentialGranted = true,
+                        ),
+                ),
             onToggleTracking = {},
             onNavigateToDeviceList = {},
             onNavigateToPermissions = {},
             onNavigateToAlerts = {},
             onNavigateToMap = {},
-            onClearError = {}
+            onClearError = {},
         )
     }
 }
@@ -729,27 +760,29 @@ private fun HomeScreenIdlePreview() {
 private fun HomeScreenScanningPreview() {
     TailBaitTheme {
         HomeContent(
-            uiState = HomeViewModel.HomeUiState(
-                isLoading = false,
-                isTrackingEnabled = true,
-                scanState = HomeViewModel.ScanStatus.Scanning,
-                totalDevicesFound = 15,
-                devicesFoundInCurrentScan = 5,
-                lastScanTimestamp = System.currentTimeMillis() - 300_000,
-                permissionStatus = HomeViewModel.PermissionStatus(
-                    bluetoothGranted = true,
-                    locationGranted = true,
-                    notificationGranted = true,
-                    backgroundLocationGranted = true,
-                    allEssentialGranted = true
-                )
-            ),
+            uiState =
+                HomeViewModel.HomeUiState(
+                    isLoading = false,
+                    isTrackingEnabled = true,
+                    scanState = HomeViewModel.ScanStatus.Scanning,
+                    totalDevicesFound = 15,
+                    devicesFoundInCurrentScan = 5,
+                    lastScanTimestamp = System.currentTimeMillis() - 300_000,
+                    permissionStatus =
+                        HomeViewModel.PermissionStatus(
+                            bluetoothGranted = true,
+                            locationGranted = true,
+                            notificationGranted = true,
+                            backgroundLocationGranted = true,
+                            allEssentialGranted = true,
+                        ),
+                ),
             onToggleTracking = {},
             onNavigateToDeviceList = {},
             onNavigateToPermissions = {},
             onNavigateToAlerts = {},
             onNavigateToMap = {},
-            onClearError = {}
+            onClearError = {},
         )
     }
 }
@@ -759,24 +792,26 @@ private fun HomeScreenScanningPreview() {
 private fun HomeScreenMissingPermissionsPreview() {
     TailBaitTheme {
         HomeContent(
-            uiState = HomeViewModel.HomeUiState(
-                isLoading = false,
-                isTrackingEnabled = false,
-                scanState = HomeViewModel.ScanStatus.Idle,
-                totalDevicesFound = 0,
-                permissionStatus = HomeViewModel.PermissionStatus(
-                    bluetoothGranted = true,
-                    locationGranted = false,
-                    notificationGranted = false,
-                    allEssentialGranted = false
-                )
-            ),
+            uiState =
+                HomeViewModel.HomeUiState(
+                    isLoading = false,
+                    isTrackingEnabled = false,
+                    scanState = HomeViewModel.ScanStatus.Idle,
+                    totalDevicesFound = 0,
+                    permissionStatus =
+                        HomeViewModel.PermissionStatus(
+                            bluetoothGranted = true,
+                            locationGranted = false,
+                            notificationGranted = false,
+                            allEssentialGranted = false,
+                        ),
+                ),
             onToggleTracking = {},
             onNavigateToDeviceList = {},
             onNavigateToPermissions = {},
             onNavigateToAlerts = {},
             onNavigateToMap = {},
-            onClearError = {}
+            onClearError = {},
         )
     }
 }
@@ -786,26 +821,28 @@ private fun HomeScreenMissingPermissionsPreview() {
 private fun HomeScreenDarkPreview() {
     TailBaitTheme(darkTheme = true) {
         HomeContent(
-            uiState = HomeViewModel.HomeUiState(
-                isLoading = false,
-                isTrackingEnabled = true,
-                scanState = HomeViewModel.ScanStatus.Idle,
-                totalDevicesFound = 23,
-                lastScanTimestamp = System.currentTimeMillis() - 120_000,
-                permissionStatus = HomeViewModel.PermissionStatus(
-                    bluetoothGranted = true,
-                    locationGranted = true,
-                    notificationGranted = true,
-                    backgroundLocationGranted = true,
-                    allEssentialGranted = true
-                )
-            ),
+            uiState =
+                HomeViewModel.HomeUiState(
+                    isLoading = false,
+                    isTrackingEnabled = true,
+                    scanState = HomeViewModel.ScanStatus.Idle,
+                    totalDevicesFound = 23,
+                    lastScanTimestamp = System.currentTimeMillis() - 120_000,
+                    permissionStatus =
+                        HomeViewModel.PermissionStatus(
+                            bluetoothGranted = true,
+                            locationGranted = true,
+                            notificationGranted = true,
+                            backgroundLocationGranted = true,
+                            allEssentialGranted = true,
+                        ),
+                ),
             onToggleTracking = {},
             onNavigateToDeviceList = {},
             onNavigateToPermissions = {},
             onNavigateToAlerts = {},
             onNavigateToMap = {},
-            onClearError = {}
+            onClearError = {},
         )
     }
 }

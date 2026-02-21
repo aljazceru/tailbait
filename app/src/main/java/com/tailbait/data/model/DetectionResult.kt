@@ -51,7 +51,7 @@ data class DetectionResult(
     val timeSpanMs: Long = 0L,
     val scoreBreakdown: Map<String, Double>? = null,
     val timestamp: Long = System.currentTimeMillis(),
-    val detectionId: String = generateDetectionId(device.id, timestamp)
+    val detectionId: String = generateDetectionId(device.id, timestamp),
 ) {
     /**
      * Get the threat level as a human-readable string.
@@ -108,7 +108,10 @@ data class DetectionResult(
          * @param timestamp Detection timestamp
          * @return Unique detection ID
          */
-        private fun generateDetectionId(deviceId: Long, timestamp: Long): String {
+        private fun generateDetectionId(
+            deviceId: Long,
+            timestamp: Long,
+        ): String {
             return "DET_${deviceId}_$timestamp"
         }
     }
@@ -121,7 +124,8 @@ enum class ThreatLevel(val displayName: String, val score: Double) {
     CRITICAL("Critical", 0.9),
     HIGH("High", 0.75),
     MEDIUM("Medium", 0.6),
-    LOW("Low", 0.5);
+    LOW("Low", 0.5),
+    ;
 
     companion object {
         /**
@@ -164,7 +168,7 @@ data class ThreatScoreBreakdown(
     val timeCorrelationScore: Double,
     val consistencyScore: Double,
     val deviceTypeScore: Double,
-    val totalScore: Double
+    val totalScore: Double,
 ) {
     /**
      * Get a human-readable explanation of the score breakdown.

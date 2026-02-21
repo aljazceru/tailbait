@@ -28,7 +28,6 @@ import com.tailbait.R
  * @see TailBaitService
  */
 abstract class NotificationService : LifecycleService() {
-
     /**
      * CRITICAL FIX: Removed lateinit var notificationManager to prevent memory leak.
      *
@@ -88,15 +87,16 @@ abstract class NotificationService : LifecycleService() {
      */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                notificationChannelId,
-                notificationChannelName,
-                channelImportance
-            ).apply {
-                description = notificationChannelDescription
-                // Don't show badge for low importance channels
-                setShowBadge(channelImportance >= NotificationManager.IMPORTANCE_DEFAULT)
-            }
+            val channel =
+                NotificationChannel(
+                    notificationChannelId,
+                    notificationChannelName,
+                    channelImportance,
+                ).apply {
+                    description = notificationChannelDescription
+                    // Don't show badge for low importance channels
+                    setShowBadge(channelImportance >= NotificationManager.IMPORTANCE_DEFAULT)
+                }
             getNotificationManager().createNotificationChannel(channel)
         }
     }
@@ -122,15 +122,16 @@ abstract class NotificationService : LifecycleService() {
         message: String,
         priority: Int = NotificationCompat.PRIORITY_LOW,
         onGoing: Boolean = true,
-        builder: (NotificationCompat.Builder.() -> Unit)? = null
+        builder: (NotificationCompat.Builder.() -> Unit)? = null,
     ): Notification {
         // Intent to open main activity when notification is tapped
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
         return NotificationCompat.Builder(this, notificationChannelId)
             .setContentTitle(title)
@@ -156,16 +157,17 @@ abstract class NotificationService : LifecycleService() {
      */
     protected fun createActionPendingIntent(
         action: String,
-        requestCode: Int
+        requestCode: Int,
     ): PendingIntent {
-        val intent = Intent(this, this::class.java).apply {
-            this.action = action
-        }
+        val intent =
+            Intent(this, this::class.java).apply {
+                this.action = action
+            }
         return PendingIntent.getService(
             this,
             requestCode,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
 
@@ -176,7 +178,10 @@ abstract class NotificationService : LifecycleService() {
      * @param notificationId The ID of the notification to update
      * @param notification The new notification to display
      */
-    protected fun updateNotification(notificationId: Int, notification: Notification) {
+    protected fun updateNotification(
+        notificationId: Int,
+        notification: Notification,
+    ) {
         getNotificationManager().notify(notificationId, notification)
     }
 
@@ -200,7 +205,7 @@ abstract class NotificationService : LifecycleService() {
     protected fun createNotificationAction(
         iconResId: Int,
         title: String,
-        pendingIntent: PendingIntent
+        pendingIntent: PendingIntent,
     ): NotificationCompat.Action {
         return NotificationCompat.Action.Builder(iconResId, title, pendingIntent).build()
     }

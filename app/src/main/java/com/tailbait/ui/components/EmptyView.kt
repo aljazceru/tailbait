@@ -15,7 +15,6 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -62,23 +61,23 @@ fun EmptyView(
     onActionClick: (() -> Unit)? = null,
     secondaryActionText: String? = null,
     onSecondaryActionClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier.padding(TailBaitDimensions.SpacingXXXL),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             // Icon
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(TailBaitDimensions.IconSizeHero),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
             )
 
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingLG))
@@ -88,7 +87,7 @@ fun EmptyView(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
 
             // Message
@@ -98,7 +97,7 @@ fun EmptyView(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
             }
 
@@ -108,11 +107,11 @@ fun EmptyView(
                 Button(
                     onClick = onActionClick,
                     shape = TailBaitShapeTokens.ButtonShape,
-                    modifier = Modifier.height(TailBaitDimensions.ButtonHeight)
+                    modifier = Modifier.height(TailBaitDimensions.ButtonHeight),
                 ) {
                     Text(
                         text = actionButtonText,
-                        style = MaterialTheme.typography.labelLarge
+                        style = MaterialTheme.typography.labelLarge,
                     )
                 }
             }
@@ -121,11 +120,11 @@ fun EmptyView(
             if (secondaryActionText != null && onSecondaryActionClick != null) {
                 Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingSM))
                 TextButton(
-                    onClick = onSecondaryActionClick
+                    onClick = onSecondaryActionClick,
                 ) {
                     Text(
                         text = secondaryActionText,
-                        style = MaterialTheme.typography.labelLarge
+                        style = MaterialTheme.typography.labelLarge,
                     )
                 }
             }
@@ -147,18 +146,18 @@ fun EmptyView(
 fun CompactEmptyView(
     icon: ImageVector = Icons.Outlined.Info,
     message: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.padding(TailBaitDimensions.SpacingLG),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(TailBaitDimensions.IconSizeXL),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
         )
 
         Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingSM))
@@ -167,7 +166,7 @@ fun CompactEmptyView(
             text = message,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -180,7 +179,7 @@ private fun EmptyViewBasicPreview() {
         EmptyView(
             icon = Icons.Outlined.DevicesOther,
             title = "No Devices Found",
-            message = "Start tracking to discover nearby Bluetooth devices"
+            message = "Start tracking to discover nearby Bluetooth devices",
         )
     }
 }
@@ -196,7 +195,7 @@ private fun EmptyViewWithActionsPreview() {
             actionButtonText = "Start Scanning",
             onActionClick = {},
             secondaryActionText = "Learn More",
-            onSecondaryActionClick = {}
+            onSecondaryActionClick = {},
         )
     }
 }
@@ -208,7 +207,7 @@ private fun EmptyViewAlertsPreview() {
         EmptyView(
             icon = Icons.Outlined.NotificationsNone,
             title = "No Alerts",
-            message = "You're all safe! No suspicious devices detected."
+            message = "You're all safe! No suspicious devices detected.",
         )
     }
 }
@@ -219,7 +218,7 @@ private fun CompactEmptyViewPreview() {
     TailBaitTheme {
         CompactEmptyView(
             icon = Icons.Outlined.Search,
-            message = "No results found"
+            message = "No results found",
         )
     }
 }
@@ -233,7 +232,7 @@ private fun EmptyViewDarkPreview() {
             title = "No Devices Found",
             message = "Start tracking to discover nearby Bluetooth devices",
             actionButtonText = "Start Now",
-            onActionClick = {}
+            onActionClick = {},
         )
     }
 }

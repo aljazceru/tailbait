@@ -2,8 +2,8 @@ package com.tailbait.ui.screens.settings
 
 import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
-import com.tailbait.data.database.entities.AppSettings
 import com.tailbait.data.database.entities.AlertHistory
+import com.tailbait.data.database.entities.AppSettings
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.repository.AlertRepository
@@ -24,14 +24,14 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
 import org.junit.After
-import org.junit.Before
-import org.junit.Rule
-import org.junit.Test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
 
 /**
  * Unit tests for SettingsViewModel.
@@ -40,7 +40,6 @@ import org.junit.Assert.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
-
     @get:Rule
     val instantExecutorRule = InstantTaskExecutorRule()
 
@@ -82,80 +81,84 @@ class SettingsViewModelTest {
         fileShareHelper = mockk(relaxed = true)
 
         // Create test data
-        testSettings = AppSettings(
-            id = 1,
-            isTrackingEnabled = false,
-            scanIntervalSeconds = 300,
-            scanDurationSeconds = 30,
-            minDetectionDistanceMeters = 100.0,
-            alertThresholdCount = 3,
-            alertNotificationEnabled = true,
-            alertSoundEnabled = true,
-            alertVibrationEnabled = true,
-            dataRetentionDays = 30,
-            batteryOptimizationEnabled = true
-        )
-
-        testDevices = listOf(
-            ScannedDevice(
-                id = 1L,
-                address = "AA:BB:CC:DD:EE:01",
-                name = "Device 1",
-                firstSeen = 1000L,
-                lastSeen = 2000L,
-                detectionCount = 3
-            ),
-            ScannedDevice(
-                id = 2L,
-                address = "AA:BB:CC:DD:EE:02",
-                name = "Device 2",
-                firstSeen = 1500L,
-                lastSeen = 2500L,
-                detectionCount = 2
+        testSettings =
+            AppSettings(
+                id = 1,
+                isTrackingEnabled = false,
+                scanIntervalSeconds = 300,
+                scanDurationSeconds = 30,
+                minDetectionDistanceMeters = 100.0,
+                alertThresholdCount = 3,
+                alertNotificationEnabled = true,
+                alertSoundEnabled = true,
+                alertVibrationEnabled = true,
+                dataRetentionDays = 30,
+                batteryOptimizationEnabled = true,
             )
-        )
 
-        testLocations = listOf(
-            Location(
-                id = 1L,
-                latitude = 40.7128,
-                longitude = -74.0060,
-                accuracy = 10f,
-                timestamp = 1000L,
-                provider = "GPS"
-            ),
-            Location(
-                id = 2L,
-                latitude = 40.7589,
-                longitude = -73.9851,
-                accuracy = 15f,
-                timestamp = 1500L,
-                provider = "GPS"
-            ),
-            Location(
-                id = 3L,
-                latitude = 40.7489,
-                longitude = -73.9680,
-                accuracy = 12f,
-                timestamp = 2000L,
-                provider = "GPS"
+        testDevices =
+            listOf(
+                ScannedDevice(
+                    id = 1L,
+                    address = "AA:BB:CC:DD:EE:01",
+                    name = "Device 1",
+                    firstSeen = 1000L,
+                    lastSeen = 2000L,
+                    detectionCount = 3,
+                ),
+                ScannedDevice(
+                    id = 2L,
+                    address = "AA:BB:CC:DD:EE:02",
+                    name = "Device 2",
+                    firstSeen = 1500L,
+                    lastSeen = 2500L,
+                    detectionCount = 2,
+                ),
             )
-        )
 
-        testAlerts = listOf(
-            AlertHistory(
-                id = 1L,
-                alertLevel = "HIGH",
-                title = "Test Alert 1",
-                message = "Device detected",
-                timestamp = 1000L,
-                deviceAddresses = "[\"AA:BB:CC:DD:EE:01\"]",
-                locationIds = "[1,2]",
-                threatScore = 0.8,
-                detectionDetails = "{}",
-                isDismissed = false
+        testLocations =
+            listOf(
+                Location(
+                    id = 1L,
+                    latitude = 40.7128,
+                    longitude = -74.0060,
+                    accuracy = 10f,
+                    timestamp = 1000L,
+                    provider = "GPS",
+                ),
+                Location(
+                    id = 2L,
+                    latitude = 40.7589,
+                    longitude = -73.9851,
+                    accuracy = 15f,
+                    timestamp = 1500L,
+                    provider = "GPS",
+                ),
+                Location(
+                    id = 3L,
+                    latitude = 40.7489,
+                    longitude = -73.9680,
+                    accuracy = 12f,
+                    timestamp = 2000L,
+                    provider = "GPS",
+                ),
             )
-        )
+
+        testAlerts =
+            listOf(
+                AlertHistory(
+                    id = 1L,
+                    alertLevel = "HIGH",
+                    title = "Test Alert 1",
+                    message = "Device detected",
+                    timestamp = 1000L,
+                    deviceAddresses = "[\"AA:BB:CC:DD:EE:01\"]",
+                    locationIds = "[1,2]",
+                    threatScore = 0.8,
+                    detectionDetails = "{}",
+                    isDismissed = false,
+                ),
+            )
 
         // Setup mock responses
         every { settingsRepository.getSettings() } returns flowOf(testSettings)
@@ -186,329 +189,371 @@ class SettingsViewModelTest {
      * stateIn flow actually starts collecting.
      */
     private fun TestScope.createAndSubscribe(): SettingsViewModel {
-        val vm = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, dataExportService, fileShareHelper)
+        val vm =
+            SettingsViewModel(
+                context,
+                settingsRepository,
+                deviceRepository,
+                locationRepository,
+                alertRepository,
+                csvDataExporter,
+                dataExportService,
+                fileShareHelper,
+            )
         collectJob = backgroundScope.launch { vm.uiState.collect {} }
         return vm
     }
 
     @Test
-    fun `initial state is loading`() = runTest {
-        viewModel = SettingsViewModel(context, settingsRepository, deviceRepository, locationRepository, alertRepository, csvDataExporter, dataExportService, fileShareHelper)
+    fun `initial state is loading`() =
+        runTest {
+            viewModel =
+                SettingsViewModel(
+                    context,
+                    settingsRepository,
+                    deviceRepository,
+                    locationRepository,
+                    alertRepository,
+                    csvDataExporter,
+                    dataExportService,
+                    fileShareHelper,
+                )
 
-        val initialState = viewModel.uiState.value
-        assertTrue(initialState.isLoading)
-    }
-
-    @Test
-    fun `loads settings and statistics successfully`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-        assertEquals(testSettings, state.settings)
-        assertEquals(2, state.totalDevicesCount)
-        assertEquals(3, state.totalLocationsCount)
-        assertEquals(1, state.totalAlertsCount)
-        assertNotNull(state.appVersion)
-        assertNotNull(state.buildNumber)
-    }
-
-    @Test
-    fun `updateScanInterval converts minutes to seconds`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.updateScanInterval(10) // 10 minutes
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify {
-            settingsRepository.updateScanInterval(600) // 600 seconds
+            val initialState = viewModel.uiState.value
+            assertTrue(initialState.isLoading)
         }
-    }
 
     @Test
-    fun `updateScanDuration updates duration successfully`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `loads settings and statistics successfully`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateScanDuration(45)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify {
-            settingsRepository.updateScanDuration(45)
+            val state = viewModel.uiState.value
+            assertFalse(state.isLoading)
+            assertEquals(testSettings, state.settings)
+            assertEquals(2, state.totalDevicesCount)
+            assertEquals(3, state.totalLocationsCount)
+            assertEquals(1, state.totalAlertsCount)
+            assertNotNull(state.appVersion)
+            assertNotNull(state.buildNumber)
         }
-    }
 
     @Test
-    fun `updateAlertThresholdCount updates count successfully`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateScanInterval converts minutes to seconds`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateAlertThresholdCount(5)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateScanInterval(10) // 10 minutes
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify {
-            settingsRepository.updateSettings(
-                match { it.alertThresholdCount == 5 }
-            )
+            coVerify {
+                settingsRepository.updateScanInterval(600) // 600 seconds
+            }
         }
-    }
 
     @Test
-    fun `updateMinDetectionDistance updates distance successfully`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateScanDuration updates duration successfully`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateMinDetectionDistance(200.0)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateScanDuration(45)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify {
-            settingsRepository.updateSettings(
-                match { it.minDetectionDistanceMeters == 200.0 }
-            )
+            coVerify {
+                settingsRepository.updateScanDuration(45)
+            }
         }
-    }
 
     @Test
-    fun `updateAlertNotificationEnabled updates notification setting`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateAlertThresholdCount updates count successfully`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateAlertNotificationEnabled(false)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateAlertThresholdCount(5)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify {
-            settingsRepository.updateSettings(
-                match { !it.alertNotificationEnabled }
-            )
+            coVerify {
+                settingsRepository.updateSettings(
+                    match { it.alertThresholdCount == 5 },
+                )
+            }
         }
-    }
 
     @Test
-    fun `updateAlertSoundEnabled updates sound setting`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateMinDetectionDistance updates distance successfully`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateAlertSoundEnabled(false)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateMinDetectionDistance(200.0)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify {
-            settingsRepository.updateSettings(
-                match { !it.alertSoundEnabled }
-            )
+            coVerify {
+                settingsRepository.updateSettings(
+                    match { it.minDetectionDistanceMeters == 200.0 },
+                )
+            }
         }
-    }
 
     @Test
-    fun `updateAlertVibrationEnabled updates vibration setting`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateAlertNotificationEnabled updates notification setting`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateAlertVibrationEnabled(false)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateAlertNotificationEnabled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify {
-            settingsRepository.updateSettings(
-                match { !it.alertVibrationEnabled }
-            )
+            coVerify {
+                settingsRepository.updateSettings(
+                    match { !it.alertNotificationEnabled },
+                )
+            }
         }
-    }
 
     @Test
-    fun `updateDataRetentionDays updates retention period`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateAlertSoundEnabled updates sound setting`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateDataRetentionDays(60)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateAlertSoundEnabled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify {
-            settingsRepository.updateSettings(
-                match { it.dataRetentionDays == 60 }
-            )
+            coVerify {
+                settingsRepository.updateSettings(
+                    match { !it.alertSoundEnabled },
+                )
+            }
         }
-    }
 
     @Test
-    fun `updateBatteryOptimizationEnabled updates battery setting`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateAlertVibrationEnabled updates vibration setting`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.updateBatteryOptimizationEnabled(false)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateAlertVibrationEnabled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify {
-            settingsRepository.updateSettings(
-                match { !it.batteryOptimizationEnabled }
-            )
+            coVerify {
+                settingsRepository.updateSettings(
+                    match { !it.alertVibrationEnabled },
+                )
+            }
         }
-    }
 
     @Test
-    fun `showClearDataDialog sets dialog visible`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateDataRetentionDays updates retention period`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.showClearDataDialog()
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateDataRetentionDays(60)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.showClearDataDialog)
-    }
-
-    @Test
-    fun `hideClearDataDialog hides dialog`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.showClearDataDialog()
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.showClearDataDialog)
-
-        viewModel.hideClearDataDialog()
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertFalse(viewModel.uiState.value.showClearDataDialog)
-    }
+            coVerify {
+                settingsRepository.updateSettings(
+                    match { it.dataRetentionDays == 60 },
+                )
+            }
+        }
 
     @Test
-    fun `clearAllData deletes all data from repositories`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `updateBatteryOptimizationEnabled updates battery setting`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.clearAllData()
-        testDispatcher.scheduler.advanceTimeBy(100)
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.updateBatteryOptimizationEnabled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify { deviceRepository.deleteAllDevices() }
-        coVerify { locationRepository.deleteAllLocations() }
-        coVerify { alertRepository.deleteAllAlerts() }
-    }
-
-    @Test
-    fun `clearAllData sets dataCleared flag temporarily`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.clearAllData()
-        // Advance just enough to let the clearAllData coroutine run up to the delay(3000)
-        testDispatcher.scheduler.advanceTimeBy(100)
-        testDispatcher.scheduler.runCurrent()
-        // Give the combine/stateIn a chance to process the _uiState change
-        testDispatcher.scheduler.runCurrent()
-
-        // dataCleared should be true (coroutine is suspended at delay(3000))
-        assertTrue("dataCleared should be true after clear completes", viewModel.uiState.value.dataCleared)
-
-        // After 3 seconds, it should be reset to false
-        testDispatcher.scheduler.advanceTimeBy(3100)
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertFalse("dataCleared should be false after 3s delay", viewModel.uiState.value.dataCleared)
-    }
+            coVerify {
+                settingsRepository.updateSettings(
+                    match { !it.batteryOptimizationEnabled },
+                )
+            }
+        }
 
     @Test
-    fun `clearAllData hides dialog after completion`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `showClearDataDialog sets dialog visible`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.showClearDataDialog()
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.showClearDataDialog)
+            viewModel.showClearDataDialog()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.clearAllData()
-        testDispatcher.scheduler.advanceTimeBy(100)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertFalse(viewModel.uiState.value.showClearDataDialog)
-    }
+            assertTrue(viewModel.uiState.value.showClearDataDialog)
+        }
 
     @Test
-    fun `error is shown when settings update fails`() = runTest {
-        // Setup mock to throw exception
-        coEvery { settingsRepository.updateScanInterval(any()) } throws RuntimeException("Database error")
+    fun `hideClearDataDialog hides dialog`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.showClearDataDialog()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.showClearDataDialog)
 
-        viewModel.updateScanInterval(10)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertNotNull(viewModel.uiState.value.errorMessage)
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("Failed"))
-    }
-
-    @Test
-    fun `clearError removes error message`() = runTest {
-        coEvery { settingsRepository.updateScanInterval(any()) } throws RuntimeException("Error")
-
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.updateScanInterval(10)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Verify error exists
-        assertNotNull(viewModel.uiState.value.errorMessage)
-
-        // Clear error
-        viewModel.clearError()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Verify error is cleared
-        assertNull(viewModel.uiState.value.errorMessage)
-    }
+            viewModel.hideClearDataDialog()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.showClearDataDialog)
+        }
 
     @Test
-    fun `error is shown when clearAllData fails`() = runTest {
-        // Setup mock to throw exception
-        coEvery { deviceRepository.deleteAllDevices() } throws RuntimeException("Delete failed")
+    fun `clearAllData deletes all data from repositories`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.clearAllData()
+            testDispatcher.scheduler.advanceTimeBy(100)
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.clearAllData()
-        testDispatcher.scheduler.advanceTimeBy(100)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertNotNull(viewModel.uiState.value.errorMessage)
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("Failed to clear data"))
-    }
-
-    @Test
-    fun `statistics show correct counts`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertEquals("Should have 2 devices", 2, state.totalDevicesCount)
-        assertEquals("Should have 3 locations", 3, state.totalLocationsCount)
-        assertEquals("Should have 1 alert", 1, state.totalAlertsCount)
-    }
+            coVerify { deviceRepository.deleteAllDevices() }
+            coVerify { locationRepository.deleteAllLocations() }
+            coVerify { alertRepository.deleteAllAlerts() }
+        }
 
     @Test
-    fun `empty data shows zero counts`() = runTest {
-        // Setup mocks to return empty lists
-        every { deviceRepository.getAllDevices() } returns flowOf(emptyList())
-        every { locationRepository.getAllLocations() } returns flowOf(emptyList())
-        every { alertRepository.getAllAlerts() } returns flowOf(emptyList())
+    fun `clearAllData sets dataCleared flag temporarily`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+            viewModel.clearAllData()
+            // Advance just enough to let the clearAllData coroutine run up to the delay(3000)
+            testDispatcher.scheduler.advanceTimeBy(100)
+            testDispatcher.scheduler.runCurrent()
+            // Give the combine/stateIn a chance to process the _uiState change
+            testDispatcher.scheduler.runCurrent()
 
-        val state = viewModel.uiState.value
-        assertEquals(0, state.totalDevicesCount)
-        assertEquals(0, state.totalLocationsCount)
-        assertEquals(0, state.totalAlertsCount)
-    }
+            // dataCleared should be true (coroutine is suspended at delay(3000))
+            assertTrue("dataCleared should be true after clear completes", viewModel.uiState.value.dataCleared)
+
+            // After 3 seconds, it should be reset to false
+            testDispatcher.scheduler.advanceTimeBy(3100)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertFalse("dataCleared should be false after 3s delay", viewModel.uiState.value.dataCleared)
+        }
 
     @Test
-    fun `app version and build number are populated`() = runTest {
-        viewModel = createAndSubscribe()
-        testDispatcher.scheduler.advanceUntilIdle()
+    fun `clearAllData hides dialog after completion`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertNotNull(state.appVersion)
-        assertNotNull(state.buildNumber)
-        assertTrue(state.appVersion.isNotEmpty())
-        assertTrue(state.buildNumber.isNotEmpty())
-    }
+            viewModel.showClearDataDialog()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.showClearDataDialog)
+
+            viewModel.clearAllData()
+            testDispatcher.scheduler.advanceTimeBy(100)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.showClearDataDialog)
+        }
+
+    @Test
+    fun `error is shown when settings update fails`() =
+        runTest {
+            // Setup mock to throw exception
+            coEvery { settingsRepository.updateScanInterval(any()) } throws RuntimeException("Database error")
+
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.updateScanInterval(10)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertTrue(viewModel.uiState.value.errorMessage!!.contains("Failed"))
+        }
+
+    @Test
+    fun `clearError removes error message`() =
+        runTest {
+            coEvery { settingsRepository.updateScanInterval(any()) } throws RuntimeException("Error")
+
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.updateScanInterval(10)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Verify error exists
+            assertNotNull(viewModel.uiState.value.errorMessage)
+
+            // Clear error
+            viewModel.clearError()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Verify error is cleared
+            assertNull(viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun `error is shown when clearAllData fails`() =
+        runTest {
+            // Setup mock to throw exception
+            coEvery { deviceRepository.deleteAllDevices() } throws RuntimeException("Delete failed")
+
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.clearAllData()
+            testDispatcher.scheduler.advanceTimeBy(100)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertNotNull(viewModel.uiState.value.errorMessage)
+            assertTrue(viewModel.uiState.value.errorMessage!!.contains("Failed to clear data"))
+        }
+
+    @Test
+    fun `statistics show correct counts`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals("Should have 2 devices", 2, state.totalDevicesCount)
+            assertEquals("Should have 3 locations", 3, state.totalLocationsCount)
+            assertEquals("Should have 1 alert", 1, state.totalAlertsCount)
+        }
+
+    @Test
+    fun `empty data shows zero counts`() =
+        runTest {
+            // Setup mocks to return empty lists
+            every { deviceRepository.getAllDevices() } returns flowOf(emptyList())
+            every { locationRepository.getAllLocations() } returns flowOf(emptyList())
+            every { alertRepository.getAllAlerts() } returns flowOf(emptyList())
+
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(0, state.totalDevicesCount)
+            assertEquals(0, state.totalLocationsCount)
+            assertEquals(0, state.totalAlertsCount)
+        }
+
+    @Test
+    fun `app version and build number are populated`() =
+        runTest {
+            viewModel = createAndSubscribe()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertNotNull(state.appVersion)
+            assertNotNull(state.buildNumber)
+            assertTrue(state.appVersion.isNotEmpty())
+            assertTrue(state.buildNumber.isNotEmpty())
+        }
 }

@@ -25,7 +25,7 @@ data class ThreatScoreStats(
     val average: Double,
     val maximum: Double,
     val minimum: Double,
-    val count: Int
+    val count: Int,
 )
 
 /**
@@ -62,7 +62,10 @@ interface AlertRepository {
      * @param throttleWindowMs Time window in milliseconds to check for duplicates
      * @return The alert ID if inserted, null if throttled (duplicate found)
      */
-    suspend fun insertAlertWithThrottling(alert: AlertHistory, throttleWindowMs: Long): Long?
+    suspend fun insertAlertWithThrottling(
+        alert: AlertHistory,
+        throttleWindowMs: Long,
+    ): Long?
 
     /**
      * Check if a similar recent alert exists within a time threshold.
@@ -75,7 +78,10 @@ interface AlertRepository {
      * @param afterTimestamp Only check alerts created after this timestamp
      * @return True if a similar alert exists, false otherwise
      */
-    suspend fun hasSimilarRecentAlert(deviceAddresses: String, afterTimestamp: Long): Boolean
+    suspend fun hasSimilarRecentAlert(
+        deviceAddresses: String,
+        afterTimestamp: Long,
+    ): Boolean
 
     /**
      * Get the most recent alert for a specific device address string.
@@ -161,7 +167,10 @@ interface AlertRepository {
      * @param endTimestamp End of time range (inclusive)
      * @return Flow emitting list of alerts within the time range
      */
-    fun getAlertsByTimeRange(startTimestamp: Long, endTimestamp: Long): Flow<List<AlertHistory>>
+    fun getAlertsByTimeRange(
+        startTimestamp: Long,
+        endTimestamp: Long,
+    ): Flow<List<AlertHistory>>
 
     /**
      * Get the most recent alert.
@@ -307,210 +316,212 @@ interface AlertRepository {
 /**
  * Implementation of AlertRepository.
  */
+@Suppress("TooManyFunctions")
 @Singleton
-class AlertRepositoryImpl @Inject constructor(
-    private val alertHistoryDao: AlertHistoryDao
-) : AlertRepository {
-
-    override suspend fun insertAlert(alert: AlertHistory): Long {
-        return alertHistoryDao.insert(alert)
-    }
-
-    override suspend fun insertAlerts(alerts: List<AlertHistory>): List<Long> {
-        return alertHistoryDao.insertAll(alerts)
-    }
-
-    /**
-     * CRITICAL FIX: Implementation of insertAlertWithThrottling.
-     * Prevents duplicate alerts from spamming users.
-     */
-    override suspend fun insertAlertWithThrottling(
-        alert: AlertHistory,
-        throttleWindowMs: Long
-    ): Long? {
-        // Calculate throttle threshold timestamp
-        val throttleThreshold = alert.timestamp - throttleWindowMs
-
-        // Check if a similar alert already exists within the throttle window
-        val hasSimilar = hasSimilarRecentAlert(alert.deviceAddresses, throttleThreshold)
-
-        if (hasSimilar) {
-            // Throttle: don't insert duplicate alert
-            return null
+class AlertRepositoryImpl
+    @Inject
+    constructor(
+        private val alertHistoryDao: AlertHistoryDao,
+    ) : AlertRepository {
+        override suspend fun insertAlert(alert: AlertHistory): Long {
+            return alertHistoryDao.insert(alert)
         }
 
-        // No similar alert found, insert the new alert
-        return insertAlert(alert)
-    }
-
-    /**
-     * CRITICAL FIX: Implementation of hasSimilarRecentAlert.
-     * Checks for duplicate alerts based on device addresses and timestamp.
-     */
-    override suspend fun hasSimilarRecentAlert(
-        deviceAddresses: String,
-        afterTimestamp: Long
-    ): Boolean {
-        // Get recent alerts after the threshold timestamp
-        val recentAlerts = getRecentAlerts(afterTimestamp).first()
-
-        // Check if any recent alert has the same device addresses
-        return recentAlerts.any { alert ->
-            alert.deviceAddresses == deviceAddresses
+        override suspend fun insertAlerts(alerts: List<AlertHistory>): List<Long> {
+            return alertHistoryDao.insertAll(alerts)
         }
-    }
 
-    override suspend fun getLatestAlertForDevice(deviceAddresses: String): AlertHistory? {
-        return alertHistoryDao.getLatestAlertForDevice(deviceAddresses)
-    }
+        /**
+         * CRITICAL FIX: Implementation of insertAlertWithThrottling.
+         * Prevents duplicate alerts from spamming users.
+         */
+        override suspend fun insertAlertWithThrottling(
+            alert: AlertHistory,
+            throttleWindowMs: Long,
+        ): Long? {
+            // Calculate throttle threshold timestamp
+            val throttleThreshold = alert.timestamp - throttleWindowMs
 
-    override suspend fun getAlertById(alertId: Long): AlertHistory? {
-        return alertHistoryDao.getById(alertId)
-    }
+            // Check if a similar alert already exists within the throttle window
+            val hasSimilar = hasSimilarRecentAlert(alert.deviceAddresses, throttleThreshold)
 
-    override fun getAllAlerts(): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getAllAlerts()
-    }
+            if (hasSimilar) {
+                // Throttle: don't insert duplicate alert
+                return null
+            }
 
-    override fun getActiveAlerts(): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getActiveAlerts()
-    }
-
-    override fun getDismissedAlerts(): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getDismissedAlerts()
-    }
-
-    override fun getRecentAlerts(sinceTimestamp: Long): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getRecentAlerts(sinceTimestamp)
-    }
-
-    override fun getRecentActiveAlerts(sinceTimestamp: Long): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getRecentActiveAlerts(sinceTimestamp)
-    }
-
-    override fun getAlertsByLevel(alertLevel: String): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getAlertsByLevel(alertLevel)
-    }
-
-    override fun getActiveAlertsByLevel(alertLevel: String): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getActiveAlertsByLevel(alertLevel)
-    }
-
-    override fun getHighThreatAlerts(minThreatScore: Double): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getHighThreatAlerts(minThreatScore)
-    }
-
-    override fun getAlertsByTimeRange(
-        startTimestamp: Long,
-        endTimestamp: Long
-    ): Flow<List<AlertHistory>> {
-        return alertHistoryDao.getAlertsByTimeRange(startTimestamp, endTimestamp)
-    }
-
-    override suspend fun getLatestAlert(): AlertHistory? {
-        return alertHistoryDao.getLatestAlert()
-    }
-
-    override fun getAlertCount(): Flow<Int> {
-        return alertHistoryDao.getAlertCount()
-    }
-
-    override fun getActiveAlertCount(): Flow<Int> {
-        return alertHistoryDao.getActiveAlertCount()
-    }
-
-    override fun getAlertCountByLevel(alertLevel: String): Flow<Int> {
-        return alertHistoryDao.getAlertCountByLevel(alertLevel)
-    }
-
-    override fun getActiveAlertCountByLevel(alertLevel: String): Flow<Int> {
-        return alertHistoryDao.getActiveAlertCountByLevel(alertLevel)
-    }
-
-    override suspend fun getAlertStatistics(): Map<String, Int> {
-        return alertHistoryDao.getAlertStatistics().associate { it.alertLevel to it.count }
-    }
-
-    override fun getUndismissedAlerts(): Flow<List<AlertHistory>> {
-        return getActiveAlerts()
-    }
-
-    override fun getTopThreatAlerts(limit: Int): Flow<List<AlertHistory>> {
-        return getAllAlerts().map { alerts ->
-            alerts.sortedByDescending { it.threatScore }.take(limit)
+            // No similar alert found, insert the new alert
+            return insertAlert(alert)
         }
-    }
 
-    override fun getThreatScoreStatistics(): Flow<ThreatScoreStats> {
-        return getAllAlerts().map { alerts ->
-            if (alerts.isEmpty()) {
-                ThreatScoreStats(0.0, 0.0, 0.0, 0)
-            } else {
-                val scores = alerts.map { it.threatScore }
-                ThreatScoreStats(
-                    average = scores.average(),
-                    maximum = scores.maxOrNull() ?: 0.0,
-                    minimum = scores.minOrNull() ?: 0.0,
-                    count = scores.size
-                )
+        /**
+         * CRITICAL FIX: Implementation of hasSimilarRecentAlert.
+         * Checks for duplicate alerts based on device addresses and timestamp.
+         */
+        override suspend fun hasSimilarRecentAlert(
+            deviceAddresses: String,
+            afterTimestamp: Long,
+        ): Boolean {
+            // Get recent alerts after the threshold timestamp
+            val recentAlerts = getRecentAlerts(afterTimestamp).first()
+
+            // Check if any recent alert has the same device addresses
+            return recentAlerts.any { alert ->
+                alert.deviceAddresses == deviceAddresses
             }
         }
-    }
 
-    override fun getAverageThreatScore(): Flow<Double> {
-        return getAllAlerts().map { alerts ->
-            if (alerts.isEmpty()) 0.0 else alerts.map { it.threatScore }.average()
+        override suspend fun getLatestAlertForDevice(deviceAddresses: String): AlertHistory? {
+            return alertHistoryDao.getLatestAlertForDevice(deviceAddresses)
         }
-    }
 
-    override fun getMaxThreatScore(): Flow<Double> {
-        return getAllAlerts().map { alerts ->
-            alerts.maxOfOrNull { it.threatScore } ?: 0.0
+        override suspend fun getAlertById(alertId: Long): AlertHistory? {
+            return alertHistoryDao.getById(alertId)
         }
-    }
 
-    override suspend fun dismissAlert(alertId: Long): Boolean {
-        return try {
+        override fun getAllAlerts(): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getAllAlerts()
+        }
+
+        override fun getActiveAlerts(): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getActiveAlerts()
+        }
+
+        override fun getDismissedAlerts(): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getDismissedAlerts()
+        }
+
+        override fun getRecentAlerts(sinceTimestamp: Long): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getRecentAlerts(sinceTimestamp)
+        }
+
+        override fun getRecentActiveAlerts(sinceTimestamp: Long): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getRecentActiveAlerts(sinceTimestamp)
+        }
+
+        override fun getAlertsByLevel(alertLevel: String): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getAlertsByLevel(alertLevel)
+        }
+
+        override fun getActiveAlertsByLevel(alertLevel: String): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getActiveAlertsByLevel(alertLevel)
+        }
+
+        override fun getHighThreatAlerts(minThreatScore: Double): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getHighThreatAlerts(minThreatScore)
+        }
+
+        override fun getAlertsByTimeRange(
+            startTimestamp: Long,
+            endTimestamp: Long,
+        ): Flow<List<AlertHistory>> {
+            return alertHistoryDao.getAlertsByTimeRange(startTimestamp, endTimestamp)
+        }
+
+        override suspend fun getLatestAlert(): AlertHistory? {
+            return alertHistoryDao.getLatestAlert()
+        }
+
+        override fun getAlertCount(): Flow<Int> {
+            return alertHistoryDao.getAlertCount()
+        }
+
+        override fun getActiveAlertCount(): Flow<Int> {
+            return alertHistoryDao.getActiveAlertCount()
+        }
+
+        override fun getAlertCountByLevel(alertLevel: String): Flow<Int> {
+            return alertHistoryDao.getAlertCountByLevel(alertLevel)
+        }
+
+        override fun getActiveAlertCountByLevel(alertLevel: String): Flow<Int> {
+            return alertHistoryDao.getActiveAlertCountByLevel(alertLevel)
+        }
+
+        override suspend fun getAlertStatistics(): Map<String, Int> {
+            return alertHistoryDao.getAlertStatistics().associate { it.alertLevel to it.count }
+        }
+
+        override fun getUndismissedAlerts(): Flow<List<AlertHistory>> {
+            return getActiveAlerts()
+        }
+
+        override fun getTopThreatAlerts(limit: Int): Flow<List<AlertHistory>> {
+            return getAllAlerts().map { alerts ->
+                alerts.sortedByDescending { it.threatScore }.take(limit)
+            }
+        }
+
+        override fun getThreatScoreStatistics(): Flow<ThreatScoreStats> {
+            return getAllAlerts().map { alerts ->
+                if (alerts.isEmpty()) {
+                    ThreatScoreStats(0.0, 0.0, 0.0, 0)
+                } else {
+                    val scores = alerts.map { it.threatScore }
+                    ThreatScoreStats(
+                        average = scores.average(),
+                        maximum = scores.maxOrNull() ?: 0.0,
+                        minimum = scores.minOrNull() ?: 0.0,
+                        count = scores.size,
+                    )
+                }
+            }
+        }
+
+        override fun getAverageThreatScore(): Flow<Double> {
+            return getAllAlerts().map { alerts ->
+                if (alerts.isEmpty()) 0.0 else alerts.map { it.threatScore }.average()
+            }
+        }
+
+        override fun getMaxThreatScore(): Flow<Double> {
+            return getAllAlerts().map { alerts ->
+                alerts.maxOfOrNull { it.threatScore } ?: 0.0
+            }
+        }
+
+        override suspend fun dismissAlert(alertId: Long): Boolean {
+            return try {
+                val dismissedAt = System.currentTimeMillis()
+                alertHistoryDao.dismissAlert(alertId, dismissedAt)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        override suspend fun dismissAlerts(alertIds: List<Long>): Boolean {
+            return try {
+                val dismissedAt = System.currentTimeMillis()
+                alertHistoryDao.dismissAlerts(alertIds, dismissedAt)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        override suspend fun dismissAllAlerts(): Int {
             val dismissedAt = System.currentTimeMillis()
-            alertHistoryDao.dismissAlert(alertId, dismissedAt)
-            true
-        } catch (e: Exception) {
-            false
+            return alertHistoryDao.dismissAllAlerts(dismissedAt)
+        }
+
+        override suspend fun updateAlert(alert: AlertHistory) {
+            alertHistoryDao.update(alert)
+        }
+
+        override suspend fun deleteAlert(alert: AlertHistory) {
+            alertHistoryDao.delete(alert)
+        }
+
+        override suspend fun deleteOldAlerts(beforeTimestamp: Long): Int {
+            return alertHistoryDao.deleteOldAlerts(beforeTimestamp)
+        }
+
+        override suspend fun deleteOldDismissedAlerts(beforeTimestamp: Long): Int {
+            return alertHistoryDao.deleteOldDismissedAlerts(beforeTimestamp)
+        }
+
+        override suspend fun deleteAllAlerts() {
+            alertHistoryDao.deleteAll()
         }
     }
-
-    override suspend fun dismissAlerts(alertIds: List<Long>): Boolean {
-        return try {
-            val dismissedAt = System.currentTimeMillis()
-            alertHistoryDao.dismissAlerts(alertIds, dismissedAt)
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    override suspend fun dismissAllAlerts(): Int {
-        val dismissedAt = System.currentTimeMillis()
-        return alertHistoryDao.dismissAllAlerts(dismissedAt)
-    }
-
-    override suspend fun updateAlert(alert: AlertHistory) {
-        alertHistoryDao.update(alert)
-    }
-
-    override suspend fun deleteAlert(alert: AlertHistory) {
-        alertHistoryDao.delete(alert)
-    }
-
-    override suspend fun deleteOldAlerts(beforeTimestamp: Long): Int {
-        return alertHistoryDao.deleteOldAlerts(beforeTimestamp)
-    }
-
-    override suspend fun deleteOldDismissedAlerts(beforeTimestamp: Long): Int {
-        return alertHistoryDao.deleteOldDismissedAlerts(beforeTimestamp)
-    }
-
-    override suspend fun deleteAllAlerts() {
-        alertHistoryDao.deleteAll()
-    }
-}

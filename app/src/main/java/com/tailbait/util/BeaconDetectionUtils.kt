@@ -24,7 +24,6 @@ import java.util.UUID
  * - AltBeacon: https://altbeacon.org/
  */
 object BeaconDetectionUtils {
-
     // ============================================================================
     // COMPANY IDENTIFIERS (Bluetooth SIG)
     // ============================================================================
@@ -52,10 +51,10 @@ object BeaconDetectionUtils {
      * Eddystone frame types
      */
     object EddystoneFrameType {
-        const val UID = 0x00    // Unique identifier
-        const val URL = 0x10    // URL broadcast
-        const val TLM = 0x20    // Telemetry
-        const val EID = 0x30    // Ephemeral identifier
+        const val UID = 0x00 // Unique identifier
+        const val URL = 0x10 // URL broadcast
+        const val TLM = 0x20 // Telemetry
+        const val EID = 0x30 // Ephemeral identifier
     }
 
     // ============================================================================
@@ -66,19 +65,19 @@ object BeaconDetectionUtils {
      * Classification of beacon types detected in BLE advertisements.
      */
     enum class BeaconType {
-        IBEACON,           // Apple iBeacon (0x02 0x15 prefix)
-        EDDYSTONE_UID,     // Eddystone UID frame
-        EDDYSTONE_URL,     // Eddystone URL frame
-        EDDYSTONE_TLM,     // Eddystone telemetry
-        EDDYSTONE_EID,     // Eddystone ephemeral ID
-        ALTBEACON,         // AltBeacon format
-        MICROSOFT_BEACON,  // Microsoft beacon
-        NORDIC_BEACON,     // Nordic Semiconductor beacon
-        AIRDROP,           // Apple AirDrop proximity
-        FIND_MY,           // Apple Find My network (AirTag!)
-        NEARBY_INFO,       // Apple Nearby Info
+        IBEACON, // Apple iBeacon (0x02 0x15 prefix)
+        EDDYSTONE_UID, // Eddystone UID frame
+        EDDYSTONE_URL, // Eddystone URL frame
+        EDDYSTONE_TLM, // Eddystone telemetry
+        EDDYSTONE_EID, // Eddystone ephemeral ID
+        ALTBEACON, // AltBeacon format
+        MICROSOFT_BEACON, // Microsoft beacon
+        NORDIC_BEACON, // Nordic Semiconductor beacon
+        AIRDROP, // Apple AirDrop proximity
+        FIND_MY, // Apple Find My network (AirTag!)
+        NEARBY_INFO, // Apple Nearby Info
         PROXIMITY_PAIRING, // Apple Proximity Pairing (AirPods)
-        UNKNOWN
+        UNKNOWN,
     }
 
     /**
@@ -86,13 +85,20 @@ object BeaconDetectionUtils {
      */
     data class BeaconDetectionResult(
         val beaconType: BeaconType,
-        val uuid: UUID? = null,           // iBeacon/Eddystone UUID
-        val major: Int? = null,           // iBeacon major value
-        val minor: Int? = null,           // iBeacon minor value
-        val txPower: Int? = null,         // Measured TX power for distance calculation
-        val url: String? = null,          // Eddystone URL
-        val confidence: Float = 1.0f,     // Detection confidence (0.0-1.0)
-        val rawData: ByteArray? = null    // Raw beacon payload for analysis
+        // iBeacon/Eddystone UUID
+        val uuid: UUID? = null,
+        // iBeacon major value
+        val major: Int? = null,
+        // iBeacon minor value
+        val minor: Int? = null,
+        // Measured TX power for distance calculation
+        val txPower: Int? = null,
+        // Eddystone URL
+        val url: String? = null,
+        // Detection confidence (0.0-1.0)
+        val confidence: Float = 1.0f,
+        // Raw beacon payload for analysis
+        val rawData: ByteArray? = null,
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -110,7 +116,9 @@ object BeaconDetectionUtils {
             if (rawData != null) {
                 if (other.rawData == null) return false
                 if (!rawData.contentEquals(other.rawData)) return false
-            } else if (other.rawData != null) return false
+            } else if (other.rawData != null) {
+                return false
+            }
 
             return true
         }
@@ -142,8 +150,8 @@ object BeaconDetectionUtils {
      * Byte 22: TX Power (signed)
      */
     private const val IBEACON_TYPE = 0x02
-    private const val IBEACON_LENGTH = 0x15  // 21 bytes
-    private const val IBEACON_TOTAL_LENGTH = 23  // Type + Length + 21 bytes data
+    private const val IBEACON_LENGTH = 0x15 // 21 bytes
+    private const val IBEACON_TOTAL_LENGTH = 23 // Type + Length + 21 bytes data
 
     /**
      * Detect if manufacturer data represents an iBeacon.
@@ -152,7 +160,10 @@ object BeaconDetectionUtils {
      * @param data The manufacturer-specific data payload
      * @return BeaconDetectionResult if iBeacon detected, null otherwise
      */
-    fun detectIBeacon(manufacturerId: Int, data: ByteArray?): BeaconDetectionResult? {
+    fun detectIBeacon(
+        manufacturerId: Int,
+        data: ByteArray?,
+    ): BeaconDetectionResult? {
         if (data == null || data.size < IBEACON_TOTAL_LENGTH) return null
 
         // iBeacons can be from Apple or Nordic
@@ -187,7 +198,7 @@ object BeaconDetectionUtils {
                 minor = minor,
                 txPower = txPower,
                 confidence = 0.95f,
-                rawData = data
+                rawData = data,
             )
         } catch (e: Exception) {
             Timber.e(e, "Error parsing iBeacon data")
@@ -198,12 +209,15 @@ object BeaconDetectionUtils {
     /**
      * Check if data represents an iBeacon (simple check without full parsing).
      */
-    fun isIBeacon(manufacturerId: Int, data: ByteArray?): Boolean {
+    fun isIBeacon(
+        manufacturerId: Int,
+        data: ByteArray?,
+    ): Boolean {
         if (data == null || data.size < 2) return false
         if (manufacturerId != CompanyId.APPLE && manufacturerId != CompanyId.NORDIC_SEMI) return false
         return data[0].toInt() and 0xFF == IBEACON_TYPE &&
-               data[1].toInt() and 0xFF == IBEACON_LENGTH &&
-               data.size >= IBEACON_TOTAL_LENGTH
+            data[1].toInt() and 0xFF == IBEACON_LENGTH &&
+            data.size >= IBEACON_TOTAL_LENGTH
     }
 
     // ============================================================================
@@ -219,7 +233,7 @@ object BeaconDetectionUtils {
      */
     fun detectEddystone(
         serviceUuids: List<ParcelUuid>?,
-        serviceData: Map<ParcelUuid, ByteArray?>?
+        serviceData: Map<ParcelUuid, ByteArray?>?,
     ): BeaconDetectionResult? {
         if (serviceUuids == null) return null
 
@@ -232,7 +246,7 @@ object BeaconDetectionUtils {
         if (data == null || data.isEmpty()) {
             return BeaconDetectionResult(
                 beaconType = BeaconType.EDDYSTONE_UID,
-                confidence = 0.7f
+                confidence = 0.7f,
             )
         }
 
@@ -242,21 +256,24 @@ object BeaconDetectionUtils {
         return when (frameType) {
             EddystoneFrameType.UID -> parseEddystoneUid(data)
             EddystoneFrameType.URL -> parseEddystoneUrl(data)
-            EddystoneFrameType.TLM -> BeaconDetectionResult(
-                beaconType = BeaconType.EDDYSTONE_TLM,
-                confidence = 0.9f,
-                rawData = data
-            )
-            EddystoneFrameType.EID -> BeaconDetectionResult(
-                beaconType = BeaconType.EDDYSTONE_EID,
-                confidence = 0.9f,
-                rawData = data
-            )
-            else -> BeaconDetectionResult(
-                beaconType = BeaconType.EDDYSTONE_UID,
-                confidence = 0.6f,
-                rawData = data
-            )
+            EddystoneFrameType.TLM ->
+                BeaconDetectionResult(
+                    beaconType = BeaconType.EDDYSTONE_TLM,
+                    confidence = 0.9f,
+                    rawData = data,
+                )
+            EddystoneFrameType.EID ->
+                BeaconDetectionResult(
+                    beaconType = BeaconType.EDDYSTONE_EID,
+                    confidence = 0.9f,
+                    rawData = data,
+                )
+            else ->
+                BeaconDetectionResult(
+                    beaconType = BeaconType.EDDYSTONE_UID,
+                    confidence = 0.6f,
+                    rawData = data,
+                )
         }
     }
 
@@ -273,7 +290,7 @@ object BeaconDetectionUtils {
             return BeaconDetectionResult(
                 beaconType = BeaconType.EDDYSTONE_UID,
                 confidence = 0.7f,
-                rawData = data
+                rawData = data,
             )
         }
 
@@ -283,7 +300,7 @@ object BeaconDetectionUtils {
             beaconType = BeaconType.EDDYSTONE_UID,
             txPower = txPower,
             confidence = 0.95f,
-            rawData = data
+            rawData = data,
         )
     }
 
@@ -292,24 +309,25 @@ object BeaconDetectionUtils {
             return BeaconDetectionResult(
                 beaconType = BeaconType.EDDYSTONE_URL,
                 confidence = 0.7f,
-                rawData = data
+                rawData = data,
             )
         }
 
         val txPower = data[1].toInt()
-        val url = try {
-            decodeEddystoneUrl(data)
-        } catch (e: Exception) {
-            Timber.e(e, "Error decoding Eddystone URL")
-            null
-        }
+        val url =
+            try {
+                decodeEddystoneUrl(data)
+            } catch (e: Exception) {
+                Timber.e(e, "Error decoding Eddystone URL")
+                null
+            }
 
         return BeaconDetectionResult(
             beaconType = BeaconType.EDDYSTONE_URL,
             txPower = txPower,
             url = url,
             confidence = 0.95f,
-            rawData = data
+            rawData = data,
         )
     }
 
@@ -321,7 +339,10 @@ object BeaconDetectionUtils {
      * Detect Microsoft beacon format.
      * Microsoft beacons have data[0] == 0x01
      */
-    fun detectMicrosoftBeacon(manufacturerId: Int, data: ByteArray?): BeaconDetectionResult? {
+    fun detectMicrosoftBeacon(
+        manufacturerId: Int,
+        data: ByteArray?,
+    ): BeaconDetectionResult? {
         if (manufacturerId != CompanyId.MICROSOFT) return null
         if (data == null || data.isEmpty()) return null
 
@@ -329,7 +350,7 @@ object BeaconDetectionUtils {
             return BeaconDetectionResult(
                 beaconType = BeaconType.MICROSOFT_BEACON,
                 confidence = 0.85f,
-                rawData = data
+                rawData = data,
             )
         }
 
@@ -339,7 +360,10 @@ object BeaconDetectionUtils {
     /**
      * Check if data represents a Microsoft beacon.
      */
-    fun isMicrosoftBeacon(manufacturerId: Int, data: ByteArray?): Boolean {
+    fun isMicrosoftBeacon(
+        manufacturerId: Int,
+        data: ByteArray?,
+    ): Boolean {
         if (manufacturerId != CompanyId.MICROSOFT) return false
         if (data == null || data.isEmpty()) return false
         return data[0].toInt() and 0xFF == 0x01
@@ -354,10 +378,10 @@ object BeaconDetectionUtils {
      */
     object AppleContinuityType {
         const val AIRDROP = 0x05
-        const val PROXIMITY_PAIRING = 0x07  // AirPods, Beats
+        const val PROXIMITY_PAIRING = 0x07 // AirPods, Beats
         const val NEARBY_ACTION = 0x0F
         const val NEARBY_INFO = 0x10
-        const val FIND_MY = 0x12  // AirTag! CRITICAL!
+        const val FIND_MY = 0x12 // AirTag! CRITICAL!
     }
 
     /**
@@ -367,7 +391,10 @@ object BeaconDetectionUtils {
      * @param data The manufacturer data payload
      * @return BeaconDetectionResult if Apple beacon detected, null otherwise
      */
-    fun detectAppleContinuity(manufacturerId: Int, data: ByteArray?): BeaconDetectionResult? {
+    fun detectAppleContinuity(
+        manufacturerId: Int,
+        data: ByteArray?,
+    ): BeaconDetectionResult? {
         if (manufacturerId != CompanyId.APPLE) return null
         if (data == null || data.isEmpty()) return null
 
@@ -378,29 +405,30 @@ object BeaconDetectionUtils {
                 Timber.d("Detected Apple Find My beacon (AirTag/Find My accessory)")
                 BeaconDetectionResult(
                     beaconType = BeaconType.FIND_MY,
-                    confidence = 0.98f,  // Very high - this is an AirTag!
-                    rawData = data
+                    // Very high - this is an AirTag!
+                    confidence = 0.98f,
+                    rawData = data,
                 )
             }
             AppleContinuityType.AIRDROP -> {
                 BeaconDetectionResult(
                     beaconType = BeaconType.AIRDROP,
                     confidence = 0.9f,
-                    rawData = data
+                    rawData = data,
                 )
             }
             AppleContinuityType.NEARBY_INFO -> {
                 BeaconDetectionResult(
                     beaconType = BeaconType.NEARBY_INFO,
                     confidence = 0.85f,
-                    rawData = data
+                    rawData = data,
                 )
             }
             AppleContinuityType.PROXIMITY_PAIRING -> {
                 BeaconDetectionResult(
                     beaconType = BeaconType.PROXIMITY_PAIRING,
                     confidence = 0.9f,
-                    rawData = data
+                    rawData = data,
                 )
             }
             else -> null
@@ -410,7 +438,10 @@ object BeaconDetectionUtils {
     /**
      * Check if data represents AirDrop.
      */
-    fun isAirDrop(manufacturerId: Int, data: ByteArray?): Boolean {
+    fun isAirDrop(
+        manufacturerId: Int,
+        data: ByteArray?,
+    ): Boolean {
         if (manufacturerId != CompanyId.APPLE) return false
         if (data == null || data.isEmpty()) return false
         return data[0].toInt() and 0xFF == AppleContinuityType.AIRDROP
@@ -419,7 +450,10 @@ object BeaconDetectionUtils {
     /**
      * Check if data represents Find My network (AirTag).
      */
-    fun isFindMy(manufacturerId: Int, data: ByteArray?): Boolean {
+    fun isFindMy(
+        manufacturerId: Int,
+        data: ByteArray?,
+    ): Boolean {
         if (manufacturerId != CompanyId.APPLE) return false
         if (data == null || data.isEmpty()) return false
         return data[0].toInt() and 0xFF == AppleContinuityType.FIND_MY
@@ -444,7 +478,7 @@ object BeaconDetectionUtils {
         manufacturerId: Int?,
         manufacturerData: ByteArray?,
         serviceUuids: List<ParcelUuid>?,
-        serviceData: Map<ParcelUuid, ByteArray?>? = null
+        serviceData: Map<ParcelUuid, ByteArray?>? = null,
     ): BeaconDetectionResult? {
         // Priority 1: Apple Find My (AirTag detection is critical!)
         if (manufacturerId == CompanyId.APPLE && manufacturerData != null) {
@@ -473,7 +507,7 @@ object BeaconDetectionUtils {
     fun isAnyBeacon(
         manufacturerId: Int?,
         manufacturerData: ByteArray?,
-        serviceUuids: List<ParcelUuid>?
+        serviceUuids: List<ParcelUuid>?,
     ): Boolean {
         return detectBeacon(manufacturerId, manufacturerData, serviceUuids) != null
     }
@@ -504,17 +538,22 @@ object BeaconDetectionUtils {
     /**
      * Eddystone URL scheme prefixes.
      */
-    private val URL_SCHEMES = arrayOf(
-        "http://www.", "https://www.", "http://", "https://"
-    )
+    private val URL_SCHEMES =
+        arrayOf(
+            "http://www.",
+            "https://www.",
+            "http://",
+            "https://",
+        )
 
     /**
      * Eddystone URL encoded suffixes.
      */
-    private val URL_CODES = arrayOf(
-        ".com/", ".org/", ".edu/", ".net/", ".info/", ".biz/", ".gov/",
-        ".com", ".org", ".edu", ".net", ".info", ".biz", ".gov"
-    )
+    private val URL_CODES =
+        arrayOf(
+            ".com/", ".org/", ".edu/", ".net/", ".info/", ".biz/", ".gov/",
+            ".com", ".org", ".edu", ".net", ".info", ".biz", ".gov",
+        )
 
     /**
      * Decode Eddystone URL from service data.

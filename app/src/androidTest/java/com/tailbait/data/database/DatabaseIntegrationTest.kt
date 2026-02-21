@@ -21,7 +21,6 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class DatabaseIntegrationTest {
-
     // TODO: Setup test database
     // private lateinit var database: TailBaitDatabase
 
@@ -32,27 +31,32 @@ class DatabaseIntegrationTest {
     }
 
     @Test
-    fun insertDeviceAndLocation_createsValidRecord() = runTest {
-        // TODO: Test full flow of inserting device, location, and correlation
-    }
+    fun insertDeviceAndLocation_createsValidRecord() =
+        runTest {
+            // TODO: Test full flow of inserting device, location, and correlation
+        }
 
     @Test
-    fun deleteDevice_cascadesCorrectly() = runTest {
-        // TODO: Verify cascade delete removes related records
-    }
+    fun deleteDevice_cascadesCorrectly() =
+        runTest {
+            // TODO: Verify cascade delete removes related records
+        }
 
     @Test
-    fun whitelistEntry_preventsDuplicates() = runTest {
-        // TODO: Test unique constraint on whitelist device_id
-    }
+    fun whitelistEntry_preventsDuplicates() =
+        runTest {
+            // TODO: Test unique constraint on whitelist device_id
+        }
 
     @Test
-    fun getDevicesAtLocation_joinsCorrectly() = runTest {
-        // TODO: Test complex join query
-    }
+    fun getDevicesAtLocation_joinsCorrectly() =
+        runTest {
+            // TODO: Test complex join query
+        }
 
     @Test
-    fun settingsInitialization_createsDefaults() = runTest {
-        // TODO: Verify settings are initialized on first access
-    }
+    fun settingsInitialization_createsDefaults() =
+        runTest {
+            // TODO: Verify settings are initialized on first access
+        }
 }

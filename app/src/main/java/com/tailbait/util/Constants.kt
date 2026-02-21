@@ -7,6 +7,7 @@ object Constants {
     // Database
     const val DATABASE_NAME = "tailbait.db"
     const val DATABASE_VERSION = 1
+
     // Scanning
     const val DEFAULT_SCAN_INTERVAL_SECONDS = 300 // 5 minutes
     const val DEFAULT_SCAN_DURATION_SECONDS = 30 // 30 seconds
@@ -18,26 +19,32 @@ object Constants {
     // 3. Overwhelm the detection algorithm with noise
     // -85 dBm is the recommended threshold for reliable BLE signal detection
     const val MIN_RSSI_THRESHOLD = -100 // Minimum RSSI to consider (dBm)
+
     // Location
     const val DEFAULT_LOCATION_CHANGE_THRESHOLD_METERS = 50.0
     const val MIN_DETECTION_DISTANCE_METERS = 100.0
     const val LOCATION_ACCURACY_THRESHOLD_METERS = 100.0f
+
     // Detection Algorithm
     const val DEFAULT_ALERT_THRESHOLD_COUNT = 3 // Alert after device seen at N locations
     const val DETECTION_WORKER_INTERVAL_MINUTES = 15L
     const val THREAT_SCORE_THRESHOLD = 0.5 // Minimum score to generate alert
+
     // Data Retention
     const val DEFAULT_DATA_RETENTION_DAYS = 30
     const val CLEANUP_WORKER_INTERVAL_DAYS = 1L
+
     // WorkManager Tags
     const val WORK_TAG_DETECTION = "detection_work"
     const val WORK_TAG_CLEANUP = "cleanup_work"
     const val WORK_TAG_BACKGROUND_SCAN = "background_scan_work"
+
     // Permissions
     const val REQUEST_CODE_BLUETOOTH = 1001
     const val REQUEST_CODE_LOCATION = 1002
     const val REQUEST_CODE_BACKGROUND_LOCATION = 1003
     const val REQUEST_CODE_NOTIFICATION = 1004
+
     // Service
     const val SERVICE_NOTIFICATION_ID = 1001
     const val ALERT_NOTIFICATION_BASE_ID = 2000
@@ -75,10 +82,12 @@ object Constants {
     const val SCAN_TRIGGER_CONTINUOUS = "CONTINUOUS"
     const val SCAN_TRIGGER_PERIODIC = "PERIODIC"
     const val SCAN_TRIGGER_LOCATION_BASED = "LOCATION_BASED"
+
     // Whitelist Categories
     const val WHITELIST_CATEGORY_OWN = "OWN"
     const val WHITELIST_CATEGORY_PARTNER = "PARTNER"
     const val WHITELIST_CATEGORY_TRUSTED = "TRUSTED"
+
     // Alert Levels
     const val ALERT_LEVEL_LOW = "LOW"
     const val ALERT_LEVEL_MEDIUM = "MEDIUM"

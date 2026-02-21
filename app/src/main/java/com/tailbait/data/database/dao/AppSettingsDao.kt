@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.Flow
  */
 @Dao
 interface AppSettingsDao {
-
     /**
      * Insert or replace the settings record.
      * Since settings is a singleton table, this will always update the single row.
@@ -77,12 +76,17 @@ interface AppSettingsDao {
      * @param enabled The new tracking enabled state
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET is_tracking_enabled = :enabled, updated_at = :updatedAt
         WHERE id = 1
-    """)
-    suspend fun updateTrackingEnabled(enabled: Boolean, updatedAt: Long = System.currentTimeMillis())
+    """,
+    )
+    suspend fun updateTrackingEnabled(
+        enabled: Boolean,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Update scan interval for periodic mode.
@@ -90,12 +94,17 @@ interface AppSettingsDao {
      * @param intervalSeconds New scan interval in seconds
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET scan_interval_seconds = :intervalSeconds, updated_at = :updatedAt
         WHERE id = 1
-    """)
-    suspend fun updateScanInterval(intervalSeconds: Int, updatedAt: Long = System.currentTimeMillis())
+    """,
+    )
+    suspend fun updateScanInterval(
+        intervalSeconds: Int,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Update scan duration.
@@ -103,12 +112,17 @@ interface AppSettingsDao {
      * @param durationSeconds New scan duration in seconds
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET scan_duration_seconds = :durationSeconds, updated_at = :updatedAt
         WHERE id = 1
-    """)
-    suspend fun updateScanDuration(durationSeconds: Int, updatedAt: Long = System.currentTimeMillis())
+    """,
+    )
+    suspend fun updateScanDuration(
+        durationSeconds: Int,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Update minimum detection distance for stalking detection.
@@ -116,12 +130,17 @@ interface AppSettingsDao {
      * @param distanceMeters New minimum distance in meters
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET min_detection_distance_meters = :distanceMeters, updated_at = :updatedAt
         WHERE id = 1
-    """)
-    suspend fun updateMinDetectionDistance(distanceMeters: Double, updatedAt: Long = System.currentTimeMillis())
+    """,
+    )
+    suspend fun updateMinDetectionDistance(
+        distanceMeters: Double,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Update alert threshold count (minimum locations for detection).
@@ -129,12 +148,17 @@ interface AppSettingsDao {
      * @param count New threshold count
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET alert_threshold_count = :count, updated_at = :updatedAt
         WHERE id = 1
-    """)
-    suspend fun updateAlertThresholdCount(count: Int, updatedAt: Long = System.currentTimeMillis())
+    """,
+    )
+    suspend fun updateAlertThresholdCount(
+        count: Int,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Update alert notification preferences.
@@ -144,19 +168,21 @@ interface AppSettingsDao {
      * @param vibrationEnabled Enable/disable vibration
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET alert_notification_enabled = :notificationEnabled,
             alert_sound_enabled = :soundEnabled,
             alert_vibration_enabled = :vibrationEnabled,
             updated_at = :updatedAt
         WHERE id = 1
-    """)
+    """,
+    )
     suspend fun updateAlertPreferences(
         notificationEnabled: Boolean,
         soundEnabled: Boolean,
         vibrationEnabled: Boolean,
-        updatedAt: Long = System.currentTimeMillis()
+        updatedAt: Long = System.currentTimeMillis(),
     )
 
     /**
@@ -164,13 +190,15 @@ interface AppSettingsDao {
      *
      * @param startedAt Timestamp when Learn Mode was started
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET learn_mode_active = 1,
             learn_mode_started_at = :startedAt,
             updated_at = :startedAt
         WHERE id = 1
-    """)
+    """,
+    )
     suspend fun startLearnMode(startedAt: Long = System.currentTimeMillis())
 
     /**
@@ -178,13 +206,15 @@ interface AppSettingsDao {
      *
      * @param updatedAt Timestamp when Learn Mode was stopped
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET learn_mode_active = 0,
             learn_mode_started_at = NULL,
             updated_at = :updatedAt
         WHERE id = 1
-    """)
+    """,
+    )
     suspend fun stopLearnMode(updatedAt: Long = System.currentTimeMillis())
 
     /**
@@ -193,12 +223,17 @@ interface AppSettingsDao {
      * @param days Number of days to retain data
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET data_retention_days = :days, updated_at = :updatedAt
         WHERE id = 1
-    """)
-    suspend fun updateDataRetentionDays(days: Int, updatedAt: Long = System.currentTimeMillis())
+    """,
+    )
+    suspend fun updateDataRetentionDays(
+        days: Int,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Update battery optimization setting.
@@ -206,12 +241,17 @@ interface AppSettingsDao {
      * @param enabled Enable/disable battery optimization
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET battery_optimization_enabled = :enabled, updated_at = :updatedAt
         WHERE id = 1
-    """)
-    suspend fun updateBatteryOptimization(enabled: Boolean, updatedAt: Long = System.currentTimeMillis())
+    """,
+    )
+    suspend fun updateBatteryOptimization(
+        enabled: Boolean,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Get the timestamp when settings were last updated.
@@ -235,12 +275,17 @@ interface AppSettingsDao {
      * @param mode The new theme mode ("SYSTEM", "LIGHT", "DARK")
      * @param updatedAt Timestamp when the setting was updated
      */
-    @Query("""
+    @Query(
+        """
         UPDATE app_settings
         SET theme_mode = :mode, updated_at = :updatedAt
         WHERE id = 1
-    """)
-    suspend fun updateThemeMode(mode: String, updatedAt: Long = System.currentTimeMillis())
+    """,
+    )
+    suspend fun updateThemeMode(
+        mode: String,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Reset settings to default values.

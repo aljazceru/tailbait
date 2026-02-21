@@ -56,12 +56,12 @@ complexity:
   active: true
   ComplexCondition:
     active: true
-    threshold: 4
+    threshold: 5
   ComplexInterface:
     active: false
-  ComplexMethod:
+  CyclomaticComplexMethod:
     active: true
-    threshold: 15
+    threshold: 25
     ignoreSingleWhenExpression: true
     ignoreSimpleWhenEntries: true
     ignoreNestingFunctions: false
@@ -69,14 +69,14 @@ complexity:
     active: false
   LargeClass:
     active: true
-    threshold: 600
+    threshold: 800
   LongMethod:
     active: true
-    threshold: 60
+    threshold: 150
   LongParameterList:
     active: true
-    functionThreshold: 6
-    constructorThreshold: 7
+    functionThreshold: 10
+    constructorThreshold: 10
     ignoreDefaultParameters: true
     ignoreDataClasses: true
     ignoreAnnotatedParameter: []
@@ -86,18 +86,18 @@ complexity:
     active: false
   NestedBlockDepth:
     active: true
-    threshold: 4
+    threshold: 5
   ReplaceSafeCallChainWithRun:
     active: false
   StringLiteralDuplication:
     active: false
   TooManyFunctions:
     active: true
-    thresholdInFiles: 15
-    thresholdInClasses: 15
-    thresholdInInterfaces: 11
-    thresholdInObjects: 11
-    thresholdInEnums: 11
+    thresholdInFiles: 25
+    thresholdInClasses: 25
+    thresholdInInterfaces: 35
+    thresholdInObjects: 20
+    thresholdInEnums: 15
     ignoreDeprecated: false
     ignorePrivate: false
     ignoreOverridden: false
@@ -182,7 +182,7 @@ exceptions:
     active: false
   ThrowingExceptionsWithoutMessageOrCause:
     active: true
-    excludedExceptionTypes:
+    exceptions:
       - 'ArrayIndexOutOfBoundsException'
       - 'Exception'
       - 'IllegalArgumentException'
@@ -192,24 +192,13 @@ exceptions:
       - 'NullPointerException'
       - 'RuntimeException'
       - 'Throwable'
-    excludedClasses: []
   ThrowingNewInstanceOfSameException:
     active: true
   TooGenericExceptionCaught:
-    active: true
-    excludedExceptionTypes:
-      - 'ArrayIndexOutOfBoundsException'
-      - 'Error'
-      - 'Exception'
-      - 'IllegalMonitorStateException'
-      - 'IndexOutOfBoundsException'
-      - 'NullPointerException'
-      - 'RuntimeException'
-      - 'Throwable'
-    allowedExceptionNameRegex: '_|(ignore|expected).*'
+    active: false
   TooGenericExceptionThrown:
     active: true
-    excludedExceptionTypes:
+    exceptionNames:
       - 'Error'
       - 'Exception'
       - 'RuntimeException'
@@ -243,7 +232,7 @@ naming:
     ignoreAnnotated: ['Composable']
   FunctionParameterNaming:
     active: true
-    parameterPattern: '[a-z][A-Za-z0-9]*'
+    parameterPattern: '[_a-z][A-Za-z0-9]*'
     excludeClassPattern: '$^'
   InvalidPackageDeclaration:
     active: false
@@ -308,8 +297,6 @@ potential-bugs:
     active: false
   DoubleMutabilityForCollection:
     active: false
-  DuplicateCaseInWhenExpression:
-    active: true
   EqualsAlwaysReturnsTrueOrFalse:
     active: true
   EqualsWithHashCodeExist:
@@ -338,15 +325,10 @@ potential-bugs:
     active: false
   MissingPackageDeclaration:
     active: false
-  MissingWhenCase:
-    active: true
-    allowElseExpression: true
   NullCheckOnMutableProperty:
     active: false
   NullableToStringCall:
     active: false
-  RedundantElseInWhen:
-    active: true
   UnconditionalJumpStatementInLoop:
     active: false
   UnnecessaryNotNullOperator:
@@ -396,10 +378,8 @@ style:
     active: false
   ForbiddenComment:
     active: true
-    values:
-      - 'FIXME:'
+    comments:
       - 'STOPSHIP:'
-      - 'TODO:'
     allowedPatterns: ''
   ForbiddenImport:
     active: false
@@ -413,10 +393,10 @@ style:
     active: false
   LoopWithTooManyJumpStatements:
     active: true
-    maxJumpCount: 1
+    maxJumpCount: 2
   MagicNumber:
     active: false
-  MandatoryBracesIfStatements:
+  BracesOnIfStatements:
     active: false
   MandatoryBracesLoops:
     active: false
@@ -424,10 +404,10 @@ style:
     active: false
   MaxLineLength:
     active: true
-    maxLineLength: 120
+    maxLineLength: 150
     excludePackageStatements: true
     excludeImportStatements: true
-    excludeCommentStatements: false
+    excludeCommentStatements: true
   MayBeConst:
     active: true
   ModifierOrder:
@@ -446,7 +426,7 @@ style:
     active: true
   OptionalUnit:
     active: false
-  OptionalWhenBraces:
+  BracesOnWhenStatements:
     active: false
   PreferToOverPairSyntax:
     active: false
@@ -460,12 +440,12 @@ style:
     active: false
   ReturnCount:
     active: true
-    max: 3
+    max: 5
     excludedFunctions:
       - 'equals'
     excludeLabeled: false
     excludeReturnFromLambda: true
-    excludeGuardClauses: false
+    excludeGuardClauses: true
   SafeCast:
     active: true
   SerialVersionUIDInSerializableClass:
@@ -504,11 +484,14 @@ style:
     active: false
   UnusedImports:
     active: false
+  UnusedParameter:
+    active: true
+    allowedNames: '_.*'
   UnusedPrivateClass:
     active: true
   UnusedPrivateMember:
     active: true
-    allowedNames: '(_|ignored|expected|serialVersionUID)'
+    allowedNames: '(_|ignored|expected|serialVersionUID|.*Preview)'
   UseAnyOrNoneInsteadOfFind:
     active: false
   UseArrayLiteralsInAnnotations:

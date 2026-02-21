@@ -2,7 +2,7 @@ package com.tailbait.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/**
+/*
  * TailBait color system - Clean, minimal, Apple-like aesthetic
  *
  * Primary: Steel Blue (#007AFF) - Trust, security, professionalism
@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.Color
 
 object TailBaitLightColors {
     // === PRIMARY (Vibrant Blue) ===
-    val Primary = Color(0xFF2563EB)              // Brighter, more saturated blue
+    val Primary = Color(0xFF2563EB) // Brighter, more saturated blue
     val OnPrimary = Color(0xFFFFFFFF)
     val PrimaryContainer = Color(0xFFDBEAFE)
     val OnPrimaryContainer = Color(0xFF1E3A8A)
@@ -34,12 +34,12 @@ object TailBaitLightColors {
     val OnTertiaryContainer = Color(0xFF064E3B)
 
     // === SURFACE HIERARCHY ===
-    val Background = Color(0xFFF8FAFC)           // Very subtle slate tint, not flat gray
-    val OnBackground = Color(0xFF0F172A)         // Slate 900
-    val Surface = Color(0xFFFFFFFF)              // Pure white
+    val Background = Color(0xFFF8FAFC) // Very subtle slate tint, not flat gray
+    val OnBackground = Color(0xFF0F172A) // Slate 900
+    val Surface = Color(0xFFFFFFFF) // Pure white
     val OnSurface = Color(0xFF0F172A)
-    val SurfaceVariant = Color(0xFFF1F5F9)       // Slate 100
-    val OnSurfaceVariant = Color(0xFF475569)     // Slate 600
+    val SurfaceVariant = Color(0xFFF1F5F9) // Slate 100
+    val OnSurfaceVariant = Color(0xFF475569) // Slate 600
     val SurfaceTint = Color(0xFF2563EB)
 
     // === SURFACE CONTAINERS ===
@@ -50,11 +50,11 @@ object TailBaitLightColors {
     val SurfaceContainerHighest = Color(0xFFCBD5E1)
 
     // === OUTLINE (Softer) ===
-    val Outline = Color(0xFF94A3B8)              // Slate 400
-    val OutlineVariant = Color(0xFFCBD5E1)       // Slate 300
+    val Outline = Color(0xFF94A3B8) // Slate 400
+    val OutlineVariant = Color(0xFFCBD5E1) // Slate 300
 
     // === ERROR ===
-    val Error = Color(0xFFEF4444)                // Vibrant Red
+    val Error = Color(0xFFEF4444) // Vibrant Red
     val OnError = Color(0xFFFFFFFF)
     val ErrorContainer = Color(0xFFFEE2E2)
     val OnErrorContainer = Color(0xFF7F1D1D)
@@ -74,7 +74,7 @@ object TailBaitLightColors {
 
 object TailBaitDarkColors {
     // === PRIMARY ===
-    val Primary = Color(0xFF3B82F6)              // Lighter blue for dark mode
+    val Primary = Color(0xFF3B82F6) // Lighter blue for dark mode
     val OnPrimary = Color(0xFF1E3A8A)
     val PrimaryContainer = Color(0xFF1E40AF)
     val OnPrimaryContainer = Color(0xFFDBEAFE)
@@ -92,19 +92,19 @@ object TailBaitDarkColors {
     val OnTertiaryContainer = Color(0xFFD1FAE5)
 
     // === SURFACE HIERARCHY ===
-    val Background = Color(0xFF0F172A)           // Deep Slate 900
+    val Background = Color(0xFF0F172A) // Deep Slate 900
     val OnBackground = Color(0xFFF8FAFC)
-    val Surface = Color(0xFF1E293B)              // Slate 800 - distinct card color
+    val Surface = Color(0xFF1E293B) // Slate 800 - distinct card color
     val OnSurface = Color(0xFFF8FAFC)
-    val SurfaceVariant = Color(0xFF334155)       // Slate 700
-    val OnSurfaceVariant = Color(0xFF94A3B8)     // Slate 400
+    val SurfaceVariant = Color(0xFF334155) // Slate 700
+    val OnSurfaceVariant = Color(0xFF94A3B8) // Slate 400
     val SurfaceTint = Color(0xFF3B82F6)
 
     // === SURFACE CONTAINERS ===
     val SurfaceContainerLowest = Color(0xFF020617) // Slate 950
-    val SurfaceContainerLow = Color(0xFF0F172A)    // Slate 900
-    val SurfaceContainer = Color(0xFF1E293B)       // Slate 800
-    val SurfaceContainerHigh = Color(0xFF334155)   // Slate 700
+    val SurfaceContainerLow = Color(0xFF0F172A) // Slate 900
+    val SurfaceContainer = Color(0xFF1E293B) // Slate 800
+    val SurfaceContainerHigh = Color(0xFF334155) // Slate 700
     val SurfaceContainerHighest = Color(0xFF475569) // Slate 600
 
     // === OUTLINE ===
@@ -182,13 +182,13 @@ object AlertColors {
 
 object StateColors {
     // === LIGHT THEME ===
-    val Scanning = Color(0xFF007AFF)             // Active scanning
+    val Scanning = Color(0xFF007AFF) // Active scanning
     val ScanningBackground = Color(0xFFD6E4FF)
-    val Whitelisted = Color(0xFF34C759)          // Known/trusted device
+    val Whitelisted = Color(0xFF34C759) // Known/trusted device
     val WhitelistedBackground = Color(0xFFD4F5DC)
-    val Unknown = Color(0xFF8E8E93)              // Unknown device
+    val Unknown = Color(0xFF8E8E93) // Unknown device
     val UnknownBackground = Color(0xFFF2F2F7)
-    val Inactive = Color(0xFFC7C7CC)             // Disabled/inactive
+    val Inactive = Color(0xFFC7C7CC) // Disabled/inactive
 
     // === DARK THEME ===
     val ScanningDark = Color(0xFF0A84FF)

@@ -6,8 +6,6 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-
-
 /**
  * Entity representing a many-to-many relationship between devices and locations.
  *
@@ -40,51 +38,41 @@ import androidx.room.PrimaryKey
             entity = ScannedDevice::class,
             parentColumns = ["id"],
             childColumns = ["device_id"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
             entity = Location::class,
             parentColumns = ["id"],
             childColumns = ["location_id"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
     indices = [
         Index(value = ["device_id"]),
         Index(value = ["location_id"]),
         Index(value = ["timestamp"]),
-        Index(value = ["device_id", "location_id"], unique = false)
-    ]
+        Index(value = ["device_id", "location_id"], unique = false),
+    ],
 )
-
 data class DeviceLocationRecord(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-
     @ColumnInfo(name = "device_id")
     val deviceId: Long,
-
     @ColumnInfo(name = "location_id")
     val locationId: Long,
-
     @ColumnInfo(name = "rssi")
     val rssi: Int,
-
     @ColumnInfo(name = "timestamp")
     val timestamp: Long,
-
     @ColumnInfo(name = "scan_duration_ms")
     val scanDurationMs: Long = 0,
-
     @ColumnInfo(name = "location_changed")
     val locationChanged: Boolean = false,
-
     @ColumnInfo(name = "distance_from_last")
     val distanceFromLast: Double? = null,
-
     @ColumnInfo(name = "scan_trigger_type")
     val scanTriggerType: String,
-
     @ColumnInfo(name = "created_at")
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
 )

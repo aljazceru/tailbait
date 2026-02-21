@@ -52,73 +52,74 @@ import timber.log.Timber
  * @property database The BLE Tracker database instance
  */
 @HiltWorker
-class DataCleanupWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val database: TailBaitDatabase
-) : CoroutineWorker(context, workerParams) {
+class DataCleanupWorker
+    @AssistedInject
+    constructor(
+        @Assisted context: Context,
+        @Assisted workerParams: WorkerParameters,
+        private val database: TailBaitDatabase,
+    ) : CoroutineWorker(context, workerParams) {
+        companion object {
+            private const val TAG = "DataCleanupWorker"
 
-    companion object {
-        private const val TAG = "DataCleanupWorker"
+            // Output data keys
+            const val KEY_RECORDS_DELETED = "records_deleted"
+            const val KEY_EXECUTION_TIME_MS = "execution_time_ms"
+            const val KEY_CLEANUP_SUCCESS = "cleanup_success"
+        }
 
-        // Output data keys
-        const val KEY_RECORDS_DELETED = "records_deleted"
-        const val KEY_EXECUTION_TIME_MS = "execution_time_ms"
-        const val KEY_CLEANUP_SUCCESS = "cleanup_success"
-    }
+        /**
+         * Execute the data cleanup worker.
+         *
+         * This method:
+         * 1. Retrieves the current data retention settings
+         * 2. Deletes old records based on retention policy
+         * 3. Performs database optimization
+         * 4. Returns success/failure result with statistics
+         *
+         * @return Result indicating success or failure
+         */
+        override suspend fun doWork(): Result {
+            Timber.d("[$TAG] Starting data cleanup worker (run attempt: $runAttemptCount)")
+            val startTime = System.currentTimeMillis()
 
-    /**
-     * Execute the data cleanup worker.
-     *
-     * This method:
-     * 1. Retrieves the current data retention settings
-     * 2. Deletes old records based on retention policy
-     * 3. Performs database optimization
-     * 4. Returns success/failure result with statistics
-     *
-     * @return Result indicating success or failure
-     */
-    override suspend fun doWork(): Result {
-        Timber.d("[$TAG] Starting data cleanup worker (run attempt: $runAttemptCount)")
-        val startTime = System.currentTimeMillis()
+            try {
+                // Get current settings to determine retention policy
+                val settings = database.appSettingsDao().getSettings()
+                if (settings == null) {
+                    Timber.w("[$TAG] No settings found, skipping cleanup")
+                    return Result.success()
+                }
 
-        try {
-            // Get current settings to determine retention policy
-            val settings = database.appSettingsDao().getSettings()
-            if (settings == null) {
-                Timber.w("[$TAG] No settings found, skipping cleanup")
-                return Result.success()
-            }
+                val retentionDays = settings.dataRetentionDays
+                Timber.i("[$TAG] Running cleanup with $retentionDays-day retention policy")
 
-            val retentionDays = settings.dataRetentionDays
-            Timber.i("[$TAG] Running cleanup with ${retentionDays}-day retention policy")
+                // Perform database maintenance (includes deletion of old records)
+                database.performMaintenance()
 
-            // Perform database maintenance (includes deletion of old records)
-            database.performMaintenance()
+                // Calculate execution time
+                val executionTime = System.currentTimeMillis() - startTime
 
-            // Calculate execution time
-            val executionTime = System.currentTimeMillis() - startTime
+                // Build output data
+                val outputData =
+                    androidx.work.Data.Builder()
+                        .putBoolean(KEY_CLEANUP_SUCCESS, true)
+                        .putLong(KEY_EXECUTION_TIME_MS, executionTime)
+                        .build()
 
-            // Build output data
-            val outputData = androidx.work.Data.Builder()
-                .putBoolean(KEY_CLEANUP_SUCCESS, true)
-                .putLong(KEY_EXECUTION_TIME_MS, executionTime)
-                .build()
+                Timber.i("[$TAG] Data cleanup completed successfully in ${executionTime}ms")
+                return Result.success(outputData)
+            } catch (e: Exception) {
+                Timber.e(e, "[$TAG] Error during data cleanup worker execution")
 
-            Timber.i("[$TAG] Data cleanup completed successfully in ${executionTime}ms")
-            return Result.success(outputData)
-
-        } catch (e: Exception) {
-            Timber.e(e, "[$TAG] Error during data cleanup worker execution")
-
-            // Determine if we should retry
-            return if (runAttemptCount < 3) {
-                Timber.w("[$TAG] Will retry (attempt ${runAttemptCount + 1}/3)")
-                Result.retry()
-            } else {
-                Timber.e("[$TAG] Max retries exceeded, failing permanently")
-                Result.failure()
+                // Determine if we should retry
+                return if (runAttemptCount < 3) {
+                    Timber.w("[$TAG] Will retry (attempt ${runAttemptCount + 1}/3)")
+                    Result.retry()
+                } else {
+                    Timber.e("[$TAG] Max retries exceeded, failing permanently")
+                    Result.failure()
+                }
             }
         }
     }
-}

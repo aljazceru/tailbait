@@ -27,7 +27,6 @@ import java.util.UUID
  * - Samsung SmartTag analysis: https://arxiv.org/pdf/2210.14702
  */
 object TrackerServiceDetector {
-
     // ============================================================================
     // TRACKER SERVICE UUIDS (16-bit UUIDs in 128-bit format)
     // ============================================================================
@@ -125,7 +124,7 @@ object TrackerServiceDetector {
         val trackerType: TrackerType,
         val confidence: Float,
         val detectedServiceUuid: UUID?,
-        val manufacturerName: String?
+        val manufacturerName: String?,
     )
 
     /**
@@ -143,7 +142,7 @@ object TrackerServiceDetector {
         EUFY,
         JIO_TAG,
         UNKNOWN_TRACKER,
-        NOT_A_TRACKER
+        NOT_A_TRACKER,
     }
 
     // ============================================================================
@@ -153,18 +152,19 @@ object TrackerServiceDetector {
     /**
      * Map of tracker service UUIDs to their types and manufacturers.
      */
-    private val trackerServiceMap = mapOf(
-        SAMSUNG_SMARTTAG_SERVICE to Pair(TrackerType.SAMSUNG_SMARTTAG, "Samsung"),
-        APPLE_FIND_MY_SERVICE to Pair(TrackerType.APPLE_FIND_MY_ACCESSORY, "Apple"),
-        TILE_SERVICE to Pair(TrackerType.TILE, "Tile"),
-        TILE_SERVICE_ALT to Pair(TrackerType.TILE, "Tile"),
-        CHIPOLO_SERVICE to Pair(TrackerType.CHIPOLO, "Chipolo"),
-        PEBBLEBEE_SERVICE to Pair(TrackerType.PEBBLEBEE, "Pebblebee"),
-        CUBE_SERVICE to Pair(TrackerType.CUBE, "Cube"),
-        EUFY_SERVICE to Pair(TrackerType.EUFY, "eufy"),
-        JIO_TAG_SERVICE to Pair(TrackerType.JIO_TAG, "Jio"),
-        GOOGLE_FIND_MY_SERVICE to Pair(TrackerType.GOOGLE_FIND_MY_DEVICE, "Google")
-    )
+    private val trackerServiceMap =
+        mapOf(
+            SAMSUNG_SMARTTAG_SERVICE to Pair(TrackerType.SAMSUNG_SMARTTAG, "Samsung"),
+            APPLE_FIND_MY_SERVICE to Pair(TrackerType.APPLE_FIND_MY_ACCESSORY, "Apple"),
+            TILE_SERVICE to Pair(TrackerType.TILE, "Tile"),
+            TILE_SERVICE_ALT to Pair(TrackerType.TILE, "Tile"),
+            CHIPOLO_SERVICE to Pair(TrackerType.CHIPOLO, "Chipolo"),
+            PEBBLEBEE_SERVICE to Pair(TrackerType.PEBBLEBEE, "Pebblebee"),
+            CUBE_SERVICE to Pair(TrackerType.CUBE, "Cube"),
+            EUFY_SERVICE to Pair(TrackerType.EUFY, "eufy"),
+            JIO_TAG_SERVICE to Pair(TrackerType.JIO_TAG, "Jio"),
+            GOOGLE_FIND_MY_SERVICE to Pair(TrackerType.GOOGLE_FIND_MY_DEVICE, "Google"),
+        )
 
     /**
      * Set of all known tracker service UUIDs for quick lookup.
@@ -184,7 +184,7 @@ object TrackerServiceDetector {
                 trackerType = TrackerType.NOT_A_TRACKER,
                 confidence = 0.0f,
                 detectedServiceUuid = null,
-                manufacturerName = null
+                manufacturerName = null,
             )
         }
 
@@ -201,9 +201,10 @@ object TrackerServiceDetector {
                 return TrackerDetectionResult(
                     isTracker = true,
                     trackerType = trackerType,
-                    confidence = 0.95f,  // High confidence - service UUIDs are very reliable
+                    // High confidence - service UUIDs are very reliable
+                    confidence = 0.95f,
                     detectedServiceUuid = uuid,
-                    manufacturerName = manufacturerName
+                    manufacturerName = manufacturerName,
                 )
             }
         }
@@ -213,7 +214,7 @@ object TrackerServiceDetector {
             trackerType = TrackerType.NOT_A_TRACKER,
             confidence = 0.0f,
             detectedServiceUuid = null,
-            manufacturerName = null
+            manufacturerName = null,
         )
     }
 
@@ -327,7 +328,7 @@ object TrackerServiceDetector {
     fun detectTrackerComprehensive(
         serviceUuids: List<ParcelUuid>?,
         manufacturerId: Int?,
-        manufacturerData: ByteArray?
+        manufacturerData: ByteArray?,
     ): TrackerDetectionResult {
         // Priority 1: Service UUID detection (most reliable)
         val serviceResult = detectTracker(serviceUuids)
@@ -337,63 +338,69 @@ object TrackerServiceDetector {
 
         // Priority 2: Manufacturer data detection
         if (manufacturerId != null && manufacturerData != null) {
-            val manufacturerInfo = ManufacturerDataParser.parseManufacturerData(
-                manufacturerId,
-                manufacturerData
-            )
+            val manufacturerInfo =
+                ManufacturerDataParser.parseManufacturerData(
+                    manufacturerId,
+                    manufacturerData,
+                )
 
             if (manufacturerInfo?.isTracker == true) {
                 // Determine tracker type from manufacturer
-                val trackerType = when (manufacturerId) {
-                    ManufacturerDataParser.ManufacturerId.APPLE -> {
-                        if (manufacturerInfo.appleContinuityType == ManufacturerDataParser.AppleContinuityType.FIND_MY) {
-                            TrackerType.APPLE_AIRTAG
-                        } else {
-                            TrackerType.APPLE_FIND_MY_ACCESSORY
+                val trackerType =
+                    when (manufacturerId) {
+                        ManufacturerDataParser.ManufacturerId.APPLE -> {
+                            if (manufacturerInfo.appleContinuityType == ManufacturerDataParser.AppleContinuityType.FIND_MY) {
+                                TrackerType.APPLE_AIRTAG
+                            } else {
+                                TrackerType.APPLE_FIND_MY_ACCESSORY
+                            }
                         }
+                        ManufacturerDataParser.ManufacturerId.SAMSUNG -> TrackerType.SAMSUNG_SMARTTAG
+                        ManufacturerDataParser.ManufacturerId.TILE -> TrackerType.TILE
+                        ManufacturerDataParser.ManufacturerId.CHIPOLO -> TrackerType.CHIPOLO
+                        ManufacturerDataParser.ManufacturerId.PEBBLEBEE -> TrackerType.PEBBLEBEE
+                        ManufacturerDataParser.ManufacturerId.CUBE -> TrackerType.CUBE
+                        else -> TrackerType.UNKNOWN_TRACKER
                     }
-                    ManufacturerDataParser.ManufacturerId.SAMSUNG -> TrackerType.SAMSUNG_SMARTTAG
-                    ManufacturerDataParser.ManufacturerId.TILE -> TrackerType.TILE
-                    ManufacturerDataParser.ManufacturerId.CHIPOLO -> TrackerType.CHIPOLO
-                    ManufacturerDataParser.ManufacturerId.PEBBLEBEE -> TrackerType.PEBBLEBEE
-                    ManufacturerDataParser.ManufacturerId.CUBE -> TrackerType.CUBE
-                    else -> TrackerType.UNKNOWN_TRACKER
-                }
 
                 return TrackerDetectionResult(
                     isTracker = true,
                     trackerType = trackerType,
                     confidence = manufacturerInfo.identificationConfidence,
                     detectedServiceUuid = null,
-                    manufacturerName = manufacturerInfo.manufacturerName
+                    manufacturerName = manufacturerInfo.manufacturerName,
                 )
             }
         }
 
         // Priority 3: Check for tracker manufacturer IDs even without tracker-specific data
         if (manufacturerId != null) {
-            val isTrackerManufacturer = manufacturerId in listOf(
-                ManufacturerDataParser.ManufacturerId.TILE,
-                ManufacturerDataParser.ManufacturerId.CHIPOLO,
-                ManufacturerDataParser.ManufacturerId.PEBBLEBEE,
-                ManufacturerDataParser.ManufacturerId.CUBE
-            )
+            val isTrackerManufacturer =
+                manufacturerId in
+                    listOf(
+                        ManufacturerDataParser.ManufacturerId.TILE,
+                        ManufacturerDataParser.ManufacturerId.CHIPOLO,
+                        ManufacturerDataParser.ManufacturerId.PEBBLEBEE,
+                        ManufacturerDataParser.ManufacturerId.CUBE,
+                    )
 
             if (isTrackerManufacturer) {
-                val trackerType = when (manufacturerId) {
-                    ManufacturerDataParser.ManufacturerId.TILE -> TrackerType.TILE
-                    ManufacturerDataParser.ManufacturerId.CHIPOLO -> TrackerType.CHIPOLO
-                    ManufacturerDataParser.ManufacturerId.PEBBLEBEE -> TrackerType.PEBBLEBEE
-                    ManufacturerDataParser.ManufacturerId.CUBE -> TrackerType.CUBE
-                    else -> TrackerType.UNKNOWN_TRACKER
-                }
+                val trackerType =
+                    when (manufacturerId) {
+                        ManufacturerDataParser.ManufacturerId.TILE -> TrackerType.TILE
+                        ManufacturerDataParser.ManufacturerId.CHIPOLO -> TrackerType.CHIPOLO
+                        ManufacturerDataParser.ManufacturerId.PEBBLEBEE -> TrackerType.PEBBLEBEE
+                        ManufacturerDataParser.ManufacturerId.CUBE -> TrackerType.CUBE
+                        else -> TrackerType.UNKNOWN_TRACKER
+                    }
 
                 return TrackerDetectionResult(
                     isTracker = true,
                     trackerType = trackerType,
-                    confidence = 0.85f,  // Lower confidence without service UUID
+                    // Lower confidence without service UUID
+                    confidence = 0.85f,
                     detectedServiceUuid = null,
-                    manufacturerName = ManufacturerDataParser.getManufacturerName(manufacturerId)
+                    manufacturerName = ManufacturerDataParser.getManufacturerName(manufacturerId),
                 )
             }
         }
@@ -403,7 +410,7 @@ object TrackerServiceDetector {
             trackerType = TrackerType.NOT_A_TRACKER,
             confidence = 0.0f,
             detectedServiceUuid = null,
-            manufacturerName = null
+            manufacturerName = null,
         )
     }
 }

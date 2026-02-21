@@ -28,7 +28,7 @@ import com.tailbait.util.Constants
 fun DeviceLabelDialog(
     device: LearnModeViewModel.DeviceSelectionItem,
     onConfirm: (String, String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var label by remember { mutableStateOf(device.label) }
     var selectedCategory by remember { mutableStateOf(device.category) }
@@ -38,25 +38,25 @@ fun DeviceLabelDialog(
         icon = {
             Icon(
                 imageVector = Icons.Default.Edit,
-                contentDescription = null
+                contentDescription = null,
             )
         },
         title = {
             Text(
                 text = "Label Device",
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineSmall,
             )
         },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 // Device address
                 Text(
                     text = device.device.address,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 // Label input
@@ -70,20 +70,20 @@ fun DeviceLabelDialog(
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Label,
-                            contentDescription = null
+                            contentDescription = null,
                         )
-                    }
+                    },
                 )
 
                 // Category selection
                 Text(
                     text = "Category",
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
 
                 Column(
-                    modifier = Modifier.selectableGroup()
+                    modifier = Modifier.selectableGroup(),
                 ) {
                     CategoryOption(
                         label = "Own Device",
@@ -91,7 +91,7 @@ fun DeviceLabelDialog(
                         icon = Icons.Default.Person,
                         category = Constants.WHITELIST_CATEGORY_OWN,
                         selectedCategory = selectedCategory,
-                        onSelect = { selectedCategory = it }
+                        onSelect = { selectedCategory = it },
                     )
                     CategoryOption(
                         label = "Partner Device",
@@ -99,7 +99,7 @@ fun DeviceLabelDialog(
                         icon = Icons.Default.Favorite,
                         category = Constants.WHITELIST_CATEGORY_PARTNER,
                         selectedCategory = selectedCategory,
-                        onSelect = { selectedCategory = it }
+                        onSelect = { selectedCategory = it },
                     )
                     CategoryOption(
                         label = "Trusted Device",
@@ -107,7 +107,7 @@ fun DeviceLabelDialog(
                         icon = Icons.Default.Security,
                         category = Constants.WHITELIST_CATEGORY_TRUSTED,
                         selectedCategory = selectedCategory,
-                        onSelect = { selectedCategory = it }
+                        onSelect = { selectedCategory = it },
                     )
                 }
             }
@@ -119,7 +119,7 @@ fun DeviceLabelDialog(
                         onConfirm(label.trim(), selectedCategory)
                     }
                 },
-                enabled = label.isNotBlank()
+                enabled = label.isNotBlank(),
             ) {
                 Text("Save")
             }
@@ -128,7 +128,7 @@ fun DeviceLabelDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
-        }
+        },
     )
 }
 
@@ -142,45 +142,47 @@ private fun CategoryOption(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     category: String,
     selectedCategory: String,
-    onSelect: (String) -> Unit
+    onSelect: (String) -> Unit,
 ) {
     Surface(
         onClick = { onSelect(category) },
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
-        color = if (selectedCategory == category) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surface
-        }
+        color =
+            if (selectedCategory == category) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             RadioButton(
                 selected = selectedCategory == category,
-                onClick = { onSelect(category) }
+                onClick = { onSelect(category) },
             )
             Spacer(modifier = Modifier.width(12.dp))
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -200,7 +202,7 @@ private fun CategoryOption(
 fun AddToWhitelistConfirmationDialog(
     devicesToAdd: List<LearnModeViewModel.DeviceSelectionItem>,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -208,34 +210,35 @@ fun AddToWhitelistConfirmationDialog(
             Icon(
                 imageVector = Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
             )
         },
         title = {
             Text(
                 text = "Add to Whitelist?",
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineSmall,
             )
         },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
                     text = "You're about to add ${devicesToAdd.size} device(s) to your whitelist:",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        ),
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         devicesToAdd.forEach { device ->
                             DeviceSummaryRow(device)
@@ -246,18 +249,18 @@ fun AddToWhitelistConfirmationDialog(
                 Text(
                     text = "These devices will be excluded from stalking detection.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
             Button(
-                onClick = onConfirm
+                onClick = onConfirm,
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Add to Whitelist")
@@ -267,7 +270,7 @@ fun AddToWhitelistConfirmationDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
-        }
+        },
     )
 }
 
@@ -278,43 +281,44 @@ fun AddToWhitelistConfirmationDialog(
 private fun DeviceSummaryRow(device: LearnModeViewModel.DeviceSelectionItem) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = when (device.category) {
-                Constants.WHITELIST_CATEGORY_OWN -> Icons.Default.Person
-                Constants.WHITELIST_CATEGORY_PARTNER -> Icons.Default.Favorite
-                Constants.WHITELIST_CATEGORY_TRUSTED -> Icons.Default.Security
-                else -> Icons.Default.BluetoothConnected
-            },
+            imageVector =
+                when (device.category) {
+                    Constants.WHITELIST_CATEGORY_OWN -> Icons.Default.Person
+                    Constants.WHITELIST_CATEGORY_PARTNER -> Icons.Default.Favorite
+                    Constants.WHITELIST_CATEGORY_TRUSTED -> Icons.Default.Security
+                    else -> Icons.Default.BluetoothConnected
+                },
             contentDescription = null,
             modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary
+            tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.width(8.dp))
         Column(
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         ) {
             Text(
                 text = device.label,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
             Text(
                 text = device.device.address,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Surface(
             shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.secondaryContainer
+            color = MaterialTheme.colorScheme.secondaryContainer,
         ) {
             Text(
                 text = device.category,
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
     }
@@ -325,19 +329,21 @@ private fun DeviceSummaryRow(device: LearnModeViewModel.DeviceSelectionItem) {
 private fun DeviceLabelDialogPreview() {
     MaterialTheme {
         DeviceLabelDialog(
-            device = LearnModeViewModel.DeviceSelectionItem(
-                device = ScannedDevice(
-                    id = 1,
-                    address = "AA:BB:CC:DD:EE:FF",
-                    name = "Device",
-                    firstSeen = System.currentTimeMillis(),
-                    lastSeen = System.currentTimeMillis()
+            device =
+                LearnModeViewModel.DeviceSelectionItem(
+                    device =
+                        ScannedDevice(
+                            id = 1,
+                            address = "AA:BB:CC:DD:EE:FF",
+                            name = "Device",
+                            firstSeen = System.currentTimeMillis(),
+                            lastSeen = System.currentTimeMillis(),
+                        ),
+                    label = "My Phone",
+                    category = Constants.WHITELIST_CATEGORY_OWN,
                 ),
-                label = "My Phone",
-                category = Constants.WHITELIST_CATEGORY_OWN
-            ),
             onConfirm = { _, _ -> },
-            onDismiss = {}
+            onDismiss = {},
         )
     }
 }
@@ -347,32 +353,35 @@ private fun DeviceLabelDialogPreview() {
 private fun AddToWhitelistConfirmationDialogPreview() {
     MaterialTheme {
         AddToWhitelistConfirmationDialog(
-            devicesToAdd = listOf(
-                LearnModeViewModel.DeviceSelectionItem(
-                    device = ScannedDevice(
-                        id = 1,
-                        address = "AA:BB:CC:DD:EE:FF",
-                        name = "Phone",
-                        firstSeen = System.currentTimeMillis(),
-                        lastSeen = System.currentTimeMillis()
+            devicesToAdd =
+                listOf(
+                    LearnModeViewModel.DeviceSelectionItem(
+                        device =
+                            ScannedDevice(
+                                id = 1,
+                                address = "AA:BB:CC:DD:EE:FF",
+                                name = "Phone",
+                                firstSeen = System.currentTimeMillis(),
+                                lastSeen = System.currentTimeMillis(),
+                            ),
+                        label = "My Phone",
+                        category = Constants.WHITELIST_CATEGORY_OWN,
                     ),
-                    label = "My Phone",
-                    category = Constants.WHITELIST_CATEGORY_OWN
+                    LearnModeViewModel.DeviceSelectionItem(
+                        device =
+                            ScannedDevice(
+                                id = 2,
+                                address = "11:22:33:44:55:66",
+                                name = "Watch",
+                                firstSeen = System.currentTimeMillis(),
+                                lastSeen = System.currentTimeMillis(),
+                            ),
+                        label = "My Watch",
+                        category = Constants.WHITELIST_CATEGORY_OWN,
+                    ),
                 ),
-                LearnModeViewModel.DeviceSelectionItem(
-                    device = ScannedDevice(
-                        id = 2,
-                        address = "11:22:33:44:55:66",
-                        name = "Watch",
-                        firstSeen = System.currentTimeMillis(),
-                        lastSeen = System.currentTimeMillis()
-                    ),
-                    label = "My Watch",
-                    category = Constants.WHITELIST_CATEGORY_OWN
-                )
-            ),
             onConfirm = {},
-            onDismiss = {}
+            onDismiss = {},
         )
     }
 }

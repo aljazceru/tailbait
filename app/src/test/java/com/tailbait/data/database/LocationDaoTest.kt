@@ -14,7 +14,6 @@ import org.junit.Test
  * Test implementation will be done in Phase 7 (Testing).
  */
 class LocationDaoTest {
-
     // TODO: Setup in-memory database
     // private lateinit var database: TailBaitDatabase
     // private lateinit var locationDao: LocationDao
@@ -25,22 +24,26 @@ class LocationDaoTest {
     }
 
     @Test
-    fun insertLocation_returnsValidId() = runTest {
-        // TODO: Test location insertion
-    }
+    fun insertLocation_returnsValidId() =
+        runTest {
+            // TODO: Test location insertion
+        }
 
     @Test
-    fun getLocationsByTimeRange_filtersCorrectly() = runTest {
-        // TODO: Test temporal filtering
-    }
+    fun getLocationsByTimeRange_filtersCorrectly() =
+        runTest {
+            // TODO: Test temporal filtering
+        }
 
     @Test
-    fun getLocationsInBounds_returnsSpatialMatches() = runTest {
-        // TODO: Test spatial bounding box query
-    }
+    fun getLocationsInBounds_returnsSpatialMatches() =
+        runTest {
+            // TODO: Test spatial bounding box query
+        }
 
     @Test
-    fun getHighAccuracyLocations_filtersLowAccuracy() = runTest {
-        // TODO: Test accuracy filtering
-    }
+    fun getHighAccuracyLocations_filtersLowAccuracy() =
+        runTest {
+            // TODO: Test accuracy filtering
+        }
 }

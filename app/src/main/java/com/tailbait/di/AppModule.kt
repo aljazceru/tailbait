@@ -44,7 +44,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-
     /**
      * Provides the application context.
      *
@@ -58,7 +57,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideApplicationContext(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
     ): Context = context
 
     /**
@@ -96,7 +95,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideNotificationManager(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
     ): NotificationManager {
         return context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }

@@ -5,8 +5,6 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-
-
 /**
  * Entity representing a unique BLE device that has been discovered during scanning.
  *
@@ -57,90 +55,66 @@ import androidx.room.PrimaryKey
         Index(value = ["device_type"]),
         Index(value = ["is_tracker"]),
         Index(value = ["manufacturer_id"]),
-        Index(value = ["payload_fingerprint"]),  // For fingerprint-based device correlation
-        Index(value = ["linked_device_id"]),     // For finding linked devices
-        Index(value = ["highest_rssi"]),         // For signal strength queries
-        Index(value = ["threat_level"]),         // For threat-based filtering
-        Index(value = ["shadow_key"])            // For shadow-based detection queries
-    ]
+        Index(value = ["payload_fingerprint"]), // For fingerprint-based device correlation
+        Index(value = ["linked_device_id"]), // For finding linked devices
+        Index(value = ["highest_rssi"]), // For signal strength queries
+        Index(value = ["threat_level"]), // For threat-based filtering
+        Index(value = ["shadow_key"]), // For shadow-based detection queries
+    ],
 )
-
 data class ScannedDevice(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-
     // Core identification
     @ColumnInfo(name = "address")
     val address: String,
-
     @ColumnInfo(name = "name")
     val name: String?,
-
     @ColumnInfo(name = "advertised_name")
     val advertisedName: String? = null,
-
     // Timing
     @ColumnInfo(name = "first_seen")
     val firstSeen: Long,
-
     @ColumnInfo(name = "last_seen")
     val lastSeen: Long,
-
     @ColumnInfo(name = "detection_count")
     val detectionCount: Int = 1,
-
     @ColumnInfo(name = "created_at")
     val createdAt: Long = System.currentTimeMillis(),
-
     // Manufacturer identification
     @ColumnInfo(name = "manufacturer_data")
     val manufacturerData: String? = null,
-
     @ColumnInfo(name = "manufacturer_id")
     val manufacturerId: Int? = null,
-
     @ColumnInfo(name = "manufacturer_name")
     val manufacturerName: String? = null,
-
     // Device classification
     @ColumnInfo(name = "device_type")
     val deviceType: String? = null,
-
     @ColumnInfo(name = "device_model")
     val deviceModel: String? = null,
-
     @ColumnInfo(name = "is_tracker", defaultValue = "0")
     val isTracker: Boolean = false,
-
     // BLE advertisement data
     @ColumnInfo(name = "service_uuids")
     val serviceUuids: String? = null,
-
     @ColumnInfo(name = "appearance")
     val appearance: Int? = null,
-
     @ColumnInfo(name = "tx_power_level")
     val txPowerLevel: Int? = null,
-
     @ColumnInfo(name = "advertising_flags")
     val advertisingFlags: Int? = null,
-
     // Apple-specific
     @ColumnInfo(name = "apple_continuity_type")
     val appleContinuityType: Int? = null,
-
     // Identification confidence
     @ColumnInfo(name = "identification_confidence", defaultValue = "0.0")
     val identificationConfidence: Float = 0.0f,
-
     @ColumnInfo(name = "identification_method")
     val identificationMethod: String? = null,
-
-    // ============================================================================
-    // FIND MY NETWORK FINGERPRINTING (AirTag MAC rotation handling)
-    // ============================================================================
-
     /**
+     * FIND MY NETWORK FINGERPRINTING (AirTag MAC rotation handling).
+     *
      * Payload fingerprint for Find My network devices.
      * This is extracted from the semi-stable portion of the Find My advertisement
      * payload and remains consistent across MAC address rotations (every ~15 min).
@@ -153,7 +127,6 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "payload_fingerprint")
     val payloadFingerprint: String? = null,
-
     /**
      * Raw Find My status byte from the advertisement payload.
      * Contains device state flags including the critical "separated from owner" bit.
@@ -164,7 +137,6 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "find_my_status")
     val findMyStatus: Int? = null,
-
     /**
      * Whether the Find My device is currently separated from its owner.
      * Extracted from bit 0x04 of the status byte.
@@ -178,7 +150,6 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "find_my_separated", defaultValue = "0")
     val findMySeparated: Boolean = false,
-
     /**
      * ID of a linked device with the same payload fingerprint but different MAC.
      * Used to correlate the same physical device across MAC address rotations.
@@ -188,7 +159,6 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "linked_device_id")
     val linkedDeviceId: Long? = null,
-
     /**
      * Strength/confidence of the link to the primary device.
      *
@@ -204,7 +174,6 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "link_strength")
     val linkStrength: String? = null,
-
     /**
      * Detailed reason for the link, useful for debugging and transparency.
      * Examples:
@@ -214,26 +183,21 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "link_reason")
     val linkReason: String? = null,
-
     /**
      * Timestamp when this device was last seen with a different MAC address.
      * Used to detect and track MAC address rotation patterns.
      */
     @ColumnInfo(name = "last_mac_rotation")
     val lastMacRotation: Long? = null,
-
-    // ============================================================================
-    // ENHANCED SIGNAL AND BEACON DETECTION (v7)
-    // ============================================================================
-
     /**
+     * ENHANCED SIGNAL AND BEACON DETECTION (v7).
+     *
      * Highest RSSI value ever recorded for this device.
      * Tracks the strongest signal seen, indicating closest proximity achieved.
      * Useful for determining if device has been very close to user.
      */
     @ColumnInfo(name = "highest_rssi")
     val highestRssi: Int? = null,
-
     /**
      * Most recent signal strength classification.
      * Stored as enum name: VERY_WEAK, WEAK, MEDIUM, STRONG, VERY_STRONG
@@ -241,7 +205,6 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "signal_strength")
     val signalStrength: String? = null,
-
     /**
      * Detected beacon type from advertisement analysis.
      * Stored as enum name: IBEACON, EDDYSTONE_UID, FIND_MY, AIRDROP, etc.
@@ -249,7 +212,6 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "beacon_type")
     val beaconType: String? = null,
-
     /**
      * Threat level assessment based on device characteristics.
      * Stored as enum name: NONE, LOW, MEDIUM, HIGH, CRITICAL
@@ -257,12 +219,9 @@ data class ScannedDevice(
      */
     @ColumnInfo(name = "threat_level")
     val threatLevel: String? = null,
-
-    // ============================================================================
-    // SHADOW DETECTION (MAC-agnostic device profiling)
-    // ============================================================================
-
     /**
+     * SHADOW DETECTION (MAC-agnostic device profiling).
+     *
      * Coarse device profile key for shadow-based detection.
      * Built from stable BLE properties that survive MAC rotation:
      * manufacturer ID, device type, continuity type, tracker flag, etc.
@@ -274,5 +233,5 @@ data class ScannedDevice(
      * @see com.tailbait.algorithm.ShadowKeyGenerator
      */
     @ColumnInfo(name = "shadow_key")
-    val shadowKey: String? = null
+    val shadowKey: String? = null,
 )

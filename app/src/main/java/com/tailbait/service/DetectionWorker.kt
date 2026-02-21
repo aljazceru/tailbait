@@ -5,7 +5,6 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.tailbait.algorithm.DetectionAlgorithm
-import com.tailbait.util.Constants
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import timber.log.Timber
@@ -50,96 +49,100 @@ import timber.log.Timber
  * to enqueue a OneTimeWorkRequest with the same worker class.
  */
 @HiltWorker
-class DetectionWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val detectionAlgorithm: DetectionAlgorithm,
-    private val alertGenerator: AlertGenerator
-) : CoroutineWorker(context, workerParams) {
+class DetectionWorker
+    @AssistedInject
+    constructor(
+        @Assisted context: Context,
+        @Assisted workerParams: WorkerParameters,
+        private val detectionAlgorithm: DetectionAlgorithm,
+        private val alertGenerator: AlertGenerator,
+    ) : CoroutineWorker(context, workerParams) {
+        companion object {
+            private const val TAG = "DetectionWorker"
 
-    companion object {
-        private const val TAG = "DetectionWorker"
+            // Input data keys
+            const val KEY_MIN_LOCATION_COUNT = "min_location_count"
+            const val KEY_MIN_THREAT_SCORE = "min_threat_score"
+            const val KEY_THROTTLE_WINDOW_MS = "throttle_window_ms"
 
-        // Input data keys
-        const val KEY_MIN_LOCATION_COUNT = "min_location_count"
-        const val KEY_MIN_THREAT_SCORE = "min_threat_score"
-        const val KEY_THROTTLE_WINDOW_MS = "throttle_window_ms"
+            // Output data keys
+            const val KEY_DETECTIONS_FOUND = "detections_found"
+            const val KEY_ALERTS_GENERATED = "alerts_generated"
+            const val KEY_EXECUTION_TIME_MS = "execution_time_ms"
+        }
 
-        // Output data keys
-        const val KEY_DETECTIONS_FOUND = "detections_found"
-        const val KEY_ALERTS_GENERATED = "alerts_generated"
-        const val KEY_EXECUTION_TIME_MS = "execution_time_ms"
-    }
+        /**
+         * Execute the detection worker.
+         *
+         * This method:
+         * 1. Retrieves configuration from input data
+         * 2. Runs the detection algorithm
+         * 3. Generates alerts for suspicious devices
+         * 4. Returns success/failure result
+         *
+         * @return Result indicating success or failure
+         */
+        override suspend fun doWork(): Result {
+            Timber.d("[$TAG] Starting detection worker (run attempt: $runAttemptCount)")
+            val startTime = System.currentTimeMillis()
 
-    /**
-     * Execute the detection worker.
-     *
-     * This method:
-     * 1. Retrieves configuration from input data
-     * 2. Runs the detection algorithm
-     * 3. Generates alerts for suspicious devices
-     * 4. Returns success/failure result
-     *
-     * @return Result indicating success or failure
-     */
-    override suspend fun doWork(): Result {
-        Timber.d("[$TAG] Starting detection worker (run attempt: $runAttemptCount)")
-        val startTime = System.currentTimeMillis()
+            try {
+                // Get configuration from input data or use defaults
+                val throttleWindowMs =
+                    inputData.getLong(
+                        KEY_THROTTLE_WINDOW_MS,
+                        // 1 hour default
+                        60 * 60 * 1000L,
+                    )
 
-        try {
-            // Get configuration from input data or use defaults
-            val throttleWindowMs = inputData.getLong(
-                KEY_THROTTLE_WINDOW_MS,
-                60 * 60 * 1000L // 1 hour default
-            )
+                // Run detection algorithm
+                Timber.d("[$TAG] Running detection algorithm...")
+                val detectionResults = detectionAlgorithm.runDetection()
 
-            // Run detection algorithm
-            Timber.d("[$TAG] Running detection algorithm...")
-            val detectionResults = detectionAlgorithm.runDetection()
+                Timber.d("[$TAG] Detection complete: found ${detectionResults.size} suspicious devices")
 
-            Timber.d("[$TAG] Detection complete: found ${detectionResults.size} suspicious devices")
+                // Generate alerts for detections
+                var alertCount = 0
+                if (detectionResults.isNotEmpty()) {
+                    Timber.d("[$TAG] Generating alerts for ${detectionResults.size} detections...")
+                    val alertIds =
+                        alertGenerator.generateAlerts(
+                            detectionResults = detectionResults,
+                            throttleWindowMs = throttleWindowMs,
+                        )
+                    alertCount = alertIds.size
+                    Timber.d(
+                        "[$TAG] Generated ${alertIds.size} alerts " +
+                            "(${detectionResults.size - alertIds.size} throttled)",
+                    )
+                } else {
+                    Timber.d("[$TAG] No suspicious devices detected")
+                }
 
-            // Generate alerts for detections
-            var alertCount = 0
-            if (detectionResults.isNotEmpty()) {
-                Timber.d("[$TAG] Generating alerts for ${detectionResults.size} detections...")
-                val alertIds = alertGenerator.generateAlerts(
-                    detectionResults = detectionResults,
-                    throttleWindowMs = throttleWindowMs
-                )
-                alertCount = alertIds.size
-                Timber.d(
-                    "[$TAG] Generated ${alertIds.size} alerts " +
-                        "(${detectionResults.size - alertIds.size} throttled)"
-                )
-            } else {
-                Timber.d("[$TAG] No suspicious devices detected")
-            }
+                // Calculate execution time
+                val executionTime = System.currentTimeMillis() - startTime
 
-            // Calculate execution time
-            val executionTime = System.currentTimeMillis() - startTime
+                // Build output data
+                val outputData =
+                    androidx.work.Data.Builder()
+                        .putInt(KEY_DETECTIONS_FOUND, detectionResults.size)
+                        .putInt(KEY_ALERTS_GENERATED, alertCount)
+                        .putLong(KEY_EXECUTION_TIME_MS, executionTime)
+                        .build()
 
-            // Build output data
-            val outputData = androidx.work.Data.Builder()
-                .putInt(KEY_DETECTIONS_FOUND, detectionResults.size)
-                .putInt(KEY_ALERTS_GENERATED, alertCount)
-                .putLong(KEY_EXECUTION_TIME_MS, executionTime)
-                .build()
+                Timber.d("[$TAG] Detection worker completed successfully in ${executionTime}ms")
+                return Result.success(outputData)
+            } catch (e: Exception) {
+                Timber.e(e, "[$TAG] Error during detection worker execution")
 
-            Timber.d("[$TAG] Detection worker completed successfully in ${executionTime}ms")
-            return Result.success(outputData)
-
-        } catch (e: Exception) {
-            Timber.e(e, "[$TAG] Error during detection worker execution")
-
-            // Determine if we should retry
-            return if (runAttemptCount < 3) {
-                Timber.w("[$TAG] Will retry (attempt ${runAttemptCount + 1}/3)")
-                Result.retry()
-            } else {
-                Timber.e("[$TAG] Max retries exceeded, failing permanently")
-                Result.failure()
+                // Determine if we should retry
+                return if (runAttemptCount < 3) {
+                    Timber.w("[$TAG] Will retry (attempt ${runAttemptCount + 1}/3)")
+                    Result.retry()
+                } else {
+                    Timber.e("[$TAG] Max retries exceeded, failing permanently")
+                    Result.failure()
+                }
             }
         }
     }
-}

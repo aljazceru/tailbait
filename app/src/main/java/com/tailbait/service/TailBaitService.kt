@@ -2,8 +2,8 @@ package com.tailbait.service
 
 import android.app.AlarmManager
 import android.app.Notification
-import android.content.Context
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Binder
@@ -52,7 +52,6 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class TailBaitService : NotificationService() {
-
     @Inject
     lateinit var bleScannerManager: BleScannerManager
 
@@ -77,7 +76,7 @@ class TailBaitService : NotificationService() {
 
     // Service binder for UI communication
     private val binder = LocalBinder()
-    
+
     // ... (rest of class)
 
     // ... (inside startTracking)
@@ -109,20 +108,22 @@ class TailBaitService : NotificationService() {
 
                 // Observe scan state and update notification accordingly
                 // WakeLock is now managed based on scan state for battery optimization
-                scanStateJob = bleScannerManager.scanState
-                    .onEach { state ->
-                        handleScanStateChange(state)
-                    }
-                    .launchIn(lifecycleScope)
+                scanStateJob =
+                    bleScannerManager.scanState
+                        .onEach { state ->
+                            handleScanStateChange(state)
+                        }
+                        .launchIn(lifecycleScope)
 
                 // Observe location state and save user path points
-                locationStateJob = locationTracker.locationState
-                    .onEach { state ->
-                        if (state is LocationTracker.LocationState.LocationUpdated) {
-                            handleLocationUpdate(state.location)
+                locationStateJob =
+                    locationTracker.locationState
+                        .onEach { state ->
+                            if (state is LocationTracker.LocationState.LocationUpdated) {
+                                handleLocationUpdate(state.location)
+                            }
                         }
-                    }
-                    .launchIn(lifecycleScope)
+                        .launchIn(lifecycleScope)
 
                 Timber.i("Tracking started successfully")
             } catch (e: Exception) {
@@ -132,8 +133,8 @@ class TailBaitService : NotificationService() {
                     createTrackingNotification(
                         title = "BLE Tracker Error",
                         message = "Failed to start tracking: ${e.message}",
-                        isScanning = false
-                    )
+                        isScanning = false,
+                    ),
                 )
             }
         }
@@ -150,14 +151,15 @@ class TailBaitService : NotificationService() {
             try {
                 // Convert Android location to entity
                 // FQN needed to disambiguate from android.location.Location
-                val location = com.tailbait.data.database.entities.Location(
-                    latitude = androidLocation.latitude,
-                    longitude = androidLocation.longitude,
-                    accuracy = androidLocation.accuracy,
-                    altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
-                    timestamp = androidLocation.time,
-                    provider = androidLocation.provider ?: "FUSED"
-                )
+                val location =
+                    com.tailbait.data.database.entities.Location(
+                        latitude = androidLocation.latitude,
+                        longitude = androidLocation.longitude,
+                        accuracy = androidLocation.accuracy,
+                        altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
+                        timestamp = androidLocation.time,
+                        provider = androidLocation.provider ?: "FUSED",
+                    )
 
                 // Save location (find existing nearby or create new)
                 // Use a slightly larger radius (50m) to group nearby points
@@ -166,7 +168,7 @@ class TailBaitService : NotificationService() {
                 // Record user path point to track movement history
                 locationRepository.insertUserPath(locationId, location)
 
-                Timber.d("Recorded user path point: ${locationId} (acc=${location.accuracy}m)")
+                Timber.d("Recorded user path point: $locationId (acc=${location.accuracy}m)")
             } catch (e: Exception) {
                 Timber.e(e, "Failed to record user path point")
             }
@@ -207,7 +209,6 @@ class TailBaitService : NotificationService() {
 
                 // Schedule the next scan
                 scheduleNextScan()
-
             } catch (e: Exception) {
                 Timber.e(e, "Error during triggered scan")
                 // Even on error, try to reschedule to keep the loop alive
@@ -228,22 +229,25 @@ class TailBaitService : NotificationService() {
                 if (!settings.isTrackingEnabled) return@launch
 
                 val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                val intent = Intent(this@TailBaitService, TailBaitService::class.java).apply {
-                    action = ACTION_TRIGGER_SCAN
-                }
+                val intent =
+                    Intent(this@TailBaitService, TailBaitService::class.java).apply {
+                        action = ACTION_TRIGGER_SCAN
+                    }
 
-                val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                } else {
-                    PendingIntent.FLAG_UPDATE_CURRENT
-                }
+                val flags =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    } else {
+                        PendingIntent.FLAG_UPDATE_CURRENT
+                    }
 
-                val pendingIntent = PendingIntent.getService(
-                    this@TailBaitService,
-                    REQUEST_CODE_TRIGGER_SCAN,
-                    intent,
-                    flags
-                )
+                val pendingIntent =
+                    PendingIntent.getService(
+                        this@TailBaitService,
+                        REQUEST_CODE_TRIGGER_SCAN,
+                        intent,
+                        flags,
+                    )
 
                 // Use scanIntervalSeconds (default 300s = 5 min)
                 val intervalMs = settings.scanIntervalSeconds * 1000L
@@ -254,27 +258,27 @@ class TailBaitService : NotificationService() {
                         alarmManager.setExactAndAllowWhileIdle(
                             AlarmManager.ELAPSED_REALTIME_WAKEUP,
                             triggerAtMillis,
-                            pendingIntent
+                            pendingIntent,
                         )
                     } else {
                         Timber.w("SCHEDULE_EXACT_ALARM permission not granted, falling back to inexact alarm")
                         alarmManager.setAndAllowWhileIdle(
                             AlarmManager.ELAPSED_REALTIME_WAKEUP,
                             triggerAtMillis,
-                            pendingIntent
+                            pendingIntent,
                         )
                     }
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.ELAPSED_REALTIME_WAKEUP,
                         triggerAtMillis,
-                        pendingIntent
+                        pendingIntent,
                     )
                 } else {
                     alarmManager.setExact(
                         AlarmManager.ELAPSED_REALTIME_WAKEUP,
                         triggerAtMillis,
-                        pendingIntent
+                        pendingIntent,
                     )
                 }
 
@@ -321,20 +325,23 @@ class TailBaitService : NotificationService() {
     private fun cancelScheduledScan() {
         try {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(this, TailBaitService::class.java).apply {
-                action = ACTION_TRIGGER_SCAN
-            }
-            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
-            val pendingIntent = PendingIntent.getService(
-                this,
-                REQUEST_CODE_TRIGGER_SCAN,
-                intent,
-                flags
-            )
+            val intent =
+                Intent(this, TailBaitService::class.java).apply {
+                    action = ACTION_TRIGGER_SCAN
+                }
+            val flags =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
+            val pendingIntent =
+                PendingIntent.getService(
+                    this,
+                    REQUEST_CODE_TRIGGER_SCAN,
+                    intent,
+                    flags,
+                )
             alarmManager.cancel(pendingIntent)
             pendingIntent.cancel()
             Timber.d("Cancelled scheduled scans")
@@ -363,8 +370,8 @@ class TailBaitService : NotificationService() {
                         title = "BLE Tracker Paused",
                         message = "Tracking paused",
                         isScanning = false,
-                        showResumeAction = true
-                    )
+                        showResumeAction = true,
+                    ),
                 )
 
                 Timber.i("Tracking paused")
@@ -377,7 +384,7 @@ class TailBaitService : NotificationService() {
     // Track if service is currently tracking
     private var isTracking = false
     private lateinit var wakeLock: PowerManager.WakeLock
-    private val WAKE_LOCK_TAG = "TailBait:WakeLock"
+    private val wakeLockTag = "TailBait:WakeLock"
 
     /**
      * Local binder for service binding.
@@ -407,12 +414,13 @@ class TailBaitService : NotificationService() {
 
         // Initialize WakeLock once and keep it for the service lifetime
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            WAKE_LOCK_TAG
-        ).apply {
-            setReferenceCounted(true)
-        }
+        wakeLock =
+            powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                wakeLockTag,
+            ).apply {
+                setReferenceCounted(true)
+            }
 
         // Note: WakeLock is acquired during active scans to save battery.
         // The foreground service notification is sufficient to keep the service alive.
@@ -429,7 +437,11 @@ class TailBaitService : NotificationService() {
      * @param startId Unique ID for this start request
      * @return START_STICKY to restart service if killed by system
      */
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         super.onStartCommand(intent, flags, startId)
 
         Timber.d("onStartCommand: action=${intent?.action}, flags=$flags, startId=$startId")
@@ -506,17 +518,18 @@ class TailBaitService : NotificationService() {
      * This must be called within 5 seconds of starting the service on Android 8.0+.
      */
     private fun startForegroundService() {
-        val notification = createTrackingNotification(
-            title = "BLE Tracker",
-            message = "Service initialized",
-            isScanning = false
-        )
+        val notification =
+            createTrackingNotification(
+                title = "BLE Tracker",
+                message = "Service initialized",
+                isScanning = false,
+            )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
@@ -559,7 +572,6 @@ class TailBaitService : NotificationService() {
         }
     }
 
-
     // Track if the scan state observer currently holds a WakeLock
     private var scanStateWakeLockHeld = false
 
@@ -570,11 +582,13 @@ class TailBaitService : NotificationService() {
      * preventing leaks when multiple Scanning(count) updates occur.
      */
     private fun handleScanStateChange(state: BleScannerManager.ScanState) {
-        val shouldHoldLock = when (state) {
-            is BleScannerManager.ScanState.Scanning,
-            is BleScannerManager.ScanState.Processing -> true
-            else -> false
-        }
+        val shouldHoldLock =
+            when (state) {
+                is BleScannerManager.ScanState.Scanning,
+                is BleScannerManager.ScanState.Processing,
+                -> true
+                else -> false
+            }
 
         if (shouldHoldLock) {
             if (!scanStateWakeLockHeld) {
@@ -589,8 +603,6 @@ class TailBaitService : NotificationService() {
         }
         updateNotificationForScanState(state)
     }
-
-
 
     /**
      * Resume BLE tracking after pause.
@@ -607,36 +619,38 @@ class TailBaitService : NotificationService() {
      * @param scanState Current scan state from BleScannerManager
      */
     private fun updateNotificationForScanState(scanState: BleScannerManager.ScanState) {
-        val notification = when (scanState) {
-            is BleScannerManager.ScanState.Scanning -> {
-                createTrackingNotification(
-                    title = "BLE Tracker Active",
-                    message = "Scanning for devices... (${scanState.devicesFound} found)",
-                    isScanning = true
-                )
+        val notification =
+            when (scanState) {
+                is BleScannerManager.ScanState.Scanning -> {
+                    createTrackingNotification(
+                        title = "BLE Tracker Active",
+                        message = "Scanning for devices... (${scanState.devicesFound} found)",
+                        isScanning = true,
+                    )
+                }
+                is BleScannerManager.ScanState.Processing -> {
+                    createTrackingNotification(
+                        title = "BLE Tracker Active",
+                        message = "Processing scan results...",
+                        // Show progress bar during processing too
+                        isScanning = true,
+                    )
+                }
+                is BleScannerManager.ScanState.Idle -> {
+                    createTrackingNotification(
+                        title = "BLE Tracker Active",
+                        message = "Waiting for next scan",
+                        isScanning = false,
+                    )
+                }
+                is BleScannerManager.ScanState.Error -> {
+                    createTrackingNotification(
+                        title = "BLE Tracker Error",
+                        message = scanState.message,
+                        isScanning = false,
+                    )
+                }
             }
-            is BleScannerManager.ScanState.Processing -> {
-                createTrackingNotification(
-                    title = "BLE Tracker Active",
-                    message = "Processing scan results...",
-                    isScanning = true // Show progress bar during processing too
-                )
-            }
-            is BleScannerManager.ScanState.Idle -> {
-                createTrackingNotification(
-                    title = "BLE Tracker Active",
-                    message = "Waiting for next scan",
-                    isScanning = false
-                )
-            }
-            is BleScannerManager.ScanState.Error -> {
-                createTrackingNotification(
-                    title = "BLE Tracker Error",
-                    message = scanState.message,
-                    isScanning = false
-                )
-            }
-        }
 
         updateNotification(NOTIFICATION_ID, notification)
     }
@@ -655,13 +669,13 @@ class TailBaitService : NotificationService() {
         title: String,
         message: String,
         isScanning: Boolean,
-        showResumeAction: Boolean = false
+        showResumeAction: Boolean = false,
     ): Notification {
         return createNotification(
             title = title,
             message = message,
             priority = NotificationCompat.PRIORITY_LOW,
-            onGoing = true
+            onGoing = true,
         ) {
             // Add action buttons
             if (showResumeAction) {
@@ -670,11 +684,12 @@ class TailBaitService : NotificationService() {
                     createNotificationAction(
                         iconResId = R.drawable.ic_notification,
                         title = "Resume",
-                        pendingIntent = createActionPendingIntent(
-                            ACTION_RESUME_TRACKING,
-                            REQUEST_CODE_RESUME
-                        )
-                    )
+                        pendingIntent =
+                            createActionPendingIntent(
+                                ACTION_RESUME_TRACKING,
+                                REQUEST_CODE_RESUME,
+                            ),
+                    ),
                 )
             } else {
                 // Active state: show Pause and Stop buttons
@@ -682,11 +697,12 @@ class TailBaitService : NotificationService() {
                     createNotificationAction(
                         iconResId = R.drawable.ic_notification,
                         title = "Pause",
-                        pendingIntent = createActionPendingIntent(
-                            ACTION_PAUSE_TRACKING,
-                            REQUEST_CODE_PAUSE
-                        )
-                    )
+                        pendingIntent =
+                            createActionPendingIntent(
+                                ACTION_PAUSE_TRACKING,
+                                REQUEST_CODE_PAUSE,
+                            ),
+                    ),
                 )
             }
 
@@ -695,11 +711,12 @@ class TailBaitService : NotificationService() {
                 createNotificationAction(
                     iconResId = R.drawable.ic_notification,
                     title = "Stop",
-                    pendingIntent = createActionPendingIntent(
-                        ACTION_STOP_TRACKING,
-                        REQUEST_CODE_STOP
-                    )
-                )
+                    pendingIntent =
+                        createActionPendingIntent(
+                            ACTION_STOP_TRACKING,
+                            REQUEST_CODE_STOP,
+                        ),
+                ),
             )
 
             // Set style for expanded notification with progress if scanning

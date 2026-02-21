@@ -21,7 +21,7 @@ fun PermissionRationaleDialog(
     message: String,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -30,20 +30,20 @@ fun PermissionRationaleDialog(
                 imageVector = Icons.Default.Info,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(32.dp),
             )
         },
         title = {
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
             )
         },
         confirmButton = {
@@ -56,7 +56,7 @@ fun PermissionRationaleDialog(
                 Text("Not Now")
             }
         },
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
@@ -69,7 +69,7 @@ fun PermissionPermanentlyDeniedDialog(
     message: String,
     onDismiss: () -> Unit,
     onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -78,27 +78,27 @@ fun PermissionPermanentlyDeniedDialog(
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(32.dp),
             )
         },
         title = {
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
             Column {
                 Text(
                     text = message,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Please go to Settings and manually grant this permission for the app to work properly.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
@@ -112,7 +112,7 @@ fun PermissionPermanentlyDeniedDialog(
                 Text("Cancel")
             }
         },
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
@@ -123,26 +123,28 @@ fun PermissionPermanentlyDeniedDialog(
 fun BackgroundLocationExplanationDialog(
     onDismiss: () -> Unit,
     onGrantPermission: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = MaterialTheme.shapes.large
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            shape = MaterialTheme.shapes.large,
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
                     imageVector = Icons.Default.LocationOn,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(64.dp)
+                    modifier = Modifier.size(64.dp),
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -151,7 +153,7 @@ fun BackgroundLocationExplanationDialog(
                     text = "Background Location",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -160,38 +162,39 @@ fun BackgroundLocationExplanationDialog(
                     text = "Why do we need this?",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "To provide 24/7 protection, we need to scan for tracking devices " +
+                    text =
+                        "To provide 24/7 protection, we need to scan for tracking devices " +
                             "even when the app is not actively open. This helps detect devices " +
                             "that may be following you throughout the day.",
                     style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Benefits list
                 Column(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     FeatureItem(
                         icon = Icons.Default.Security,
-                        text = "Continuous protection"
+                        text = "Continuous protection",
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FeatureItem(
                         icon = Icons.Default.NotificationsActive,
-                        text = "Instant threat alerts"
+                        text = "Instant threat alerts",
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FeatureItem(
                         icon = Icons.Default.LocationOn,
-                        text = "Track device movements"
+                        text = "Track device movements",
                     )
                 }
 
@@ -200,7 +203,7 @@ fun BackgroundLocationExplanationDialog(
                 // Action buttons
                 Button(
                     onClick = onGrantPermission,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Enable 24/7 Protection")
                 }
@@ -209,7 +212,7 @@ fun BackgroundLocationExplanationDialog(
 
                 TextButton(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Maybe Later")
                 }
@@ -224,7 +227,7 @@ fun BackgroundLocationExplanationDialog(
 @Composable
 fun AllPermissionsGrantedDialog(
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -233,7 +236,7 @@ fun AllPermissionsGrantedDialog(
                 imageVector = Icons.Default.CheckCircle,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(48.dp),
             )
         },
         title = {
@@ -241,26 +244,27 @@ fun AllPermissionsGrantedDialog(
                 text = "All Set!",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         },
         text = {
             Text(
-                text = "All required permissions have been granted. " +
+                text =
+                    "All required permissions have been granted. " +
                         "You're now protected from potential tracking devices.",
                 style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         },
         confirmButton = {
             Button(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Get Started")
             }
         },
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
@@ -272,7 +276,7 @@ fun MissingEssentialPermissionsDialog(
     missingPermissions: List<String>,
     onDismiss: () -> Unit,
     onRequestPermissions: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -281,40 +285,41 @@ fun MissingEssentialPermissionsDialog(
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(32.dp),
             )
         },
         title = {
             Text(
                 text = "Required Permissions Missing",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
             Column {
                 Text(
                     text = "The following permissions are required for the app to function:",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 missingPermissions.forEach { permission ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
                             imageVector = Icons.Default.Circle,
                             contentDescription = null,
                             modifier = Modifier.size(8.dp),
-                            tint = MaterialTheme.colorScheme.error
+                            tint = MaterialTheme.colorScheme.error,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = permission,
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
@@ -330,7 +335,7 @@ fun MissingEssentialPermissionsDialog(
                 Text("Cancel")
             }
         },
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
@@ -341,22 +346,22 @@ fun MissingEssentialPermissionsDialog(
 private fun FeatureItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(24.dp),
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
@@ -369,7 +374,7 @@ fun PermissionDeniedForeverDialog(
     permissionName: String,
     onDismiss: () -> Unit,
     onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -378,14 +383,14 @@ fun PermissionDeniedForeverDialog(
                 imageVector = Icons.Default.Block,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(32.dp),
             )
         },
         title = {
             Text(
                 text = "Permission Blocked",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
@@ -393,20 +398,21 @@ fun PermissionDeniedForeverDialog(
                 Text(
                     text = "$permissionName permission has been permanently denied.",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "To enable this permission:",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "1. Tap 'Open Settings' below\n" +
+                    text =
+                        "1. Tap 'Open Settings' below\n" +
                             "2. Go to Permissions\n" +
                             "3. Enable $permissionName",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
@@ -420,6 +426,6 @@ fun PermissionDeniedForeverDialog(
                 Text("Not Now")
             }
         },
-        modifier = modifier
+        modifier = modifier,
     )
 }

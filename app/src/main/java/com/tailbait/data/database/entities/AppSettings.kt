@@ -4,8 +4,6 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-
-
 /**
  * Entity representing application settings and user preferences.
  *
@@ -37,56 +35,41 @@ import androidx.room.PrimaryKey
  * @property updatedAt Timestamp in milliseconds when settings were last updated
  */
 @Entity(tableName = "app_settings")
-
 data class AppSettings(
     @PrimaryKey
     val id: Int = 1,
-
     @ColumnInfo(name = "is_tracking_enabled")
     val isTrackingEnabled: Boolean = true,
-
     @ColumnInfo(name = "scan_interval_seconds")
     val scanIntervalSeconds: Int = 300,
-
     @ColumnInfo(name = "scan_duration_seconds")
     val scanDurationSeconds: Int = 60,
-
     @ColumnInfo(name = "min_detection_distance_meters")
     val minDetectionDistanceMeters: Double = 100.0,
-
     @ColumnInfo(name = "alert_threshold_count")
     val alertThresholdCount: Int = 3,
-
     @ColumnInfo(name = "alert_notification_enabled")
     val alertNotificationEnabled: Boolean = true,
-
     @ColumnInfo(name = "alert_sound_enabled")
     val alertSoundEnabled: Boolean = true,
-
     @ColumnInfo(name = "alert_vibration_enabled")
     val alertVibrationEnabled: Boolean = true,
-
     @ColumnInfo(name = "learn_mode_active")
     val learnModeActive: Boolean = false,
-
     @ColumnInfo(name = "learn_mode_started_at")
     val learnModeStartedAt: Long? = null,
-
     @ColumnInfo(name = "data_retention_days")
     val dataRetentionDays: Int = 30,
-
     @ColumnInfo(name = "battery_optimization_enabled")
     val batteryOptimizationEnabled: Boolean = true,
-
     /**
      * Theme mode preference.
      * Values: "SYSTEM" (follow system), "LIGHT" (always light), "DARK" (always dark)
      */
     @ColumnInfo(name = "theme_mode")
     val themeMode: String = "SYSTEM",
-
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
 ) {
     companion object {
         const val THEME_SYSTEM = "SYSTEM"

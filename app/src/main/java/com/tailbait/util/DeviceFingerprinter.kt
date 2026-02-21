@@ -42,7 +42,6 @@ import java.security.MessageDigest
  * ```
  */
 object DeviceFingerprinter {
-
     private const val TAG = "DeviceFingerprinter"
 
     /**
@@ -55,18 +54,18 @@ object DeviceFingerprinter {
     data class FingerprintResult(
         val fingerprint: String,
         val confidence: Float,
-        val method: FingerprintMethod
+        val method: FingerprintMethod,
     )
 
     /**
      * Fingerprinting methods in order of reliability.
      */
     enum class FingerprintMethod {
-        APPLE_PAYLOAD,      // Apple Continuity payload (highest confidence)
-        SERVICE_UUID,       // Service UUID-based (high confidence)
-        COMPOSITE,          // Combined signals (medium confidence)
-        TEMPORAL,           // Time-based clustering (low confidence)
-        NONE                // No fingerprint possible
+        APPLE_PAYLOAD, // Apple Continuity payload (highest confidence)
+        SERVICE_UUID, // Service UUID-based (high confidence)
+        COMPOSITE, // Combined signals (medium confidence)
+        TEMPORAL, // Time-based clustering (low confidence)
+        NONE, // No fingerprint possible
     }
 
     /**
@@ -93,7 +92,7 @@ object DeviceFingerprinter {
         deviceType: String?,
         appearance: Int?,
         txPowerLevel: Int?,
-        deviceName: String?
+        deviceName: String?,
     ): FingerprintResult? {
         // Try Apple payload fingerprint first
         if (manufacturerId == ManufacturerDataParser.ManufacturerId.APPLE && manufacturerData != null) {
@@ -108,37 +107,41 @@ object DeviceFingerprinter {
                 return FingerprintResult(
                     fingerprint = appleFingerprint,
                     confidence = confidence,
-                    method = FingerprintMethod.APPLE_PAYLOAD
+                    method = FingerprintMethod.APPLE_PAYLOAD,
                 )
             }
         }
 
         // Try service UUID fingerprint (high confidence for trackers)
-        val serviceFingerprint = ManufacturerDataParser.extractServiceUuidFingerprint(
-            manufacturerId, serviceUuids, manufacturerData
-        )
+        val serviceFingerprint =
+            ManufacturerDataParser.extractServiceUuidFingerprint(
+                manufacturerId,
+                serviceUuids,
+                manufacturerData,
+            )
         if (serviceFingerprint != null) {
             return FingerprintResult(
                 fingerprint = serviceFingerprint,
                 confidence = 0.90f,
-                method = FingerprintMethod.SERVICE_UUID
+                method = FingerprintMethod.SERVICE_UUID,
             )
         }
 
         // Try composite fingerprint (medium confidence)
-        val compositeFingerprint = generateCompositeFingerprint(
-            manufacturerId = manufacturerId,
-            deviceType = deviceType,
-            appearance = appearance,
-            txPowerLevel = txPowerLevel,
-            serviceUuids = serviceUuids,
-            deviceName = deviceName
-        )
+        val compositeFingerprint =
+            generateCompositeFingerprint(
+                manufacturerId = manufacturerId,
+                deviceType = deviceType,
+                appearance = appearance,
+                txPowerLevel = txPowerLevel,
+                serviceUuids = serviceUuids,
+                deviceName = deviceName,
+            )
         if (compositeFingerprint != null) {
             return FingerprintResult(
                 fingerprint = compositeFingerprint.fingerprint,
                 confidence = compositeFingerprint.confidence,
-                method = FingerprintMethod.COMPOSITE
+                method = FingerprintMethod.COMPOSITE,
             )
         }
 
@@ -168,7 +171,7 @@ object DeviceFingerprinter {
         appearance: Int?,
         txPowerLevel: Int?,
         serviceUuids: List<ParcelUuid>?,
-        deviceName: String?
+        deviceName: String?,
     ): FingerprintResult? {
         // Count available signals and calculate confidence
         var signalCount = 0
@@ -209,12 +212,13 @@ object DeviceFingerprinter {
         // Service UUIDs (15% weight)
         if (!serviceUuids.isNullOrEmpty()) {
             // Create a hash of service UUIDs for consistent representation
-            val uuidHash = serviceUuids
-                .map { it.uuid.toString().uppercase().take(8) }
-                .sorted()
-                .joinToString("")
-                .hashCode()
-                .let { "%08X".format(it) }
+            val uuidHash =
+                serviceUuids
+                    .map { it.uuid.toString().uppercase().take(8) }
+                    .sorted()
+                    .joinToString("")
+                    .hashCode()
+                    .let { "%08X".format(it) }
             components.add("U$uuidHash")
             signalCount++
             confidenceSum += 0.15f
@@ -243,13 +247,14 @@ object DeviceFingerprinter {
 
         Timber.tag(TAG).d(
             "Generated composite fingerprint: $fingerprint from $signalCount signals " +
-                "(confidence: ${(confidenceSum * 100).toInt()}%)"
+                "(confidence: ${(confidenceSum * 100).toInt()}%)",
         )
 
         return FingerprintResult(
             fingerprint = fingerprint,
-            confidence = confidenceSum.coerceAtMost(0.75f), // Cap composite confidence at 75%
-            method = FingerprintMethod.COMPOSITE
+            // Cap composite confidence at 75%
+            confidence = confidenceSum.coerceAtMost(0.75f),
+            method = FingerprintMethod.COMPOSITE,
         )
     }
 
@@ -297,7 +302,7 @@ object DeviceFingerprinter {
     fun areCompositesFingerprintsSimilar(
         fingerprint1: String,
         fingerprint2: String,
-        minMatchScore: Float = 0.7f
+        _minMatchScore: Float = 0.7f,
     ): Boolean {
         // Only compare composite fingerprints
         if (!fingerprint1.startsWith("COMP:") || !fingerprint2.startsWith("COMP:")) {
@@ -336,15 +341,15 @@ object DeviceFingerprinter {
         if (fingerprint == null) return false
         // FM (Find My) is excluded: its bytes 2-7 are part of the rotating public key
         // and change every ~15 minutes with the MAC address. It's medium-confidence only.
-        return fingerprint.startsWith("PP:") ||  // Proximity Pairing (hardware model ID - stable)
-               fingerprint.startsWith("NI:") ||  // Nearby Info
-               fingerprint.startsWith("MS:") ||  // Magic Switch
-               fingerprint.startsWith("HO:") ||  // Handoff
-               fingerprint.startsWith("AD:") ||  // AirDrop
-               fingerprint.startsWith("ST:") ||  // Samsung SmartTag
-               fingerprint.startsWith("TL:") ||  // Tile
-               fingerprint.startsWith("CH:") ||  // Chipolo
-               fingerprint.startsWith("GF:")     // Google Find My
+        return fingerprint.startsWith("PP:") || // Proximity Pairing (hardware model ID - stable)
+            fingerprint.startsWith("NI:") || // Nearby Info
+            fingerprint.startsWith("MS:") || // Magic Switch
+            fingerprint.startsWith("HO:") || // Handoff
+            fingerprint.startsWith("AD:") || // AirDrop
+            fingerprint.startsWith("ST:") || // Samsung SmartTag
+            fingerprint.startsWith("TL:") || // Tile
+            fingerprint.startsWith("CH:") || // Chipolo
+            fingerprint.startsWith("GF:") // Google Find My
     }
 
     /**
@@ -377,26 +382,26 @@ object DeviceFingerprinter {
         return when {
             // Apple payload methods
             fingerprint.startsWith("FM:") ||
-            fingerprint.startsWith("PP:") ||
-            fingerprint.startsWith("NI:") ||
-            fingerprint.startsWith("MS:") ||
-            fingerprint.startsWith("HO:") ||
-            fingerprint.startsWith("AD:") ||
-            fingerprint.startsWith("HS:") ||
-            fingerprint.startsWith("TH:") ||
-            fingerprint.startsWith("AP:") ||
-            fingerprint.startsWith("UK:") -> FingerprintMethod.APPLE_PAYLOAD
+                fingerprint.startsWith("PP:") ||
+                fingerprint.startsWith("NI:") ||
+                fingerprint.startsWith("MS:") ||
+                fingerprint.startsWith("HO:") ||
+                fingerprint.startsWith("AD:") ||
+                fingerprint.startsWith("HS:") ||
+                fingerprint.startsWith("TH:") ||
+                fingerprint.startsWith("AP:") ||
+                fingerprint.startsWith("UK:") -> FingerprintMethod.APPLE_PAYLOAD
 
             // Service UUID methods
             fingerprint.startsWith("ST:") ||
-            fingerprint.startsWith("TL:") ||
-            fingerprint.startsWith("CH:") ||
-            fingerprint.startsWith("GF:") ||
-            fingerprint.startsWith("PB:") ||
-            fingerprint.startsWith("CB:") ||
-            fingerprint.startsWith("EF:") ||
-            fingerprint.startsWith("JT:") ||
-            fingerprint.startsWith("AF:") -> FingerprintMethod.SERVICE_UUID
+                fingerprint.startsWith("TL:") ||
+                fingerprint.startsWith("CH:") ||
+                fingerprint.startsWith("GF:") ||
+                fingerprint.startsWith("PB:") ||
+                fingerprint.startsWith("CB:") ||
+                fingerprint.startsWith("EF:") ||
+                fingerprint.startsWith("JT:") ||
+                fingerprint.startsWith("AF:") -> FingerprintMethod.SERVICE_UUID
 
             // Composite method
             fingerprint.startsWith("COMP:") -> FingerprintMethod.COMPOSITE

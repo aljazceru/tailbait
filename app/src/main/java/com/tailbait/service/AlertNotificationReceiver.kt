@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import com.tailbait.data.repository.AlertRepository
 import com.tailbait.data.repository.DeviceRepository
 import com.tailbait.data.repository.WhitelistRepository
 import com.tailbait.di.ReceiverEntryPoint
@@ -18,14 +17,17 @@ import org.json.JSONArray
 import timber.log.Timber
 
 class AlertNotificationReceiver : BroadcastReceiver() {
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override fun onReceive(context: Context, intent: Intent) {
-        val entryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            ReceiverEntryPoint::class.java
-        )
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
+        val entryPoint =
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                ReceiverEntryPoint::class.java,
+            )
 
         val alertRepository = entryPoint.alertRepository()
         val deviceRepository = entryPoint.deviceRepository()
@@ -50,7 +52,7 @@ class AlertNotificationReceiver : BroadcastReceiver() {
     private fun handleDismissAlert(
         context: Context,
         intent: Intent,
-        notificationHelper: NotificationHelper
+        notificationHelper: NotificationHelper,
     ) {
         val alertId = intent.getLongExtra(Constants.EXTRA_ALERT_ID, -1L)
 
@@ -73,10 +75,9 @@ class AlertNotificationReceiver : BroadcastReceiver() {
                     Toast.makeText(
                         context,
                         "Alert dismissed",
-                        Toast.LENGTH_SHORT
+                        Toast.LENGTH_SHORT,
                     ).show()
                 }
-
             } catch (e: Exception) {
                 Timber.e(e, "Error dismissing alert $alertId")
 
@@ -84,7 +85,7 @@ class AlertNotificationReceiver : BroadcastReceiver() {
                     Toast.makeText(
                         context,
                         "Error dismissing alert",
-                        Toast.LENGTH_SHORT
+                        Toast.LENGTH_SHORT,
                     ).show()
                 }
             } finally {
@@ -97,7 +98,7 @@ class AlertNotificationReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
         deviceRepository: DeviceRepository,
-        whitelistRepository: WhitelistRepository
+        whitelistRepository: WhitelistRepository,
     ) {
         val alertId = intent.getLongExtra(Constants.EXTRA_ALERT_ID, -1L)
         val deviceAddressesJson = intent.getStringExtra(Constants.EXTRA_DEVICE_IDS)
@@ -121,7 +122,7 @@ class AlertNotificationReceiver : BroadcastReceiver() {
                         Toast.makeText(
                             context,
                             "No devices to whitelist",
-                            Toast.LENGTH_SHORT
+                            Toast.LENGTH_SHORT,
                         ).show()
                     }
                     return@launch
@@ -143,7 +144,7 @@ class AlertNotificationReceiver : BroadcastReceiver() {
                                     label = device.name ?: "Unknown Device",
                                     category = Constants.WHITELIST_CATEGORY_TRUSTED,
                                     addedViaLearnMode = false,
-                                    notes = "Added from alert #$alertId"
+                                    notes = "Added from alert #$alertId",
                                 )
                                 addedCount++
                                 Timber.d("Added device ${device.address} to whitelist")
@@ -159,20 +160,21 @@ class AlertNotificationReceiver : BroadcastReceiver() {
                     }
                 }
 
-                val message = when {
-                    addedCount > 0 && alreadyWhitelistedCount > 0 -> {
-                        "$addedCount device(s) added to whitelist, $alreadyWhitelistedCount already whitelisted"
+                val message =
+                    when {
+                        addedCount > 0 && alreadyWhitelistedCount > 0 -> {
+                            "$addedCount device(s) added to whitelist, $alreadyWhitelistedCount already whitelisted"
+                        }
+                        addedCount > 0 -> {
+                            "$addedCount device(s) added to whitelist"
+                        }
+                        alreadyWhitelistedCount > 0 -> {
+                            "All devices already whitelisted"
+                        }
+                        else -> {
+                            "No devices were added to whitelist"
+                        }
                     }
-                    addedCount > 0 -> {
-                        "$addedCount device(s) added to whitelist"
-                    }
-                    alreadyWhitelistedCount > 0 -> {
-                        "All devices already whitelisted"
-                    }
-                    else -> {
-                        "No devices were added to whitelist"
-                    }
-                }
 
                 launch(Dispatchers.Main) {
                     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -180,9 +182,8 @@ class AlertNotificationReceiver : BroadcastReceiver() {
 
                 Timber.i(
                     "Whitelist operation completed: $addedCount added, " +
-                        "$alreadyWhitelistedCount already whitelisted"
+                        "$alreadyWhitelistedCount already whitelisted",
                 )
-
             } catch (e: Exception) {
                 Timber.e(e, "Error adding devices to whitelist from alert $alertId")
 
@@ -190,7 +191,7 @@ class AlertNotificationReceiver : BroadcastReceiver() {
                     Toast.makeText(
                         context,
                         "Error adding to whitelist",
-                        Toast.LENGTH_SHORT
+                        Toast.LENGTH_SHORT,
                     ).show()
                 }
             } finally {

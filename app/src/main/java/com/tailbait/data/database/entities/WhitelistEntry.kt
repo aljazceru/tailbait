@@ -6,8 +6,6 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-
-
 /**
  * Entity representing a whitelisted (trusted) BLE device.
  *
@@ -34,31 +32,24 @@ import androidx.room.PrimaryKey
             entity = ScannedDevice::class,
             parentColumns = ["id"],
             childColumns = ["device_id"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    indices = [Index(value = ["device_id"], unique = true)]
+    indices = [Index(value = ["device_id"], unique = true)],
 )
-
 data class WhitelistEntry(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-
     @ColumnInfo(name = "device_id")
     val deviceId: Long,
-
     @ColumnInfo(name = "label")
     val label: String,
-
     @ColumnInfo(name = "category")
     val category: String,
-
     @ColumnInfo(name = "added_via_learn_mode")
     val addedViaLearnMode: Boolean = false,
-
     @ColumnInfo(name = "notes")
     val notes: String? = null,
-
     @ColumnInfo(name = "created_at")
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
 )

@@ -1,7 +1,6 @@
 package com.tailbait.ui.components
 
 import android.content.Context
-import android.view.MotionEvent
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -10,13 +9,13 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.tailbait.util.DeviceNameGenerator
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
-import com.tailbait.util.DeviceNameGenerator
 
 /**
  * Data class representing a point of interest on the map
@@ -25,7 +24,7 @@ data class MapMarker(
     val position: GeoPoint,
     val title: String,
     val description: String? = null,
-    val id: String = ""
+    val id: String = "",
 )
 
 /**
@@ -35,7 +34,7 @@ data class MapPath(
     val points: List<GeoPoint>,
     val title: String,
     val color: Int = android.graphics.Color.BLUE,
-    val width: Float = 5f
+    val width: Float = 5f,
 )
 
 /**
@@ -60,13 +59,14 @@ data class MapPath(
 @Composable
 fun OpenStreetMap(
     modifier: Modifier = Modifier,
-    initialPosition: GeoPoint = GeoPoint(40.7128, -74.0060), // New York
+    // New York
+    initialPosition: GeoPoint = GeoPoint(40.7128, -74.0060),
     initialZoom: Double = 15.0,
     markers: List<MapMarker> = emptyList(),
     paths: List<MapPath> = emptyList(),
     onMarkerClick: (MapMarker) -> Unit = {},
-    onMapClick: (GeoPoint) -> Unit = {},
-    onMapLongClick: (GeoPoint) -> Unit = {}
+    _onMapClick: (GeoPoint) -> Unit = {},
+    _onMapLongClick: (GeoPoint) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -80,34 +80,36 @@ fun OpenStreetMap(
     }
 
     // Create and manage MapView
-    val mapView = remember {
-        MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
-            minZoomLevel = 4.0
-            maxZoomLevel = 22.0
-            controller.setZoom(initialZoom)
-            controller.setCenter(initialPosition)
-            isHorizontalMapRepetitionEnabled = true
-            isVerticalMapRepetitionEnabled = false
+    val mapView =
+        remember {
+            MapView(context).apply {
+                setTileSource(TileSourceFactory.MAPNIK)
+                setMultiTouchControls(true)
+                zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
+                minZoomLevel = 4.0
+                maxZoomLevel = 22.0
+                controller.setZoom(initialZoom)
+                controller.setCenter(initialPosition)
+                isHorizontalMapRepetitionEnabled = true
+                isVerticalMapRepetitionEnabled = false
 
-            // Disable hover events entirely to prevent Compose hover-exit crashes
-            // This is the safest approach for certain Android versions/OEM builds
-            isHovered = false
-            // Don't set any hover listener - let the system handle hover events naturally
+                // Disable hover events entirely to prevent Compose hover-exit crashes
+                // This is the safest approach for certain Android versions/OEM builds
+                isHovered = false
+                // Don't set any hover listener - let the system handle hover events naturally
+            }
         }
-    }
 
     // Handle lifecycle events
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                else -> {}
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                    Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                    else -> {}
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -177,18 +179,21 @@ fun OpenStreetMap(
         update = { mapView ->
             // Update map state if needed
             mapView.invalidate()
-        }
+        },
     )
 }
 
-/**
+/*
  * Utility functions for creating common map objects
  */
 
 /**
  * Create a GeoPoint from latitude and longitude
  */
-fun createGeoPoint(latitude: Double, longitude: Double): GeoPoint = GeoPoint(latitude, longitude)
+fun createGeoPoint(
+    latitude: Double,
+    longitude: Double,
+): GeoPoint = GeoPoint(latitude, longitude)
 
 /**
  * Create a device marker for the map
@@ -200,7 +205,7 @@ fun createDeviceMarker(
     deviceAddress: String,
     deviceType: String?,
     manufacturerData: String? = null,
-    detectionCount: Int = 1
+    detectionCount: Int = 1,
 ): MapMarker {
     // Generate short, identifiable name for map display
     val shortName = DeviceNameGenerator.generateShortName(deviceType, deviceAddress, manufacturerData)
@@ -209,7 +214,7 @@ fun createDeviceMarker(
         position = createGeoPoint(latitude, longitude),
         title = shortName,
         description = "Device: $deviceName\nType: ${deviceType ?: "Unknown"}\nAddress: $deviceAddress\nDetections: $detectionCount",
-        id = deviceAddress
+        id = deviceAddress,
     )
 }
 
@@ -218,13 +223,14 @@ fun createDeviceMarker(
  */
 fun createLocationPath(
     points: List<GeoPoint>,
-    title: String = "Device Path"
+    title: String = "Device Path",
 ): MapPath {
     return MapPath(
         points = points,
         title = title,
-        color = android.graphics.Color.parseColor("#2196F3"), // Material Blue
-        width = 4f
+        // Material Blue
+        color = android.graphics.Color.parseColor("#2196F3"),
+        width = 4f,
     )
 }
 
@@ -234,20 +240,21 @@ fun createLocationPath(
 fun createThreatPath(
     points: List<GeoPoint>,
     threatLevel: String,
-    title: String = "Movement Path"
+    title: String = "Movement Path",
 ): MapPath {
-    val color = when (threatLevel.uppercase()) {
-        "CRITICAL" -> android.graphics.Color.parseColor("#F44336") // Red
-        "HIGH" -> android.graphics.Color.parseColor("#FF9800") // Orange
-        "MEDIUM" -> android.graphics.Color.parseColor("#FFC107") // Amber
-        "LOW" -> android.graphics.Color.parseColor("#4CAF50") // Green
-        else -> android.graphics.Color.parseColor("#2196F3") // Blue
-    }
+    val color =
+        when (threatLevel.uppercase()) {
+            "CRITICAL" -> android.graphics.Color.parseColor("#F44336") // Red
+            "HIGH" -> android.graphics.Color.parseColor("#FF9800") // Orange
+            "MEDIUM" -> android.graphics.Color.parseColor("#FFC107") // Amber
+            "LOW" -> android.graphics.Color.parseColor("#4CAF50") // Green
+            else -> android.graphics.Color.parseColor("#2196F3") // Blue
+        }
 
     return MapPath(
         points = points,
         title = title,
         color = color,
-        width = 5f
+        width = 5f,
     )
 }

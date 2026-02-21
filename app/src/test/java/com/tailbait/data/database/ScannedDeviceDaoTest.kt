@@ -1,6 +1,5 @@
 package com.tailbait.data.database
 
-import com.tailbait.data.database.entities.ScannedDevice
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -15,7 +14,6 @@ import org.junit.Test
  * Test implementation will be done in Phase 7 (Testing).
  */
 class ScannedDeviceDaoTest {
-
     // TODO: Setup in-memory database
     // private lateinit var database: TailBaitDatabase
     // private lateinit var scannedDeviceDao: ScannedDeviceDao
@@ -28,31 +26,36 @@ class ScannedDeviceDaoTest {
     }
 
     @Test
-    fun insertDevice_returnsValidId() = runTest {
-        // TODO: Test device insertion
-        // val device = ScannedDevice(...)
-        // val id = scannedDeviceDao.insert(device)
-        // assertTrue(id > 0)
-    }
+    fun insertDevice_returnsValidId() =
+        runTest {
+            // TODO: Test device insertion
+            // val device = ScannedDevice(...)
+            // val id = scannedDeviceDao.insert(device)
+            // assertTrue(id > 0)
+        }
 
     @Test
-    fun getByAddress_returnsCorrectDevice() = runTest {
-        // TODO: Test device retrieval by MAC address
-    }
+    fun getByAddress_returnsCorrectDevice() =
+        runTest {
+            // TODO: Test device retrieval by MAC address
+        }
 
     @Test
-    fun getSuspiciousDevices_filtersCorrectly() = runTest {
-        // TODO: Test suspicious device query
-        // Verify devices at multiple locations are returned
-    }
+    fun getSuspiciousDevices_filtersCorrectly() =
+        runTest {
+            // TODO: Test suspicious device query
+            // Verify devices at multiple locations are returned
+        }
 
     @Test
-    fun searchDevices_findsMatchingDevices() = runTest {
-        // TODO: Test device search functionality
-    }
+    fun searchDevices_findsMatchingDevices() =
+        runTest {
+            // TODO: Test device search functionality
+        }
 
     @Test
-    fun deleteOldDevices_removesExpiredRecords() = runTest {
-        // TODO: Test old device cleanup
-    }
+    fun deleteOldDevices_removesExpiredRecords() =
+        runTest {
+            // TODO: Test old device cleanup
+        }
 }

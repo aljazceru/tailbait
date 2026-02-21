@@ -55,26 +55,27 @@ fun KeyValueRow(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     valueColor: Color? = null,
-    monospaceValue: Boolean = false
+    monospaceValue: Boolean = false,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // Label with optional icon
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.weight(1f, fill = false),
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.width(6.dp))
             }
@@ -83,7 +84,7 @@ fun KeyValueRow(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
         }
 
@@ -98,7 +99,7 @@ fun KeyValueRow(
             fontFamily = if (monospaceValue) FontFamily.Monospace else FontFamily.Default,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.weight(1f, fill = false),
         )
     }
 }
@@ -123,18 +124,19 @@ fun KeyValueColumn(
     value: String,
     modifier: Modifier = Modifier,
     valueColor: Color? = null,
-    monospaceValue: Boolean = false
+    monospaceValue: Boolean = false,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -144,7 +146,7 @@ fun KeyValueColumn(
             style = MaterialTheme.typography.bodyLarge,
             color = valueColor ?: MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Normal,
-            fontFamily = if (monospaceValue) FontFamily.Monospace else FontFamily.Default
+            fontFamily = if (monospaceValue) FontFamily.Monospace else FontFamily.Default,
         )
     }
 }
@@ -165,23 +167,23 @@ fun KeyValueColumn(
 fun CompactKeyValue(
     label: String,
     value: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = "$label:",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -200,11 +202,11 @@ fun CompactKeyValue(
 fun KeyValueGroup(
     items: List<Pair<String, String>>,
     modifier: Modifier = Modifier,
-    useColumnLayout: Boolean = false
+    useColumnLayout: Boolean = false,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         items.forEach { (label, value) ->
             if (useColumnLayout) {
@@ -225,7 +227,7 @@ private fun KeyValueRowBasicPreview() {
             Column(modifier = Modifier.padding(16.dp)) {
                 KeyValueRow(
                     label = "Device Name",
-                    value = "AirPods Pro"
+                    value = "AirPods Pro",
                 )
             }
         }
@@ -242,7 +244,7 @@ private fun KeyValueRowWithIconPreview() {
                     label = "Status",
                     value = "Active",
                     icon = Icons.Outlined.Info,
-                    valueColor = MaterialTheme.colorScheme.primary
+                    valueColor = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -258,7 +260,7 @@ private fun KeyValueRowMonospacePreview() {
                 KeyValueRow(
                     label = "MAC Address",
                     value = "AA:BB:CC:DD:EE:FF",
-                    monospaceValue = true
+                    monospaceValue = true,
                 )
             }
         }
@@ -273,7 +275,7 @@ private fun KeyValueColumnPreview() {
             Column(modifier = Modifier.padding(16.dp)) {
                 KeyValueColumn(
                     label = "Detection Message",
-                    value = "This device has been detected at 5 different locations over the past 3 days"
+                    value = "This device has been detected at 5 different locations over the past 3 days",
                 )
             }
         }
@@ -299,13 +301,14 @@ private fun KeyValueGroupRowPreview() {
     TailBaitTheme {
         Surface {
             KeyValueGroup(
-                items = listOf(
-                    "Device Type" to "Smartphone",
-                    "First Seen" to "2 hours ago",
-                    "Last Seen" to "5 minutes ago",
-                    "Detection Count" to "12 times"
-                ),
-                modifier = Modifier.padding(16.dp)
+                items =
+                    listOf(
+                        "Device Type" to "Smartphone",
+                        "First Seen" to "2 hours ago",
+                        "Last Seen" to "5 minutes ago",
+                        "Detection Count" to "12 times",
+                    ),
+                modifier = Modifier.padding(16.dp),
             )
         }
     }
@@ -317,13 +320,14 @@ private fun KeyValueGroupColumnPreview() {
     TailBaitTheme {
         Surface {
             KeyValueGroup(
-                items = listOf(
-                    "Threat Score" to "0.87 (High Risk)",
-                    "Locations" to "5 distinct locations",
-                    "Max Distance" to "15.3 km"
-                ),
+                items =
+                    listOf(
+                        "Threat Score" to "0.87 (High Risk)",
+                        "Locations" to "5 distinct locations",
+                        "Max Distance" to "15.3 km",
+                    ),
                 modifier = Modifier.padding(16.dp),
-                useColumnLayout = true
+                useColumnLayout = true,
             )
         }
     }
@@ -336,37 +340,37 @@ private fun DeviceInfoCardPreview() {
         Surface {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = "Device Information",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 KeyValueRow(
                     label = "Name",
-                    value = "Unknown Device"
+                    value = "Unknown Device",
                 )
                 KeyValueRow(
                     label = "Address",
                     value = "12:34:56:78:9A:BC",
-                    monospaceValue = true
+                    monospaceValue = true,
                 )
                 KeyValueRow(
                     label = "RSSI",
-                    value = "-72 dBm"
+                    value = "-72 dBm",
                 )
                 KeyValueRow(
                     label = "First Detected",
-                    value = "Jan 15, 2025 at 14:30"
+                    value = "Jan 15, 2025 at 14:30",
                 )
                 KeyValueRow(
                     label = "Status",
                     value = "Suspicious",
-                    valueColor = MaterialTheme.colorScheme.error
+                    valueColor = MaterialTheme.colorScheme.error,
                 )
             }
         }
@@ -381,12 +385,12 @@ private fun KeyValueDarkPreview() {
             Column(modifier = Modifier.padding(16.dp)) {
                 KeyValueRow(
                     label = "Device Name",
-                    value = "AirPods Pro"
+                    value = "AirPods Pro",
                 )
                 KeyValueRow(
                     label = "MAC Address",
                     value = "AA:BB:CC:DD:EE:FF",
-                    monospaceValue = true
+                    monospaceValue = true,
                 )
             }
         }

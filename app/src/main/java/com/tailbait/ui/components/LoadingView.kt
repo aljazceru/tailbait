@@ -35,21 +35,22 @@ import com.tailbait.ui.theme.TailBaitTheme
 @Composable
 fun LoadingView(
     message: String = "Loading...",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(TailBaitDimensions.SpacingXXXL),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(TailBaitDimensions.SpacingXXXL),
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             CircularProgressIndicator(
                 modifier = Modifier.size(TailBaitDimensions.IconSizeXL),
-                strokeWidth = TailBaitDimensions.ProgressStrokeWidth
+                strokeWidth = TailBaitDimensions.ProgressStrokeWidth,
             )
 
             Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingLG))
@@ -58,7 +59,7 @@ fun LoadingView(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -75,14 +76,15 @@ fun LoadingView(
 @Composable
 fun CompactLoadingView(modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(TailBaitDimensions.SpacingLG),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(TailBaitDimensions.SpacingLG),
+        contentAlignment = Alignment.Center,
     ) {
         CircularProgressIndicator(
             modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
-            strokeWidth = TailBaitDimensions.ProgressStrokeWidthSmall
+            strokeWidth = TailBaitDimensions.ProgressStrokeWidthSmall,
         )
     }
 }
@@ -97,15 +99,15 @@ fun CompactLoadingView(modifier: Modifier = Modifier) {
 @Composable
 fun LinearLoadingView(
     progress: Float? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (progress != null) {
             LinearProgressIndicator(
-                progress = { progress }
+                progress = { progress },
             )
         } else {
             LinearProgressIndicator()
@@ -141,7 +143,7 @@ private fun LinearLoadingViewDeterminatePreview() {
         Surface {
             LinearLoadingView(
                 progress = 0.75f,
-                modifier = Modifier.padding(TailBaitDimensions.SpacingLG)
+                modifier = Modifier.padding(TailBaitDimensions.SpacingLG),
             )
         }
     }

@@ -85,7 +85,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object ServiceModule {
-
     /**
      * Provides FusedLocationProviderClient for location tracking.
      *
@@ -105,7 +104,7 @@ object ServiceModule {
     @Provides
     @Singleton
     fun provideFusedLocationProviderClient(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
     ): FusedLocationProviderClient {
         return LocationServices.getFusedLocationProviderClient(context)
     }
@@ -135,7 +134,7 @@ object ServiceModule {
     @Provides
     @Singleton
     fun provideWorkManager(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
     ): WorkManager {
         return WorkManager.getInstance(context)
     }
@@ -170,13 +169,13 @@ object ServiceModule {
         deviceRepository: com.tailbait.data.repository.DeviceRepository,
         locationRepository: com.tailbait.data.repository.LocationRepository,
         settingsRepository: com.tailbait.data.repository.SettingsRepository,
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
     ): com.tailbait.service.BleScannerManager {
         return com.tailbait.service.BleScannerManager(
             deviceRepository,
             locationRepository,
             settingsRepository,
-            context
+            context,
         )
     }
 

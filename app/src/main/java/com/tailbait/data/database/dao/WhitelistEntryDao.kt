@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.Flow
  */
 @Dao
 interface WhitelistEntryDao {
-
     /**
      * Insert a new whitelist entry into the database.
      *
@@ -87,11 +86,13 @@ interface WhitelistEntryDao {
      *
      * @return Flow emitting list of whitelist entries with device details
      */
-    @Query("""
+    @Query(
+        """
         SELECT we.* FROM whitelist_entries we
         INNER JOIN scanned_devices sd ON we.device_id = sd.id
         ORDER BY we.created_at DESC
-    """)
+    """,
+    )
     fun getAllEntriesWithDevices(): Flow<List<WhitelistEntry>>
 
     /**
@@ -118,11 +119,13 @@ interface WhitelistEntryDao {
      * @param category The category to filter by (e.g., "OWN", "PARTNER", "TRUSTED")
      * @return Flow emitting list of entries in the specified category
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM whitelist_entries
         WHERE category = :category
         ORDER BY created_at DESC
-    """)
+    """,
+    )
     fun getEntriesByCategory(category: String): Flow<List<WhitelistEntry>>
 
     /**
@@ -130,11 +133,13 @@ interface WhitelistEntryDao {
      *
      * @return Flow emitting list of entries added through Learn Mode
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM whitelist_entries
         WHERE added_via_learn_mode = 1
         ORDER BY created_at DESC
-    """)
+    """,
+    )
     fun getLearnModeEntries(): Flow<List<WhitelistEntry>>
 
     /**
@@ -142,11 +147,13 @@ interface WhitelistEntryDao {
      *
      * @return Flow emitting list of manually added entries
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM whitelist_entries
         WHERE added_via_learn_mode = 0
         ORDER BY created_at DESC
-    """)
+    """,
+    )
     fun getManualEntries(): Flow<List<WhitelistEntry>>
 
     /**
@@ -155,12 +162,14 @@ interface WhitelistEntryDao {
      * @param query Search query string
      * @return Flow emitting list of matching entries
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM whitelist_entries
         WHERE label LIKE '%' || :query || '%'
         OR notes LIKE '%' || :query || '%'
         ORDER BY created_at DESC
-    """)
+    """,
+    )
     fun searchEntries(query: String): Flow<List<WhitelistEntry>>
 
     /**
@@ -177,10 +186,12 @@ interface WhitelistEntryDao {
      * @param category The category to count
      * @return Flow emitting count of entries in the category
      */
-    @Query("""
+    @Query(
+        """
         SELECT COUNT(*) FROM whitelist_entries
         WHERE category = :category
-    """)
+    """,
+    )
     fun getCountByCategory(category: String): Flow<Int>
 
     /**

@@ -11,7 +11,6 @@ import org.junit.Test
  * Tests pattern detection, clustering, and temporal analysis functionality.
  */
 class PatternMatcherTest {
-
     private lateinit var patternMatcher: PatternMatcher
 
     @Before
@@ -30,11 +29,15 @@ class PatternMatcherTest {
     @Test
     fun `clusterLocations creates single cluster for nearby locations`() {
         // Three locations within 100m of each other
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L), // New York
-            createLocation(2L, 40.7129, -74.0061, 2000L), // ~15m away
-            createLocation(3L, 40.7127, -74.0059, 3000L)  // ~20m away
-        )
+        val locations =
+            listOf(
+                // New York
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                // ~15m away
+                createLocation(2L, 40.7129, -74.0061, 2000L),
+                // ~20m away
+                createLocation(3L, 40.7127, -74.0059, 3000L),
+            )
 
         val clusters = patternMatcher.clusterLocations(locations)
 
@@ -45,11 +48,15 @@ class PatternMatcherTest {
     @Test
     fun `clusterLocations creates multiple clusters for distant locations`() {
         // Three locations far apart (> 100m)
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L), // New York
-            createLocation(2L, 40.7589, -73.9851, 2000L), // Times Square (~5km)
-            createLocation(3L, 40.7489, -73.9680, 3000L)  // Grand Central (~3km)
-        )
+        val locations =
+            listOf(
+                // New York
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                // Times Square (~5km)
+                createLocation(2L, 40.7589, -73.9851, 2000L),
+                // Grand Central (~3km)
+                createLocation(3L, 40.7489, -73.9680, 3000L),
+            )
 
         val clusters = patternMatcher.clusterLocations(locations)
 
@@ -59,13 +66,19 @@ class PatternMatcherTest {
 
     @Test
     fun `clusterLocations handles mixed nearby and distant locations`() {
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L), // Cluster 1
-            createLocation(2L, 40.7129, -74.0061, 1500L), // Cluster 1
-            createLocation(3L, 40.7589, -73.9851, 2000L), // Cluster 2 (far)
-            createLocation(4L, 40.7590, -73.9852, 2500L), // Cluster 2
-            createLocation(5L, 40.7489, -73.9680, 3000L)  // Cluster 3 (far)
-        )
+        val locations =
+            listOf(
+                // Cluster 1
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                // Cluster 1
+                createLocation(2L, 40.7129, -74.0061, 1500L),
+                // Cluster 2 (far)
+                createLocation(3L, 40.7589, -73.9851, 2000L),
+                // Cluster 2
+                createLocation(4L, 40.7590, -73.9852, 2500L),
+                // Cluster 3 (far)
+                createLocation(5L, 40.7489, -73.9680, 3000L),
+            )
 
         val clusters = patternMatcher.clusterLocations(locations)
 
@@ -78,10 +91,11 @@ class PatternMatcherTest {
 
     @Test
     fun `hasFollowingPattern returns false for insufficient locations`() {
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7589, -73.9851, 2000L)
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7589, -73.9851, 2000L),
+            )
 
         val result = patternMatcher.hasFollowingPattern(locations)
 
@@ -91,12 +105,13 @@ class PatternMatcherTest {
     @Test
     fun `hasFollowingPattern returns false when locations in same cluster`() {
         // All locations within 100m (single cluster)
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7129, -74.0061, 2000L),
-            createLocation(3L, 40.7127, -74.0059, 3000L),
-            createLocation(4L, 40.7130, -74.0062, 4000L)
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7129, -74.0061, 2000L),
+                createLocation(3L, 40.7127, -74.0059, 3000L),
+                createLocation(4L, 40.7130, -74.0062, 4000L),
+            )
 
         val result = patternMatcher.hasFollowingPattern(locations)
 
@@ -106,11 +121,15 @@ class PatternMatcherTest {
     @Test
     fun `hasFollowingPattern returns true for distinct temporal clusters`() {
         // Three distinct location clusters separated by time (> 1 hour)
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),        // Cluster 1 - morning
-            createLocation(2L, 40.7589, -73.9851, 4000000L),     // Cluster 2 - afternoon
-            createLocation(3L, 40.7489, -73.9680, 8000000L)      // Cluster 3 - evening
-        )
+        val locations =
+            listOf(
+                // Cluster 1 - morning
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                // Cluster 2 - afternoon
+                createLocation(2L, 40.7589, -73.9851, 4000000L),
+                // Cluster 3 - evening
+                createLocation(3L, 40.7489, -73.9680, 8000000L),
+            )
 
         val result = patternMatcher.hasFollowingPattern(locations)
 
@@ -120,11 +139,12 @@ class PatternMatcherTest {
     @Test
     fun `hasFollowingPattern returns false when clusters not temporally separated`() {
         // Three clusters but all at similar times
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7589, -73.9851, 2000L),
-            createLocation(3L, 40.7489, -73.9680, 3000L)
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7589, -73.9851, 2000L),
+                createLocation(3L, 40.7489, -73.9680, 3000L),
+            )
 
         val result = patternMatcher.hasFollowingPattern(locations, minClusters = 3)
 
@@ -136,9 +156,10 @@ class PatternMatcherTest {
 
     @Test
     fun `calculateLocationDiversity returns zero for single location`() {
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L)
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+            )
 
         val diversity = patternMatcher.calculateLocationDiversity(locations)
 
@@ -148,10 +169,11 @@ class PatternMatcherTest {
     @Test
     fun `calculateLocationDiversity returns zero for same location`() {
         // Two locations in same spot
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7128, -74.0060, 2000L)
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7128, -74.0060, 2000L),
+            )
 
         val diversity = patternMatcher.calculateLocationDiversity(locations)
 
@@ -161,12 +183,17 @@ class PatternMatcherTest {
     @Test
     fun `calculateLocationDiversity returns higher score for distant locations`() {
         // Locations far apart show high diversity
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L), // New York
-            createLocation(2L, 40.7589, -73.9851, 2000L), // ~5km
-            createLocation(3L, 40.7489, -73.9680, 3000L), // ~3km
-            createLocation(4L, 40.7300, -73.9950, 4000L)  // ~2km
-        )
+        val locations =
+            listOf(
+                // New York
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                // ~5km
+                createLocation(2L, 40.7589, -73.9851, 2000L),
+                // ~3km
+                createLocation(3L, 40.7489, -73.9680, 3000L),
+                // ~2km
+                createLocation(4L, 40.7300, -73.9950, 4000L),
+            )
 
         val diversity = patternMatcher.calculateLocationDiversity(locations)
 
@@ -176,13 +203,14 @@ class PatternMatcherTest {
     @Test
     fun `calculateLocationDiversity is higher for more clusters`() {
         // More distinct clusters = higher diversity
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7589, -73.9851, 2000L),
-            createLocation(3L, 40.7489, -73.9680, 3000L),
-            createLocation(4L, 40.7389, -73.9500, 4000L),
-            createLocation(5L, 40.7289, -73.9350, 5000L)
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7589, -73.9851, 2000L),
+                createLocation(3L, 40.7489, -73.9680, 3000L),
+                createLocation(4L, 40.7389, -73.9500, 4000L),
+                createLocation(5L, 40.7289, -73.9350, 5000L),
+            )
 
         val diversity = patternMatcher.calculateLocationDiversity(locations)
 
@@ -194,9 +222,10 @@ class PatternMatcherTest {
 
     @Test
     fun `analyzeTemporalPattern returns INSUFFICIENT_DATA for single location`() {
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L)
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+            )
 
         val pattern = patternMatcher.analyzeTemporalPattern(locations)
 
@@ -207,12 +236,16 @@ class PatternMatcherTest {
     @Test
     fun `analyzeTemporalPattern detects VERY_REGULAR pattern`() {
         // Locations at exactly 30-minute intervals
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 0L),
-            createLocation(2L, 40.7129, -74.0061, 1800000L), // +30 min
-            createLocation(3L, 40.7130, -74.0062, 3600000L), // +30 min
-            createLocation(4L, 40.7131, -74.0063, 5400000L)  // +30 min
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 0L),
+                // +30 min
+                createLocation(2L, 40.7129, -74.0061, 1800000L),
+                // +30 min
+                createLocation(3L, 40.7130, -74.0062, 3600000L),
+                // +30 min
+                createLocation(4L, 40.7131, -74.0063, 5400000L),
+            )
 
         val pattern = patternMatcher.analyzeTemporalPattern(locations)
 
@@ -224,12 +257,16 @@ class PatternMatcherTest {
     @Test
     fun `analyzeTemporalPattern detects REGULAR pattern for consistent intervals`() {
         // Locations at roughly 2-hour intervals
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 0L),
-            createLocation(2L, 40.7129, -74.0061, 7200000L),  // +2 hours
-            createLocation(3L, 40.7130, -74.0062, 14400000L), // +2 hours
-            createLocation(4L, 40.7131, -74.0063, 21600000L)  // +2 hours
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 0L),
+                // +2 hours
+                createLocation(2L, 40.7129, -74.0061, 7200000L),
+                // +2 hours
+                createLocation(3L, 40.7130, -74.0062, 14400000L),
+                // +2 hours
+                createLocation(4L, 40.7131, -74.0063, 21600000L),
+            )
 
         val pattern = patternMatcher.analyzeTemporalPattern(locations)
 
@@ -240,13 +277,18 @@ class PatternMatcherTest {
     @Test
     fun `analyzeTemporalPattern detects IRREGULAR pattern for random intervals`() {
         // Locations at very random intervals
-        val locations = listOf(
-            createLocation(1L, 40.7128, -74.0060, 0L),
-            createLocation(2L, 40.7129, -74.0061, 500000L),     // +8 min
-            createLocation(3L, 40.7130, -74.0062, 10000000L),   // +2.6 hours
-            createLocation(4L, 40.7131, -74.0063, 12000000L),   // +33 min
-            createLocation(5L, 40.7132, -74.0064, 30000000L)    // +5 hours
-        )
+        val locations =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 0L),
+                // +8 min
+                createLocation(2L, 40.7129, -74.0061, 500000L),
+                // +2.6 hours
+                createLocation(3L, 40.7130, -74.0062, 10000000L),
+                // +33 min
+                createLocation(4L, 40.7131, -74.0063, 12000000L),
+                // +5 hours
+                createLocation(5L, 40.7132, -74.0064, 30000000L),
+            )
 
         val pattern = patternMatcher.analyzeTemporalPattern(locations)
 
@@ -264,17 +306,20 @@ class PatternMatcherTest {
 
     @Test
     fun `calculatePatternSimilarity returns high score for identical patterns`() {
-        val locations1 = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7589, -73.9851, 2000L),
-            createLocation(3L, 40.7489, -73.9680, 3000L)
-        )
+        val locations1 =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7589, -73.9851, 2000L),
+                createLocation(3L, 40.7489, -73.9680, 3000L),
+            )
 
-        val locations2 = listOf(
-            createLocation(4L, 40.7128, -74.0060, 1100L), // Same places
-            createLocation(5L, 40.7589, -73.9851, 2100L),
-            createLocation(6L, 40.7489, -73.9680, 3100L)
-        )
+        val locations2 =
+            listOf(
+                // Same places
+                createLocation(4L, 40.7128, -74.0060, 1100L),
+                createLocation(5L, 40.7589, -73.9851, 2100L),
+                createLocation(6L, 40.7489, -73.9680, 3100L),
+            )
 
         val similarity = patternMatcher.calculatePatternSimilarity(locations1, locations2)
 
@@ -283,15 +328,18 @@ class PatternMatcherTest {
 
     @Test
     fun `calculatePatternSimilarity returns low score for completely different patterns`() {
-        val locations1 = listOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7129, -74.0061, 2000L)
-        )
+        val locations1 =
+            listOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7129, -74.0061, 2000L),
+            )
 
-        val locations2 = listOf(
-            createLocation(3L, 34.0522, -118.2437, 10000000L), // Los Angeles, much later
-            createLocation(4L, 34.0523, -118.2438, 20000000L)
-        )
+        val locations2 =
+            listOf(
+                // Los Angeles, much later
+                createLocation(3L, 34.0522, -118.2437, 10000000L),
+                createLocation(4L, 34.0523, -118.2438, 20000000L),
+            )
 
         val similarity = patternMatcher.calculatePatternSimilarity(locations1, locations2)
 
@@ -311,11 +359,12 @@ class PatternMatcherTest {
     @Test
     fun `LocationCluster getAverageTimestamp calculates average correctly`() {
         val centerLocation = createLocation(1L, 40.7128, -74.0060, 1000L)
-        val locations = mutableListOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7129, -74.0061, 2000L),
-            createLocation(3L, 40.7130, -74.0062, 3000L)
-        )
+        val locations =
+            mutableListOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7129, -74.0061, 2000L),
+                createLocation(3L, 40.7130, -74.0062, 3000L),
+            )
 
         val cluster = LocationCluster(centerLocation, locations)
 
@@ -325,11 +374,12 @@ class PatternMatcherTest {
     @Test
     fun `LocationCluster getLocationCount returns correct count`() {
         val centerLocation = createLocation(1L, 40.7128, -74.0060, 1000L)
-        val locations = mutableListOf(
-            createLocation(1L, 40.7128, -74.0060, 1000L),
-            createLocation(2L, 40.7129, -74.0061, 2000L),
-            createLocation(3L, 40.7130, -74.0062, 3000L)
-        )
+        val locations =
+            mutableListOf(
+                createLocation(1L, 40.7128, -74.0060, 1000L),
+                createLocation(2L, 40.7129, -74.0061, 2000L),
+                createLocation(3L, 40.7130, -74.0062, 3000L),
+            )
 
         val cluster = LocationCluster(centerLocation, locations)
 
@@ -340,12 +390,13 @@ class PatternMatcherTest {
 
     @Test
     fun `TemporalPattern stores all properties correctly`() {
-        val pattern = TemporalPattern(
-            isRegular = true,
-            averageInterval = 3600000L,
-            variance = 1000.0,
-            pattern = "VERY_REGULAR"
-        )
+        val pattern =
+            TemporalPattern(
+                isRegular = true,
+                averageInterval = 3600000L,
+                variance = 1000.0,
+                pattern = "VERY_REGULAR",
+            )
 
         assertTrue(pattern.isRegular)
         assertEquals(3600000L, pattern.averageInterval)
@@ -362,7 +413,7 @@ class PatternMatcherTest {
         id: Long,
         latitude: Double,
         longitude: Double,
-        timestamp: Long
+        timestamp: Long,
     ): Location {
         return Location(
             id = id,
@@ -370,7 +421,7 @@ class PatternMatcherTest {
             longitude = longitude,
             accuracy = 10f,
             timestamp = timestamp,
-            provider = "GPS"
+            provider = "GPS",
         )
     }
 }

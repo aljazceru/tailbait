@@ -26,14 +26,14 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
-
     private val testDb = "migration-test"
 
     @get:Rule
-    val helper: MigrationTestHelper = MigrationTestHelper(
-        InstrumentationRegistry.getInstrumentation(),
-        TailBaitDatabase::class.java
-    )
+    val helper: MigrationTestHelper =
+        MigrationTestHelper(
+            InstrumentationRegistry.getInstrumentation(),
+            TailBaitDatabase::class.java,
+        )
 
     @Test
     fun migrate1To2() {

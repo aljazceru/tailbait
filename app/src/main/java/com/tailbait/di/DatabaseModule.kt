@@ -46,7 +46,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
-
     /**
      * Provides the singleton instance of the TailBait database.
      *
@@ -60,7 +59,7 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideTailBaitDatabase(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
     ): TailBaitDatabase {
         return TailBaitDatabase.getInstance(context)
     }
@@ -76,9 +75,7 @@ object DatabaseModule {
      */
     @Provides
     @Singleton
-    fun provideScannedDeviceDao(
-        database: TailBaitDatabase
-    ): ScannedDeviceDao {
+    fun provideScannedDeviceDao(database: TailBaitDatabase): ScannedDeviceDao {
         return database.scannedDeviceDao()
     }
 
@@ -93,9 +90,7 @@ object DatabaseModule {
      */
     @Provides
     @Singleton
-    fun provideLocationDao(
-        database: TailBaitDatabase
-    ): LocationDao {
+    fun provideLocationDao(database: TailBaitDatabase): LocationDao {
         return database.locationDao()
     }
 
@@ -110,9 +105,7 @@ object DatabaseModule {
      */
     @Provides
     @Singleton
-    fun provideDeviceLocationRecordDao(
-        database: TailBaitDatabase
-    ): DeviceLocationRecordDao {
+    fun provideDeviceLocationRecordDao(database: TailBaitDatabase): DeviceLocationRecordDao {
         return database.deviceLocationRecordDao()
     }
 
@@ -127,9 +120,7 @@ object DatabaseModule {
      */
     @Provides
     @Singleton
-    fun provideWhitelistEntryDao(
-        database: TailBaitDatabase
-    ): WhitelistEntryDao {
+    fun provideWhitelistEntryDao(database: TailBaitDatabase): WhitelistEntryDao {
         return database.whitelistEntryDao()
     }
 
@@ -144,9 +135,7 @@ object DatabaseModule {
      */
     @Provides
     @Singleton
-    fun provideAlertHistoryDao(
-        database: TailBaitDatabase
-    ): AlertHistoryDao {
+    fun provideAlertHistoryDao(database: TailBaitDatabase): AlertHistoryDao {
         return database.alertHistoryDao()
     }
 
@@ -161,9 +150,7 @@ object DatabaseModule {
      */
     @Provides
     @Singleton
-    fun provideAppSettingsDao(
-        database: TailBaitDatabase
-    ): AppSettingsDao {
+    fun provideAppSettingsDao(database: TailBaitDatabase): AppSettingsDao {
         return database.appSettingsDao()
     }
 
@@ -178,9 +165,7 @@ object DatabaseModule {
      */
     @Provides
     @Singleton
-    fun provideUserPathDao(
-        database: TailBaitDatabase
-    ): UserPathDao {
+    fun provideUserPathDao(database: TailBaitDatabase): UserPathDao {
         return database.userPathDao()
     }
 }

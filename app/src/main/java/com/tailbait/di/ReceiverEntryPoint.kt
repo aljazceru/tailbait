@@ -12,7 +12,10 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 interface ReceiverEntryPoint {
     fun alertRepository(): AlertRepository
+
     fun deviceRepository(): DeviceRepository
+
     fun whitelistRepository(): WhitelistRepository
+
     fun notificationHelper(): NotificationHelper
 }

@@ -1,6 +1,5 @@
 package com.tailbait.ui.screens.permissions
 
-
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -9,8 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.tailbait.ui.theme.TailBaitDimensions
 import com.tailbait.ui.theme.TailBaitShapeTokens
 
@@ -26,62 +25,68 @@ fun PermissionCard(
     isRequired: Boolean,
     onRequestPermission: () -> Unit,
     onShowRationale: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(enabled = !isGranted) {
-                onShowRationale()
-            },
-
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(enabled = !isGranted) {
+                    onShowRationale()
+                },
         shape = TailBaitShapeTokens.CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isGranted) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isGranted) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+            ),
+        elevation =
+            CardDefaults.cardElevation(
+                defaultElevation = 2.dp,
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             // Status Icon
             Icon(
-                imageVector = when {
-                    isGranted -> Icons.Default.CheckCircle
-                    isRequired -> Icons.Default.Warning
-                    else -> Icons.Default.Info
-                },
+                imageVector =
+                    when {
+                        isGranted -> Icons.Default.CheckCircle
+                        isRequired -> Icons.Default.Warning
+                        else -> Icons.Default.Info
+                    },
                 contentDescription = if (isGranted) "Granted" else "Not Granted",
-                tint = when {
-                    isGranted -> MaterialTheme.colorScheme.primary
-                    isRequired -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(TailBaitDimensions.IconSizeLarge)
+                tint =
+                    when {
+                        isGranted -> MaterialTheme.colorScheme.primary
+                        isRequired -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                modifier = Modifier.size(TailBaitDimensions.IconSizeLarge),
             )
 
             Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingLG))
 
             // Permission Info
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
 
                     if (!isRequired) {
@@ -89,19 +94,21 @@ fun PermissionCard(
                         Surface(
                             color = MaterialTheme.colorScheme.secondaryContainer,
                             shape = TailBaitShapeTokens.BadgeShape,
-                            modifier = Modifier.padding(
-                                horizontal = TailBaitDimensions.SpacingXS,
-                                vertical = TailBaitDimensions.SpacingXXS
-                            )
+                            modifier =
+                                Modifier.padding(
+                                    horizontal = TailBaitDimensions.SpacingXS,
+                                    vertical = TailBaitDimensions.SpacingXXS,
+                                ),
                         ) {
                             Text(
                                 text = "Optional",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(
-                                    horizontal = TailBaitDimensions.SpacingSM,
-                                    vertical = TailBaitDimensions.SpacingXXS
-                                )
+                                modifier =
+                                    Modifier.padding(
+                                        horizontal = TailBaitDimensions.SpacingSM,
+                                        vertical = TailBaitDimensions.SpacingXXS,
+                                    ),
                             )
                         }
                     }
@@ -112,7 +119,7 @@ fun PermissionCard(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 if (isGranted) {
@@ -121,7 +128,7 @@ fun PermissionCard(
                         text = "✓ Permission granted",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
                     )
                 }
             }
@@ -131,12 +138,12 @@ fun PermissionCard(
             // Action Button
             if (!isGranted) {
                 IconButton(
-                    onClick = onRequestPermission
+                    onClick = onRequestPermission,
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Grant Permission",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -151,26 +158,28 @@ fun PermissionCard(
 fun PermissionStatusIndicator(
     permissionName: String,
     isGranted: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(
-                vertical = TailBaitDimensions.SpacingSM,
-                horizontal = TailBaitDimensions.SpacingLG
-            ),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(
+                    vertical = TailBaitDimensions.SpacingSM,
+                    horizontal = TailBaitDimensions.SpacingLG,
+                ),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Cancel,
             contentDescription = if (isGranted) "Granted" else "Denied",
-            tint = if (isGranted) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.error
-            },
-            modifier = Modifier.size(TailBaitDimensions.IconSizeMedium)
+            tint =
+                if (isGranted) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+            modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
         )
 
         Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingMD))
@@ -179,12 +188,12 @@ fun PermissionStatusIndicator(
             Text(
                 text = permissionName,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
             Text(
                 text = if (isGranted) "Granted" else "Not Granted",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -201,43 +210,48 @@ fun PermissionGroupStatusCard(
     grantedCount: Int,
     totalCount: Int,
     onManageClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onManageClick() },
-
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable { onManageClick() },
         shape = TailBaitShapeTokens.CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (allGranted) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.errorContainer
-            }
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (allGranted) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.errorContainer
+                    },
+            ),
+        elevation =
+            CardDefaults.cardElevation(
+                defaultElevation = 2.dp,
+            ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(
                     imageVector = if (allGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
                     contentDescription = null,
-                    tint = if (allGranted) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    },
-                    modifier = Modifier.size(TailBaitDimensions.IconSizeLarge)
+                    tint =
+                        if (allGranted) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        },
+                    modifier = Modifier.size(TailBaitDimensions.IconSizeLarge),
                 )
 
                 Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingLG))
@@ -247,11 +261,12 @@ fun PermissionGroupStatusCard(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (allGranted) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        }
+                        color =
+                            if (allGranted) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            },
                     )
 
                     Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingXS))
@@ -259,22 +274,24 @@ fun PermissionGroupStatusCard(
                     Text(
                         text = "$grantedCount of $totalCount permissions granted",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (allGranted) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        }
+                        color =
+                            if (allGranted) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            },
                     )
                 }
 
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = "Manage",
-                    tint = if (allGranted) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    }
+                    tint =
+                        if (allGranted) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        },
                 )
             }
 
@@ -284,7 +301,7 @@ fun PermissionGroupStatusCard(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    color = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
         }

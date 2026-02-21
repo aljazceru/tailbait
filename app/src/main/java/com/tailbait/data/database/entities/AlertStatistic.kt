@@ -9,7 +9,6 @@ import androidx.room.ColumnInfo
 data class AlertStatistic(
     @ColumnInfo(name = "alert_level")
     val alertLevel: String,
-
     @ColumnInfo(name = "count")
-    val count: Int
+    val count: Int,
 )

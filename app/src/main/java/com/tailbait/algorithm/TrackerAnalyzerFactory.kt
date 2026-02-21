@@ -4,7 +4,6 @@ import android.os.ParcelUuid
 import com.tailbait.util.BeaconDetectionUtils
 import com.tailbait.util.ManufacturerDataParser
 import com.tailbait.util.SignalStrength
-import timber.log.Timber
 
 /**
  * Factory pattern for manufacturer-specific tracker analyzers.
@@ -30,7 +29,6 @@ import timber.log.Timber
  * - Google (Find My Device Network participants)
  */
 object TrackerAnalyzerFactory {
-
     // ============================================================================
     // TRACKER ANALYSIS RESULT
     // ============================================================================
@@ -47,7 +45,7 @@ object TrackerAnalyzerFactory {
         val threatLevel: ThreatLevel,
         val signalStrength: SignalStrength,
         val beaconType: BeaconDetectionUtils.BeaconType?,
-        val additionalInfo: Map<String, Any> = emptyMap()
+        val additionalInfo: Map<String, Any> = emptyMap(),
     )
 
     /**
@@ -56,14 +54,18 @@ object TrackerAnalyzerFactory {
     enum class ThreatLevel {
         /** Not a tracker, no threat */
         NONE,
+
         /** Tracker detected but likely user's own device or known safe */
         LOW,
+
         /** Tracker detected, moderate suspicion */
         MEDIUM,
+
         /** Tracker detected with suspicious characteristics */
         HIGH,
+
         /** Tracker detected with strong indicators of stalking */
-        CRITICAL
+        CRITICAL,
     }
 
     // ============================================================================
@@ -82,7 +84,7 @@ object TrackerAnalyzerFactory {
             manufacturerData: ByteArray?,
             serviceUuids: List<ParcelUuid>?,
             rssi: Int,
-            deviceName: String?
+            deviceName: String?,
         ): TrackerAnalysis?
     }
 
@@ -105,7 +107,7 @@ object TrackerAnalyzerFactory {
             manufacturerData: ByteArray?,
             serviceUuids: List<ParcelUuid>?,
             rssi: Int,
-            deviceName: String?
+            deviceName: String?,
         ): TrackerAnalysis? {
             if (manufacturerData == null || manufacturerData.isEmpty()) return null
 
@@ -119,12 +121,13 @@ object TrackerAnalyzerFactory {
                     val isSeparated = findMyInfo?.separatedFromOwner ?: false
 
                     // Separated AirTag = CRITICAL threat
-                    val threatLevel = when {
-                        isSeparated && signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.CRITICAL
-                        isSeparated -> ThreatLevel.HIGH
-                        signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                        else -> ThreatLevel.MEDIUM
-                    }
+                    val threatLevel =
+                        when {
+                            isSeparated && signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.CRITICAL
+                            isSeparated -> ThreatLevel.HIGH
+                            signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
+                            else -> ThreatLevel.MEDIUM
+                        }
 
                     TrackerAnalysis(
                         isTracker = true,
@@ -135,13 +138,14 @@ object TrackerAnalyzerFactory {
                         threatLevel = threatLevel,
                         signalStrength = signalStrength,
                         beaconType = BeaconDetectionUtils.BeaconType.FIND_MY,
-                        additionalInfo = buildMap {
-                            put("separatedFromOwner", isSeparated)
-                            findMyInfo?.let {
-                                put("batteryLevel", it.batteryLevel.name)
-                                put("fingerprint", it.payloadFingerprint)
-                            }
-                        }
+                        additionalInfo =
+                            buildMap {
+                                put("separatedFromOwner", isSeparated)
+                                findMyInfo?.let {
+                                    put("batteryLevel", it.batteryLevel.name)
+                                    put("fingerprint", it.payloadFingerprint)
+                                }
+                            },
                     )
                 }
 
@@ -150,14 +154,15 @@ object TrackerAnalyzerFactory {
                     val model = parseAirPodsModel(manufacturerData)
 
                     TrackerAnalysis(
-                        isTracker = false,  // AirPods aren't trackers per se
+                        // AirPods aren't trackers per se
+                        isTracker = false,
                         trackerType = TrackerServiceDetector.TrackerType.NOT_A_TRACKER,
                         manufacturerName = "Apple",
                         deviceModel = model ?: "AirPods",
                         confidence = 0.90f,
                         threatLevel = ThreatLevel.LOW,
                         signalStrength = signalStrength,
-                        beaconType = BeaconDetectionUtils.BeaconType.PROXIMITY_PAIRING
+                        beaconType = BeaconDetectionUtils.BeaconType.PROXIMITY_PAIRING,
                     )
                 }
 
@@ -171,7 +176,7 @@ object TrackerAnalyzerFactory {
                         confidence = 0.70f,
                         threatLevel = ThreatLevel.NONE,
                         signalStrength = signalStrength,
-                        beaconType = null
+                        beaconType = null,
                     )
                 }
             }
@@ -222,17 +227,18 @@ object TrackerAnalyzerFactory {
             manufacturerData: ByteArray?,
             serviceUuids: List<ParcelUuid>?,
             rssi: Int,
-            deviceName: String?
+            deviceName: String?,
         ): TrackerAnalysis {
             val signalStrength = SignalStrength.fromRssi(rssi)
             val isSmartTag = TrackerServiceDetector.isSamsungSmartTag(serviceUuids)
 
             if (isSmartTag) {
-                val threatLevel = when {
-                    signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                    signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
-                    else -> ThreatLevel.LOW
-                }
+                val threatLevel =
+                    when {
+                        signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
+                        signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
+                        else -> ThreatLevel.LOW
+                    }
 
                 return TrackerAnalysis(
                     isTracker = true,
@@ -242,7 +248,7 @@ object TrackerAnalyzerFactory {
                     confidence = 0.95f,
                     threatLevel = threatLevel,
                     signalStrength = signalStrength,
-                    beaconType = null
+                    beaconType = null,
                 )
             }
 
@@ -255,7 +261,7 @@ object TrackerAnalyzerFactory {
                 confidence = 0.65f,
                 threatLevel = ThreatLevel.NONE,
                 signalStrength = signalStrength,
-                beaconType = null
+                beaconType = null,
             )
         }
     }
@@ -276,24 +282,26 @@ object TrackerAnalyzerFactory {
             manufacturerData: ByteArray?,
             serviceUuids: List<ParcelUuid>?,
             rssi: Int,
-            deviceName: String?
+            deviceName: String?,
         ): TrackerAnalysis {
             val signalStrength = SignalStrength.fromRssi(rssi)
 
-            val threatLevel = when {
-                signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
-                else -> ThreatLevel.LOW
-            }
+            val threatLevel =
+                when {
+                    signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
+                    signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
+                    else -> ThreatLevel.LOW
+                }
 
             // Try to determine Tile model from name or data
-            val model = when {
-                deviceName?.contains("Pro", ignoreCase = true) == true -> "Tile Pro"
-                deviceName?.contains("Mate", ignoreCase = true) == true -> "Tile Mate"
-                deviceName?.contains("Slim", ignoreCase = true) == true -> "Tile Slim"
-                deviceName?.contains("Sticker", ignoreCase = true) == true -> "Tile Sticker"
-                else -> "Tile"
-            }
+            val model =
+                when {
+                    deviceName?.contains("Pro", ignoreCase = true) == true -> "Tile Pro"
+                    deviceName?.contains("Mate", ignoreCase = true) == true -> "Tile Mate"
+                    deviceName?.contains("Slim", ignoreCase = true) == true -> "Tile Slim"
+                    deviceName?.contains("Sticker", ignoreCase = true) == true -> "Tile Sticker"
+                    else -> "Tile"
+                }
 
             return TrackerAnalysis(
                 isTracker = true,
@@ -303,7 +311,7 @@ object TrackerAnalyzerFactory {
                 confidence = 0.95f,
                 threatLevel = threatLevel,
                 signalStrength = signalStrength,
-                beaconType = null
+                beaconType = null,
             )
         }
     }
@@ -322,21 +330,23 @@ object TrackerAnalyzerFactory {
             manufacturerData: ByteArray?,
             serviceUuids: List<ParcelUuid>?,
             rssi: Int,
-            deviceName: String?
+            deviceName: String?,
         ): TrackerAnalysis {
             val signalStrength = SignalStrength.fromRssi(rssi)
 
-            val threatLevel = when {
-                signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
-                else -> ThreatLevel.LOW
-            }
+            val threatLevel =
+                when {
+                    signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
+                    signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
+                    else -> ThreatLevel.LOW
+                }
 
-            val model = when {
-                deviceName?.contains("ONE", ignoreCase = true) == true -> "Chipolo ONE"
-                deviceName?.contains("CARD", ignoreCase = true) == true -> "Chipolo CARD"
-                else -> "Chipolo"
-            }
+            val model =
+                when {
+                    deviceName?.contains("ONE", ignoreCase = true) == true -> "Chipolo ONE"
+                    deviceName?.contains("CARD", ignoreCase = true) == true -> "Chipolo CARD"
+                    else -> "Chipolo"
+                }
 
             return TrackerAnalysis(
                 isTracker = true,
@@ -346,7 +356,7 @@ object TrackerAnalyzerFactory {
                 confidence = 0.95f,
                 threatLevel = threatLevel,
                 signalStrength = signalStrength,
-                beaconType = null
+                beaconType = null,
             )
         }
     }
@@ -365,17 +375,18 @@ object TrackerAnalyzerFactory {
             manufacturerData: ByteArray?,
             serviceUuids: List<ParcelUuid>?,
             rssi: Int,
-            deviceName: String?
+            deviceName: String?,
         ): TrackerAnalysis {
             val signalStrength = SignalStrength.fromRssi(rssi)
             val isFindMy = TrackerServiceDetector.isGoogleFindMy(serviceUuids)
 
             if (isFindMy) {
-                val threatLevel = when {
-                    signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                    signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
-                    else -> ThreatLevel.LOW
-                }
+                val threatLevel =
+                    when {
+                        signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
+                        signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
+                        else -> ThreatLevel.LOW
+                    }
 
                 return TrackerAnalysis(
                     isTracker = true,
@@ -385,7 +396,7 @@ object TrackerAnalyzerFactory {
                     confidence = 0.90f,
                     threatLevel = threatLevel,
                     signalStrength = signalStrength,
-                    beaconType = null
+                    beaconType = null,
                 )
             }
 
@@ -398,7 +409,7 @@ object TrackerAnalyzerFactory {
                 confidence = 0.70f,
                 threatLevel = ThreatLevel.NONE,
                 signalStrength = signalStrength,
-                beaconType = null
+                beaconType = null,
             )
         }
     }
@@ -413,22 +424,22 @@ object TrackerAnalyzerFactory {
     private class GenericTrackerAnalyzer(
         override val manufacturerId: Int,
         private val name: String,
-        private val trackerType: TrackerServiceDetector.TrackerType
+        private val trackerType: TrackerServiceDetector.TrackerType,
     ) : TrackerAnalyzer {
-
         override fun analyze(
             manufacturerData: ByteArray?,
             serviceUuids: List<ParcelUuid>?,
             rssi: Int,
-            deviceName: String?
+            deviceName: String?,
         ): TrackerAnalysis {
             val signalStrength = SignalStrength.fromRssi(rssi)
 
-            val threatLevel = when {
-                signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
-                else -> ThreatLevel.LOW
-            }
+            val threatLevel =
+                when {
+                    signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
+                    signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
+                    else -> ThreatLevel.LOW
+                }
 
             return TrackerAnalysis(
                 isTracker = true,
@@ -438,7 +449,7 @@ object TrackerAnalyzerFactory {
                 confidence = 0.90f,
                 threatLevel = threatLevel,
                 signalStrength = signalStrength,
-                beaconType = null
+                beaconType = null,
             )
         }
     }
@@ -450,23 +461,26 @@ object TrackerAnalyzerFactory {
     /**
      * Registry of manufacturer ID to analyzer mappings.
      */
-    private val analyzers: Map<Int, TrackerAnalyzer> = mapOf(
-        ManufacturerDataParser.ManufacturerId.APPLE to AppleAnalyzer,
-        ManufacturerDataParser.ManufacturerId.SAMSUNG to SamsungAnalyzer,
-        ManufacturerDataParser.ManufacturerId.TILE to TileAnalyzer,
-        ManufacturerDataParser.ManufacturerId.CHIPOLO to ChipoloAnalyzer,
-        ManufacturerDataParser.ManufacturerId.GOOGLE to GoogleAnalyzer,
-        ManufacturerDataParser.ManufacturerId.PEBBLEBEE to GenericTrackerAnalyzer(
-            ManufacturerDataParser.ManufacturerId.PEBBLEBEE,
-            "Pebblebee",
-            TrackerServiceDetector.TrackerType.PEBBLEBEE
-        ),
-        ManufacturerDataParser.ManufacturerId.CUBE to GenericTrackerAnalyzer(
-            ManufacturerDataParser.ManufacturerId.CUBE,
-            "Cube",
-            TrackerServiceDetector.TrackerType.CUBE
+    private val analyzers: Map<Int, TrackerAnalyzer> =
+        mapOf(
+            ManufacturerDataParser.ManufacturerId.APPLE to AppleAnalyzer,
+            ManufacturerDataParser.ManufacturerId.SAMSUNG to SamsungAnalyzer,
+            ManufacturerDataParser.ManufacturerId.TILE to TileAnalyzer,
+            ManufacturerDataParser.ManufacturerId.CHIPOLO to ChipoloAnalyzer,
+            ManufacturerDataParser.ManufacturerId.GOOGLE to GoogleAnalyzer,
+            ManufacturerDataParser.ManufacturerId.PEBBLEBEE to
+                GenericTrackerAnalyzer(
+                    ManufacturerDataParser.ManufacturerId.PEBBLEBEE,
+                    "Pebblebee",
+                    TrackerServiceDetector.TrackerType.PEBBLEBEE,
+                ),
+            ManufacturerDataParser.ManufacturerId.CUBE to
+                GenericTrackerAnalyzer(
+                    ManufacturerDataParser.ManufacturerId.CUBE,
+                    "Cube",
+                    TrackerServiceDetector.TrackerType.CUBE,
+                ),
         )
-    )
 
     // ============================================================================
     // FACTORY METHODS
@@ -497,7 +511,7 @@ object TrackerAnalyzerFactory {
         manufacturerData: ByteArray?,
         serviceUuids: List<ParcelUuid>?,
         rssi: Int,
-        deviceName: String?
+        deviceName: String?,
     ): TrackerAnalysis? {
         if (manufacturerId == null) return null
 
@@ -510,11 +524,12 @@ object TrackerAnalyzerFactory {
         val serviceDetection = TrackerServiceDetector.detectTracker(serviceUuids)
         if (serviceDetection.isTracker) {
             val signalStrength = SignalStrength.fromRssi(rssi)
-            val threatLevel = when {
-                signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
-                else -> ThreatLevel.LOW
-            }
+            val threatLevel =
+                when {
+                    signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
+                    signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
+                    else -> ThreatLevel.LOW
+                }
 
             return TrackerAnalysis(
                 isTracker = true,
@@ -524,7 +539,7 @@ object TrackerAnalyzerFactory {
                 confidence = serviceDetection.confidence,
                 threatLevel = threatLevel,
                 signalStrength = signalStrength,
-                beaconType = null
+                beaconType = null,
             )
         }
 

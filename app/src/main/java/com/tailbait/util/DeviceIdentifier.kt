@@ -19,7 +19,6 @@ import timber.log.Timber
  * - Standard BLE device types via Appearance values
  */
 object DeviceIdentifier {
-
     // ============================================================================
     // SERVICE UUIDS FOR TRACKER DETECTION
     // ============================================================================
@@ -58,10 +57,11 @@ object DeviceIdentifier {
     /**
      * Known tracker service UUIDs for quick lookup.
      */
-    private val trackerServiceUuids = setOf(
-        ServiceUuid.SAMSUNG_SMARTTAG.lowercase(),
-        ServiceUuid.TILE.lowercase(),
-    )
+    private val trackerServiceUuids =
+        setOf(
+            ServiceUuid.SAMSUNG_SMARTTAG.lowercase(),
+            ServiceUuid.TILE.lowercase(),
+        )
 
     /**
      * BLE chipset/module manufacturer IDs that shouldn't be displayed to users.
@@ -73,18 +73,29 @@ object DeviceIdentifier {
      * When we detect these IDs, we should rely on other identification methods
      * (device name, service UUIDs, appearance) instead of showing the chipset vendor.
      */
-    private val chipsetManufacturerIds = setOf(
-        ManufacturerDataParser.ManufacturerId.NORDIC,           // 0x0059 - Nordic Semiconductor
-        ManufacturerDataParser.ManufacturerId.INTERPLAN,        // 0x0212 - Interplan Co., Ltd (BLE modules)
-        ManufacturerDataParser.ManufacturerId.CYPRESS,          // 0x0131 - Cypress Semiconductor
-        ManufacturerDataParser.ManufacturerId.DIALOG,           // 0x00D2 - Dialog Semiconductor
-        ManufacturerDataParser.ManufacturerId.SILABS,           // 0x02FF - Silicon Labs
-        ManufacturerDataParser.ManufacturerId.REALTEK,          // 0x005D - Realtek Semiconductor
-        ManufacturerDataParser.ManufacturerId.MEDIATEK,         // 0x00A5 - MediaTek
-        ManufacturerDataParser.ManufacturerId.RENESAS,          // 0x00E3 - Renesas Electronics
-        ManufacturerDataParser.ManufacturerId.BROADCOM,         // 0x000F - Broadcom
-        ManufacturerDataParser.ManufacturerId.TEXAS_INSTRUMENTS,// 0x000D - Texas Instruments
-    )
+    private val chipsetManufacturerIds =
+        setOf(
+            // 0x0059 - Nordic Semiconductor
+            ManufacturerDataParser.ManufacturerId.NORDIC,
+            // 0x0212 - Interplan Co., Ltd (BLE modules)
+            ManufacturerDataParser.ManufacturerId.INTERPLAN,
+            // 0x0131 - Cypress Semiconductor
+            ManufacturerDataParser.ManufacturerId.CYPRESS,
+            // 0x00D2 - Dialog Semiconductor
+            ManufacturerDataParser.ManufacturerId.DIALOG,
+            // 0x02FF - Silicon Labs
+            ManufacturerDataParser.ManufacturerId.SILABS,
+            // 0x005D - Realtek Semiconductor
+            ManufacturerDataParser.ManufacturerId.REALTEK,
+            // 0x00A5 - MediaTek
+            ManufacturerDataParser.ManufacturerId.MEDIATEK,
+            // 0x00E3 - Renesas Electronics
+            ManufacturerDataParser.ManufacturerId.RENESAS,
+            // 0x000F - Broadcom
+            ManufacturerDataParser.ManufacturerId.BROADCOM,
+            // 0x000D - Texas Instruments
+            ManufacturerDataParser.ManufacturerId.TEXAS_INSTRUMENTS,
+        )
 
     /**
      * Check if a manufacturer ID is a chipset/module vendor (not useful for display).
@@ -96,10 +107,11 @@ object DeviceIdentifier {
     /**
      * Short form of tracker service UUIDs (for matching 16-bit UUIDs).
      */
-    private val trackerShortUuids = setOf(
-        ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase(),
-        ServiceUuid.TILE_SHORT.lowercase(),
-    )
+    private val trackerShortUuids =
+        setOf(
+            ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase(),
+            ServiceUuid.TILE_SHORT.lowercase(),
+        )
 
     // ============================================================================
     // BLE APPEARANCE VALUES (Bluetooth SIG Standard)
@@ -108,29 +120,29 @@ object DeviceIdentifier {
 
     object Appearance {
         // Category ranges (upper 10 bits of 16-bit value)
-        const val CATEGORY_UNKNOWN = 0x0000         // 0x0000 - 0x003F
-        const val CATEGORY_PHONE = 0x0040           // 0x0040 - 0x007F
-        const val CATEGORY_COMPUTER = 0x0080        // 0x0080 - 0x00BF
-        const val CATEGORY_WATCH = 0x00C0           // 0x00C0 - 0x00FF
-        const val CATEGORY_CLOCK = 0x0100           // 0x0100 - 0x013F
-        const val CATEGORY_DISPLAY = 0x0140         // 0x0140 - 0x017F
-        const val CATEGORY_REMOTE = 0x0180          // 0x0180 - 0x01BF
-        const val CATEGORY_EYEGLASSES = 0x01C0      // 0x01C0 - 0x01FF
-        const val CATEGORY_TAG = 0x0200             // 0x0200 - 0x023F (IMPORTANT!)
-        const val CATEGORY_KEYRING = 0x0240         // 0x0240 - 0x027F
-        const val CATEGORY_MEDIA_PLAYER = 0x0280    // 0x0280 - 0x02BF
-        const val CATEGORY_BARCODE = 0x02C0         // 0x02C0 - 0x02FF
-        const val CATEGORY_THERMOMETER = 0x0300     // 0x0300 - 0x033F
-        const val CATEGORY_HEART_RATE = 0x0340      // 0x0340 - 0x037F
-        const val CATEGORY_BLOOD_PRESSURE = 0x0380  // 0x0380 - 0x03BF
-        const val CATEGORY_HID = 0x03C0             // 0x03C0 - 0x03FF
-        const val CATEGORY_GLUCOSE = 0x0400         // 0x0400 - 0x043F
-        const val CATEGORY_RUNNING = 0x0440         // 0x0440 - 0x047F
-        const val CATEGORY_CYCLING = 0x0480         // 0x0480 - 0x04BF
-        const val CATEGORY_PULSE_OX = 0x0C40        // 0x0C40 - 0x0C7F
-        const val CATEGORY_OUTDOOR = 0x0540         // 0x0540 - 0x057F
-        const val CATEGORY_WEARABLE = 0x0940        // 0x0940 - 0x097F
-        const val CATEGORY_HEARING_AID = 0x0A40     // 0x0A40 - 0x0A7F
+        const val CATEGORY_UNKNOWN = 0x0000 // 0x0000 - 0x003F
+        const val CATEGORY_PHONE = 0x0040 // 0x0040 - 0x007F
+        const val CATEGORY_COMPUTER = 0x0080 // 0x0080 - 0x00BF
+        const val CATEGORY_WATCH = 0x00C0 // 0x00C0 - 0x00FF
+        const val CATEGORY_CLOCK = 0x0100 // 0x0100 - 0x013F
+        const val CATEGORY_DISPLAY = 0x0140 // 0x0140 - 0x017F
+        const val CATEGORY_REMOTE = 0x0180 // 0x0180 - 0x01BF
+        const val CATEGORY_EYEGLASSES = 0x01C0 // 0x01C0 - 0x01FF
+        const val CATEGORY_TAG = 0x0200 // 0x0200 - 0x023F (IMPORTANT!)
+        const val CATEGORY_KEYRING = 0x0240 // 0x0240 - 0x027F
+        const val CATEGORY_MEDIA_PLAYER = 0x0280 // 0x0280 - 0x02BF
+        const val CATEGORY_BARCODE = 0x02C0 // 0x02C0 - 0x02FF
+        const val CATEGORY_THERMOMETER = 0x0300 // 0x0300 - 0x033F
+        const val CATEGORY_HEART_RATE = 0x0340 // 0x0340 - 0x037F
+        const val CATEGORY_BLOOD_PRESSURE = 0x0380 // 0x0380 - 0x03BF
+        const val CATEGORY_HID = 0x03C0 // 0x03C0 - 0x03FF
+        const val CATEGORY_GLUCOSE = 0x0400 // 0x0400 - 0x043F
+        const val CATEGORY_RUNNING = 0x0440 // 0x0440 - 0x047F
+        const val CATEGORY_CYCLING = 0x0480 // 0x0480 - 0x04BF
+        const val CATEGORY_PULSE_OX = 0x0C40 // 0x0C40 - 0x0C7F
+        const val CATEGORY_OUTDOOR = 0x0540 // 0x0540 - 0x057F
+        const val CATEGORY_WEARABLE = 0x0940 // 0x0940 - 0x097F
+        const val CATEGORY_HEARING_AID = 0x0A40 // 0x0A40 - 0x0A7F
 
         // Specific appearance values
         const val GENERIC_PHONE = 0x0040
@@ -161,7 +173,7 @@ object DeviceIdentifier {
      */
     fun getAppearanceCategory(appearance: Int): Int {
         // Appearance is 16 bits: upper 10 bits = category, lower 6 bits = subcategory
-        return appearance and 0xFFC0  // Mask to get category (bits 6-15)
+        return appearance and 0xFFC0 // Mask to get category (bits 6-15)
     }
 
     /**
@@ -279,15 +291,15 @@ object DeviceIdentifier {
 
             when {
                 uuidString == ServiceUuid.SAMSUNG_SMARTTAG.lowercase() ||
-                shortUuid == ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase() -> {
+                    shortUuid == ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase() -> {
                     return "Samsung SmartTag"
                 }
                 uuidString == ServiceUuid.TILE.lowercase() ||
-                shortUuid == ServiceUuid.TILE_SHORT.lowercase() -> {
+                    shortUuid == ServiceUuid.TILE_SHORT.lowercase() -> {
                     return "Tile"
                 }
                 uuidString == ServiceUuid.GOOGLE_FAST_PAIR.lowercase() ||
-                shortUuid == ServiceUuid.GOOGLE_FAST_PAIR_SHORT.lowercase() -> {
+                    shortUuid == ServiceUuid.GOOGLE_FAST_PAIR_SHORT.lowercase() -> {
                     return "Google Fast Pair Device"
                 }
             }
@@ -314,7 +326,7 @@ object DeviceIdentifier {
             // Fitness device detection
             when {
                 shortUuid == "180d" || shortUuid == "1814" ||
-                shortUuid == "1818" || shortUuid == "1826" -> {
+                    shortUuid == "1818" || shortUuid == "1826" -> {
                     return ManufacturerDataParser.DeviceType.FITNESS_BAND
                 }
             }
@@ -370,7 +382,7 @@ object DeviceIdentifier {
         val manufacturerName: String?,
         val appleContinuityType: Int?,
         val confidence: Float,
-        val identificationMethod: String
+        val identificationMethod: String,
     )
 
     /**
@@ -389,12 +401,13 @@ object DeviceIdentifier {
      * @param deviceName Advertised device name
      * @return Comprehensive identification result
      */
+    @Suppress("CyclomaticComplexMethod")
     fun identifyDevice(
         manufacturerId: Int?,
         manufacturerData: ByteArray?,
         serviceUuids: List<ParcelUuid>?,
         appearance: Int?,
-        deviceName: String?
+        deviceName: String?,
     ): IdentificationResult {
         // Track the best identification
         var bestType = ManufacturerDataParser.DeviceType.UNKNOWN
@@ -404,16 +417,21 @@ object DeviceIdentifier {
 
         // Get manufacturer name, but filter out chipset/module vendors
         // (their names aren't useful to users - e.g., "Interplan" means nothing)
-        var manufacturerName: String? = manufacturerId?.let { id ->
-            // Don't show chipset manufacturer names to users
-            if (isChipsetManufacturer(id)) {
-                Timber.d("Filtering out chipset manufacturer: ${ManufacturerDataParser.getManufacturerName(id)} (0x${id.toString(16).uppercase()})")
-                null
-            } else {
-                ManufacturerDataParser.getManufacturerName(id)
-                    .takeIf { !it.startsWith("Unknown") }
+        var manufacturerName: String? =
+            manufacturerId?.let { id ->
+                // Don't show chipset manufacturer names to users
+                if (isChipsetManufacturer(id)) {
+                    Timber.d(
+                        "Filtering out chipset manufacturer: ${ManufacturerDataParser.getManufacturerName(
+                            id,
+                        )} (0x${id.toString(16).uppercase()})",
+                    )
+                    null
+                } else {
+                    ManufacturerDataParser.getManufacturerName(id)
+                        .takeIf { !it.startsWith("Unknown") }
+                }
             }
-        }
         var appleContinuityType: Int? = null
         var confidence = 0.0f
         var method = "NONE"
@@ -456,7 +474,8 @@ object DeviceIdentifier {
             ManufacturerDataParser.parseManufacturerData(resolvedManufacturerId, manufacturerData)?.let { info ->
                 // Update manufacturer name if we got a better one
                 if (manufacturerName == null && info.manufacturerName != null &&
-                    !info.manufacturerName.startsWith("Unknown")) {
+                    !info.manufacturerName.startsWith("Unknown")
+                ) {
                     manufacturerName = info.manufacturerName
                 }
                 appleContinuityType = info.appleContinuityType
@@ -492,7 +511,8 @@ object DeviceIdentifier {
 
             // Use appearance if no better identification
             if (bestType == ManufacturerDataParser.DeviceType.UNKNOWN &&
-                appearanceType != ManufacturerDataParser.DeviceType.UNKNOWN) {
+                appearanceType != ManufacturerDataParser.DeviceType.UNKNOWN
+            ) {
                 bestType = appearanceType
                 bestModel = getAppearanceName(app)
                 confidence = 0.70f
@@ -522,7 +542,7 @@ object DeviceIdentifier {
             manufacturerName = manufacturerName,
             appleContinuityType = appleContinuityType,
             confidence = confidence,
-            identificationMethod = method
+            identificationMethod = method,
         )
     }
 
@@ -533,7 +553,9 @@ object DeviceIdentifier {
         return when {
             // Trackers
             nameLower.contains("airtag") -> Triple(ManufacturerDataParser.DeviceType.TRACKER, "AirTag", true)
-            nameLower.contains("smarttag") -> Triple(ManufacturerDataParser.DeviceType.TRACKER, "Samsung SmartTag", true)
+            nameLower.contains(
+                "smarttag",
+            ) -> Triple(ManufacturerDataParser.DeviceType.TRACKER, "Samsung SmartTag", true)
             nameLower.contains("tile") && !nameLower.contains("reptile") ->
                 Triple(ManufacturerDataParser.DeviceType.TRACKER, "Tile", true)
             nameLower.contains("chipolo") -> Triple(ManufacturerDataParser.DeviceType.TRACKER, "Chipolo", true)

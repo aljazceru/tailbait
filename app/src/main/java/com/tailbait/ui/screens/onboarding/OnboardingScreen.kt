@@ -40,63 +40,69 @@ import kotlinx.coroutines.launch
  * @param onComplete Callback when onboarding is completed or skipped
  */
 @OptIn(ExperimentalFoundationApi::class)
+@Suppress("LongMethod")
 @Composable
-fun OnboardingScreen(
-    onComplete: () -> Unit
-) {
-    val pages = listOf(
-        OnboardingPage(
-            title = "Welcome to TailBait",
-            description = "Your personal safety companion for detecting unwanted " +
-                "Bluetooth tracking devices around you.",
-            icon = Icons.Filled.Shield,
-            color = MaterialTheme.colorScheme.primary
-        ),
-        OnboardingPage(
-            title = "Automatic Detection",
-            description = "The app continuously scans for nearby Bluetooth devices and " +
-                "tracks their locations to identify suspicious patterns.",
-            icon = Icons.Outlined.BluetoothSearching,
-            color = MaterialTheme.colorScheme.secondary
-        ),
-        OnboardingPage(
-            title = "Smart Alerts",
-            description = "Get notified when a device appears at multiple locations " +
-                "with you, indicating potential tracking.",
-            icon = Icons.Outlined.NotificationsActive,
-            color = MaterialTheme.colorScheme.tertiary
-        ),
-        OnboardingPage(
-            title = "Privacy First",
-            description = "All data stays on your device. We'll need a few permissions " +
-                "to detect devices and track locations.",
-            icon = Icons.Outlined.Lock,
-            color = MaterialTheme.colorScheme.error
+fun OnboardingScreen(onComplete: () -> Unit) {
+    val pages =
+        listOf(
+            OnboardingPage(
+                title = "Welcome to TailBait",
+                description =
+                    "Your personal safety companion for detecting unwanted " +
+                        "Bluetooth tracking devices around you.",
+                icon = Icons.Filled.Shield,
+                color = MaterialTheme.colorScheme.primary,
+            ),
+            OnboardingPage(
+                title = "Automatic Detection",
+                description =
+                    "The app continuously scans for nearby Bluetooth devices and " +
+                        "tracks their locations to identify suspicious patterns.",
+                icon = Icons.Outlined.BluetoothSearching,
+                color = MaterialTheme.colorScheme.secondary,
+            ),
+            OnboardingPage(
+                title = "Smart Alerts",
+                description =
+                    "Get notified when a device appears at multiple locations " +
+                        "with you, indicating potential tracking.",
+                icon = Icons.Outlined.NotificationsActive,
+                color = MaterialTheme.colorScheme.tertiary,
+            ),
+            OnboardingPage(
+                title = "Privacy First",
+                description =
+                    "All data stays on your device. We'll need a few permissions " +
+                        "to detect devices and track locations.",
+                icon = Icons.Outlined.Lock,
+                color = MaterialTheme.colorScheme.error,
+            ),
         )
-    )
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         ) {
             // Skip button (hidden on last page)
             AnimatedVisibility(
                 visible = pagerState.currentPage < pages.size - 1,
                 enter = fadeIn(),
-                exit = fadeOut()
+                exit = fadeOut(),
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.TopEnd
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    contentAlignment = Alignment.TopEnd,
                 ) {
                     TextButton(onClick = onComplete) {
                         Text("Skip")
@@ -107,44 +113,47 @@ fun OnboardingScreen(
             // Page content
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) { page ->
                 OnboardingPageContent(
-                    page = pages[page]
+                    page = pages[page],
                 )
             }
 
             // Page indicators
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 24.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
                 horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 repeat(pages.size) { index ->
                     Box(
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .size(if (index == pagerState.currentPage) 12.dp else 8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (index == pagerState.currentPage) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                                }
-                            )
+                        modifier =
+                            Modifier
+                                .padding(horizontal = 4.dp)
+                                .size(if (index == pagerState.currentPage) 12.dp else 8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (index == pagerState.currentPage) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                    },
+                                ),
                     )
                 }
             }
 
             // Navigation buttons
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = TailBaitDimensions.SpacingXXL, vertical = TailBaitDimensions.SpacingXXL),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = TailBaitDimensions.SpacingXXL, vertical = TailBaitDimensions.SpacingXXL),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 // Back button (hidden on first page)
                 if (pagerState.currentPage > 0) {
@@ -153,15 +162,15 @@ fun OnboardingScreen(
                             scope.launch {
                                 pagerState.animateScrollToPage(
                                     pagerState.currentPage - 1,
-                                    animationSpec = tween(300)
+                                    animationSpec = tween(300),
                                 )
                             }
                         },
-                        shape = TailBaitShapeTokens.ButtonShape
+                        shape = TailBaitShapeTokens.ButtonShape,
                     ) {
                         Icon(
                             imageVector = Icons.Default.ChevronLeft,
-                            contentDescription = "Previous"
+                            contentDescription = "Previous",
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Back")
@@ -177,34 +186,36 @@ fun OnboardingScreen(
                             scope.launch {
                                 pagerState.animateScrollToPage(
                                     pagerState.currentPage + 1,
-                                    animationSpec = tween(300)
+                                    animationSpec = tween(300),
                                 )
                             }
                         } else {
                             onComplete()
                         }
                     },
-                    shape = TailBaitShapeTokens.ButtonShape
+                    shape = TailBaitShapeTokens.ButtonShape,
                 ) {
                     Text(
                         if (pagerState.currentPage < pages.size - 1) {
                             "Next"
                         } else {
                             "Get Started"
-                        }
+                        },
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
-                        imageVector = if (pagerState.currentPage < pages.size - 1) {
-                            Icons.Default.ChevronRight
-                        } else {
-                            Icons.Default.Check
-                        },
-                        contentDescription = if (pagerState.currentPage < pages.size - 1) {
-                            "Next"
-                        } else {
-                            "Get Started"
-                        }
+                        imageVector =
+                            if (pagerState.currentPage < pages.size - 1) {
+                                Icons.Default.ChevronRight
+                            } else {
+                                Icons.Default.Check
+                            },
+                        contentDescription =
+                            if (pagerState.currentPage < pages.size - 1) {
+                                "Next"
+                            } else {
+                                "Get Started"
+                            },
                     )
                 }
             }
@@ -219,38 +230,37 @@ data class OnboardingPage(
     val title: String,
     val description: String,
     val icon: ImageVector,
-    val color: androidx.compose.ui.graphics.Color
+    val color: androidx.compose.ui.graphics.Color,
 )
 
 /**
  * Content for a single onboarding page.
  */
 @Composable
-private fun OnboardingPageContent(
-    page: OnboardingPage
-) {
+private fun OnboardingPageContent(page: OnboardingPage) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = TailBaitDimensions.SpacingXXXL),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = TailBaitDimensions.SpacingXXXL),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         // Icon
         Surface(
             modifier = Modifier.size(TailBaitDimensions.OnboardingIconSize),
             shape = CircleShape,
-            color = page.color.copy(alpha = 0.1f)
+            color = page.color.copy(alpha = 0.1f),
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = page.icon,
                     contentDescription = null,
                     modifier = Modifier.size(TailBaitDimensions.OnboardingIconInnerSize),
-                    tint = page.color
+                    tint = page.color,
                 )
             }
         }
@@ -263,7 +273,7 @@ private fun OnboardingPageContent(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
         )
 
         Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingLG))
@@ -273,7 +283,7 @@ private fun OnboardingPageContent(
             text = page.description,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

@@ -10,7 +10,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.tailbait.ui.screens.settings.SettingsViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -27,6 +26,7 @@ import com.tailbait.ui.screens.map.MapScreen
 import com.tailbait.ui.screens.onboarding.OnboardingScreen
 import com.tailbait.ui.screens.permissions.PermissionRequestScreen
 import com.tailbait.ui.screens.settings.SettingsScreen
+import com.tailbait.ui.screens.settings.SettingsViewModel
 import com.tailbait.ui.screens.whitelist.WhitelistScreen
 
 /**
@@ -79,7 +79,7 @@ import com.tailbait.ui.screens.whitelist.WhitelistScreen
 @Composable
 fun NavigationGraph(
     navController: NavHostController,
-    startDestination: String
+    startDestination: String,
 ) {
     NavHost(navController = navController, startDestination = startDestination) {
         // Onboarding Screen
@@ -90,16 +90,18 @@ fun NavigationGraph(
                     // Mark first launch as complete immediately
                     SettingsViewModel.markFirstLaunchComplete(context)
                     navController.navigate(Screen.Permissions.route)
-                }
+                },
             )
         }
 
         // Permissions Screen
         composable(Screen.Permissions.route) {
             PermissionRequestScreen(
-                onPermissionsGranted = { navController.navigate(Screen.Home.route) {
-                    popUpTo(Screen.Onboarding.route) { inclusive = true }
-                }}
+                onPermissionsGranted = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Onboarding.route) { inclusive = true }
+                    }
+                },
             )
         }
 
@@ -110,7 +112,7 @@ fun NavigationGraph(
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateToPermissions = { navController.navigate(Screen.Permissions.route) },
                 onNavigateToAlerts = { navController.navigate(Screen.Alerts.route) },
-                onNavigateToMap = { navController.navigate(Screen.Map.route) }
+                onNavigateToMap = { navController.navigate(Screen.Map.route) },
             )
         }
 
@@ -122,25 +124,27 @@ fun NavigationGraph(
                 onNavigateToMap = { navController.navigate(Screen.Map.route) },
                 onNavigateToMapForDevice = { deviceId ->
                     navController.navigate(Screen.Map.createRoute(deviceId))
-                }
+                },
             )
         }
 
         // Map Screen (with optional device ID filter)
         composable(
             route = Screen.Map.routeWithArgs,
-            arguments = listOf(
-                navArgument(Screen.Map.DEVICE_ID_ARG) {
-                    type = NavType.LongType
-                    defaultValue = -1L
-                }
-            )
+            arguments =
+                listOf(
+                    navArgument(Screen.Map.DEVICE_ID_ARG) {
+                        type = NavType.LongType
+                        defaultValue = -1L
+                    },
+                ),
         ) { backStackEntry ->
-            val deviceId = backStackEntry.arguments?.getLong(Screen.Map.DEVICE_ID_ARG)
-                ?.takeIf { it != -1L }
+            val deviceId =
+                backStackEntry.arguments?.getLong(Screen.Map.DEVICE_ID_ARG)
+                    ?.takeIf { it != -1L }
             MapScreen(
                 onNavigateBack = { navController.navigateUp() },
-                initialDeviceId = deviceId
+                initialDeviceId = deviceId,
             )
         }
 
@@ -152,7 +156,7 @@ fun NavigationGraph(
         // Alert Detail Screen
         composable(
             route = "${Screen.AlertDetail.route}/{alertId}",
-            arguments = listOf(navArgument("alertId") { type = NavType.LongType })
+            arguments = listOf(navArgument("alertId") { type = NavType.LongType }),
         ) {
             AlertDetailScreen(navController = navController)
         }
@@ -190,16 +194,19 @@ fun NavigationGraph(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppTopBar(title: String, onBackClick: () -> Unit) {
+fun AppTopBar(
+    title: String,
+    onBackClick: () -> Unit,
+) {
     TopAppBar(
         title = { Text(text = title) },
         navigationIcon = {
             IconButton(onClick = onBackClick) {
                 Icon(
                     imageVector = Icons.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.back_button_desc)
+                    contentDescription = stringResource(R.string.back_button_desc),
                 )
             }
-        }
+        },
     )
 }

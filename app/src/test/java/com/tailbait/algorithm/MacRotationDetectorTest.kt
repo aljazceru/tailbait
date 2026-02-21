@@ -6,7 +6,6 @@ import org.junit.Before
 import org.junit.Test
 
 class MacRotationDetectorTest {
-
     private lateinit var detector: MacRotationDetector
 
     @Before
@@ -18,13 +17,13 @@ class MacRotationDetectorTest {
         id: Long,
         address: String,
         firstSeen: Long,
-        lastSeen: Long
+        lastSeen: Long,
     ) = ScannedDevice(
         id = id,
         address = address,
         name = null,
         firstSeen = firstSeen,
-        lastSeen = lastSeen
+        lastSeen = lastSeen,
     )
 
     private val min15 = 15 * 60 * 1000L
@@ -32,12 +31,13 @@ class MacRotationDetectorTest {
     @Test
     fun `perfect 15-min rotation pattern scores near 1`() {
         // 4 MACs with perfect 15-min hand-offs, 1-min gaps
-        val devices = listOf(
-            device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15 - 60_000),
-            device(2, "AA:00:00:00:00:02", firstSeen = min15, lastSeen = 2 * min15 - 60_000),
-            device(3, "AA:00:00:00:00:03", firstSeen = 2 * min15, lastSeen = 3 * min15 - 60_000),
-            device(4, "AA:00:00:00:00:04", firstSeen = 3 * min15, lastSeen = 4 * min15 - 60_000)
-        )
+        val devices =
+            listOf(
+                device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15 - 60_000),
+                device(2, "AA:00:00:00:00:02", firstSeen = min15, lastSeen = 2 * min15 - 60_000),
+                device(3, "AA:00:00:00:00:03", firstSeen = 2 * min15, lastSeen = 3 * min15 - 60_000),
+                device(4, "AA:00:00:00:00:04", firstSeen = 3 * min15, lastSeen = 4 * min15 - 60_000),
+            )
 
         val result = detector.detectRotation(devices)
 
@@ -47,19 +47,20 @@ class MacRotationDetectorTest {
         // Average interval should be ~15 min
         assertTrue(
             "Average interval should be near 15 min, was ${result.averageIntervalMs}ms",
-            result.averageIntervalMs in (min15 - 60_000)..(min15 + 60_000)
+            result.averageIntervalMs in (min15 - 60_000)..(min15 + 60_000),
         )
     }
 
     @Test
     fun `irregular intervals produce lower score`() {
         // 4 MACs with hand-offs but wildly varying intervals
-        val devices = listOf(
-            device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = 5 * 60_000),
-            device(2, "AA:00:00:00:00:02", firstSeen = 6 * 60_000, lastSeen = 36 * 60_000),
-            device(3, "AA:00:00:00:00:03", firstSeen = 37 * 60_000, lastSeen = 40 * 60_000),
-            device(4, "AA:00:00:00:00:04", firstSeen = 41 * 60_000, lastSeen = 100 * 60_000)
-        )
+        val devices =
+            listOf(
+                device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = 5 * 60_000),
+                device(2, "AA:00:00:00:00:02", firstSeen = 6 * 60_000, lastSeen = 36 * 60_000),
+                device(3, "AA:00:00:00:00:03", firstSeen = 37 * 60_000, lastSeen = 40 * 60_000),
+                device(4, "AA:00:00:00:00:04", firstSeen = 41 * 60_000, lastSeen = 100 * 60_000),
+            )
 
         val result = detector.detectRotation(devices)
 
@@ -71,11 +72,12 @@ class MacRotationDetectorTest {
     fun `no hand-offs when all devices active simultaneously`() {
         // All devices have overlapping time ranges with large gaps between lastSeen and next firstSeen
         val now = System.currentTimeMillis()
-        val devices = listOf(
-            device(1, "AA:00:00:00:00:01", firstSeen = now, lastSeen = now + 60 * 60_000),
-            device(2, "AA:00:00:00:00:02", firstSeen = now, lastSeen = now + 60 * 60_000),
-            device(3, "AA:00:00:00:00:03", firstSeen = now, lastSeen = now + 60 * 60_000)
-        )
+        val devices =
+            listOf(
+                device(1, "AA:00:00:00:00:01", firstSeen = now, lastSeen = now + 60 * 60_000),
+                device(2, "AA:00:00:00:00:02", firstSeen = now, lastSeen = now + 60 * 60_000),
+                device(3, "AA:00:00:00:00:03", firstSeen = now, lastSeen = now + 60 * 60_000),
+            )
 
         val result = detector.detectRotation(devices)
 
@@ -90,9 +92,10 @@ class MacRotationDetectorTest {
 
     @Test
     fun `single device returns zero score`() {
-        val devices = listOf(
-            device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15)
-        )
+        val devices =
+            listOf(
+                device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15),
+            )
 
         val result = detector.detectRotation(devices)
 
@@ -113,11 +116,12 @@ class MacRotationDetectorTest {
     fun `large gaps between devices produce no hand-offs`() {
         // Devices seen hours apart - these are different physical devices, not rotation
         val hour = 60 * 60 * 1000L
-        val devices = listOf(
-            device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15),
-            device(2, "AA:00:00:00:00:02", firstSeen = 2 * hour, lastSeen = 2 * hour + min15),
-            device(3, "AA:00:00:00:00:03", firstSeen = 5 * hour, lastSeen = 5 * hour + min15)
-        )
+        val devices =
+            listOf(
+                device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15),
+                device(2, "AA:00:00:00:00:02", firstSeen = 2 * hour, lastSeen = 2 * hour + min15),
+                device(3, "AA:00:00:00:00:03", firstSeen = 5 * hour, lastSeen = 5 * hour + min15),
+            )
 
         val result = detector.detectRotation(devices)
 
@@ -128,10 +132,11 @@ class MacRotationDetectorTest {
     @Test
     fun `two devices with one hand-off returns zero score`() {
         // Minimum 2 hand-offs required
-        val devices = listOf(
-            device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15 - 60_000),
-            device(2, "AA:00:00:00:00:02", firstSeen = min15, lastSeen = 2 * min15)
-        )
+        val devices =
+            listOf(
+                device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15 - 60_000),
+                device(2, "AA:00:00:00:00:02", firstSeen = min15, lastSeen = 2 * min15),
+            )
 
         val result = detector.detectRotation(devices)
 
@@ -141,11 +146,12 @@ class MacRotationDetectorTest {
 
     @Test
     fun `three devices with two hand-offs is minimum viable detection`() {
-        val devices = listOf(
-            device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15 - 60_000),
-            device(2, "AA:00:00:00:00:02", firstSeen = min15, lastSeen = 2 * min15 - 60_000),
-            device(3, "AA:00:00:00:00:03", firstSeen = 2 * min15, lastSeen = 3 * min15 - 60_000)
-        )
+        val devices =
+            listOf(
+                device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15 - 60_000),
+                device(2, "AA:00:00:00:00:02", firstSeen = min15, lastSeen = 2 * min15 - 60_000),
+                device(3, "AA:00:00:00:00:03", firstSeen = 2 * min15, lastSeen = 3 * min15 - 60_000),
+            )
 
         val result = detector.detectRotation(devices)
 
@@ -157,11 +163,12 @@ class MacRotationDetectorTest {
     @Test
     fun `devices out of order are sorted correctly`() {
         // Provide devices in reverse order - should still detect pattern
-        val devices = listOf(
-            device(3, "AA:00:00:00:00:03", firstSeen = 2 * min15, lastSeen = 3 * min15 - 60_000),
-            device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15 - 60_000),
-            device(2, "AA:00:00:00:00:02", firstSeen = min15, lastSeen = 2 * min15 - 60_000)
-        )
+        val devices =
+            listOf(
+                device(3, "AA:00:00:00:00:03", firstSeen = 2 * min15, lastSeen = 3 * min15 - 60_000),
+                device(1, "AA:00:00:00:00:01", firstSeen = 0, lastSeen = min15 - 60_000),
+                device(2, "AA:00:00:00:00:02", firstSeen = min15, lastSeen = 2 * min15 - 60_000),
+            )
 
         val result = detector.detectRotation(devices)
 

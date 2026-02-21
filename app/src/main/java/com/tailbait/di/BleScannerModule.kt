@@ -29,7 +29,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object BleScannerModule {
-
     /**
      * Provides a singleton instance of BleScanner for BLE operations.
      *
@@ -47,7 +46,7 @@ object BleScannerModule {
     @Provides
     @Singleton
     fun provideBleScanner(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
     ): BleScanner {
         return BleScanner(context)
     }

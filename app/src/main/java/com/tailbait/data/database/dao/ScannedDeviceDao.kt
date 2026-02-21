@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.Flow
  */
 @Dao
 interface ScannedDeviceDao {
-
     /**
      * Insert a new scanned device into the database.
      *
@@ -88,13 +87,15 @@ interface ScannedDeviceDao {
      * @param locationId The location ID to query
      * @return List of devices detected at the specified location
      */
-    @Query("""
+    @Query(
+        """
         SELECT DISTINCT sd.* FROM scanned_devices sd
         INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
         WHERE dlr.location_id = :locationId
         AND sd.id NOT IN (SELECT device_id FROM whitelist_entries)
         ORDER BY dlr.timestamp DESC
-    """)
+    """,
+    )
     suspend fun getDevicesAtLocation(locationId: Long): List<ScannedDevice>
 
     /**
@@ -105,7 +106,8 @@ interface ScannedDeviceDao {
      * @return Flow emitting list of suspicious devices with location counts
      */
     @RewriteQueriesToDropUnusedColumns
-    @Query("""
+    @Query(
+        """
         SELECT sd.*, COUNT(DISTINCT dlr.location_id) as location_count
         FROM scanned_devices sd
         INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
@@ -113,7 +115,8 @@ interface ScannedDeviceDao {
         GROUP BY sd.id
         HAVING COUNT(DISTINCT dlr.location_id) >= :minLocationCount
         ORDER BY location_count DESC
-    """)
+    """,
+    )
     fun getSuspiciousDevices(minLocationCount: Int): Flow<List<ScannedDevice>>
 
     /**
@@ -122,11 +125,13 @@ interface ScannedDeviceDao {
      * @param sinceTimestamp Timestamp threshold (devices seen after this time)
      * @return Flow emitting list of recently seen devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE last_seen >= :sinceTimestamp
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     fun getRecentDevices(sinceTimestamp: Long): Flow<List<ScannedDevice>>
 
     /**
@@ -143,10 +148,12 @@ interface ScannedDeviceDao {
      * @param hoursAgo Number of hours to look back
      * @return Flow emitting count of recently seen devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT COUNT(*) FROM scanned_devices
         WHERE last_seen >= :sinceTimestamp
-    """)
+    """,
+    )
     fun getRecentDeviceCount(sinceTimestamp: Long): Flow<Int>
 
     /**
@@ -155,12 +162,14 @@ interface ScannedDeviceDao {
      * @param query Search query string
      * @return Flow emitting list of matching devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE name LIKE '%' || :query || '%'
         OR address LIKE '%' || :query || '%'
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     fun searchDevices(query: String): Flow<List<ScannedDevice>>
 
     /**
@@ -186,11 +195,13 @@ interface ScannedDeviceDao {
      * @param deviceType The device type to filter by (e.g., "PHONE", "WATCH")
      * @return Flow emitting list of devices of the specified type
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE device_type = :deviceType
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     fun getDevicesByType(deviceType: String): Flow<List<ScannedDevice>>
 
     // ============================================================================
@@ -204,12 +215,14 @@ interface ScannedDeviceDao {
      * @param fingerprint The payload fingerprint
      * @return The device with matching fingerprint, or null if not found
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE payload_fingerprint = :fingerprint
         ORDER BY last_seen DESC
         LIMIT 1
-    """)
+    """,
+    )
     suspend fun getByFingerprint(fingerprint: String): ScannedDevice?
 
     /**
@@ -219,11 +232,13 @@ interface ScannedDeviceDao {
      * @param fingerprint The payload fingerprint
      * @return List of devices with matching fingerprint
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE payload_fingerprint = :fingerprint
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     suspend fun getAllByFingerprint(fingerprint: String): List<ScannedDevice>
 
     /**
@@ -233,11 +248,13 @@ interface ScannedDeviceDao {
      * @param primaryDeviceId The ID of the primary device
      * @return List of linked devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE linked_device_id = :primaryDeviceId OR id = :primaryDeviceId
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     suspend fun getLinkedDevices(primaryDeviceId: Long): List<ScannedDevice>
 
     /**
@@ -246,11 +263,13 @@ interface ScannedDeviceDao {
      *
      * @return Flow emitting list of separated Find My devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE find_my_separated = 1 AND is_tracker = 1
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     fun getSeparatedFindMyDevices(): Flow<List<ScannedDevice>>
 
     /**
@@ -265,7 +284,8 @@ interface ScannedDeviceDao {
      * @return Flow emitting list of suspicious devices
      */
     @RewriteQueriesToDropUnusedColumns
-    @Query("""
+    @Query(
+        """
         SELECT sd.*,
             (SELECT COUNT(DISTINCT dlr.location_id)
              FROM device_location_records dlr
@@ -279,8 +299,12 @@ interface ScannedDeviceDao {
         GROUP BY sd.id
         HAVING total_location_count >= :minLocationCount
         ORDER BY total_location_count DESC
-    """)
-    fun getSuspiciousDevicesWithLinked(minLocationCount: Int, sinceTimestamp: Long): Flow<List<ScannedDevice>>
+    """,
+    )
+    fun getSuspiciousDevicesWithLinked(
+        minLocationCount: Int,
+        sinceTimestamp: Long,
+    ): Flow<List<ScannedDevice>>
 
     /**
      * Update the linked_device_id for a device.
@@ -292,20 +316,22 @@ interface ScannedDeviceDao {
      * @param linkStrength Strength of the link (STRONG or WEAK)
      * @param linkReason Explanation of why devices were linked
      */
-    @Query("""
+    @Query(
+        """
         UPDATE scanned_devices
         SET linked_device_id = :linkedDeviceId,
             last_mac_rotation = :lastMacRotation,
             link_strength = :linkStrength,
             link_reason = :linkReason
         WHERE id = :deviceId
-    """)
+    """,
+    )
     suspend fun linkDevice(
         deviceId: Long,
         linkedDeviceId: Long,
         lastMacRotation: Long,
         linkStrength: String,
-        linkReason: String
+        linkReason: String,
     )
 
     /**
@@ -315,12 +341,14 @@ interface ScannedDeviceDao {
      * @param primaryDeviceId The ID of the primary device
      * @return List of weakly linked devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE linked_device_id = :primaryDeviceId
           AND link_strength = 'WEAK'
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     suspend fun getWeakLinkedDevices(primaryDeviceId: Long): List<ScannedDevice>
 
     /**
@@ -329,12 +357,14 @@ interface ScannedDeviceDao {
      * @param primaryDeviceId The ID of the primary device
      * @return List of strongly linked devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE linked_device_id = :primaryDeviceId
           AND link_strength = 'STRONG'
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     suspend fun getStrongLinkedDevices(primaryDeviceId: Long): List<ScannedDevice>
 
     /**
@@ -344,13 +374,19 @@ interface ScannedDeviceDao {
      * @param findMyStatus The raw status byte
      * @param findMySeparated Whether device is separated from owner
      */
-    @Query("""
+    @Query(
+        """
         UPDATE scanned_devices
         SET find_my_status = :findMyStatus,
             find_my_separated = :findMySeparated
         WHERE id = :deviceId
-    """)
-    suspend fun updateFindMyStatus(deviceId: Long, findMyStatus: Int, findMySeparated: Boolean)
+    """,
+    )
+    suspend fun updateFindMyStatus(
+        deviceId: Long,
+        findMyStatus: Int,
+        findMySeparated: Boolean,
+    )
 
     // ============================================================================
     // TEMPORAL CLUSTERING (For devices without payload fingerprints)
@@ -377,7 +413,8 @@ interface ScannedDeviceDao {
      * @param excludeAddress MAC address to exclude (the current device)
      * @return List of potential duplicate devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE manufacturer_id = :manufacturerId
           AND device_type = :deviceType
@@ -389,14 +426,15 @@ interface ScannedDeviceDao {
           )
         ORDER BY last_seen DESC
         LIMIT 10
-    """)
+    """,
+    )
     suspend fun findPotentialDuplicates(
         manufacturerId: Int,
         deviceType: String,
         rssi: Int,
         startTime: Long,
         endTime: Long,
-        excludeAddress: String
+        excludeAddress: String,
     ): List<ScannedDevice>
 
     /**
@@ -412,7 +450,8 @@ interface ScannedDeviceDao {
      * @param excludeAddress MAC address to exclude
      * @return List of devices that "disappeared" when the new one appeared
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE manufacturer_id = :manufacturerId
           AND device_type = :deviceType
@@ -421,13 +460,14 @@ interface ScannedDeviceDao {
           AND linked_device_id IS NULL
         ORDER BY last_seen DESC
         LIMIT 5
-    """)
+    """,
+    )
     suspend fun findDevicesDisappearedNear(
         newDeviceFirstSeen: Long,
         manufacturerId: Int,
         deviceType: String,
         timeWindowMs: Long,
-        excludeAddress: String
+        excludeAddress: String,
     ): List<ScannedDevice>
 
     /**
@@ -441,13 +481,15 @@ interface ScannedDeviceDao {
      * @param sinceTimestamp Only consider devices seen after this time
      * @return List of unfingerprinted devices
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE payload_fingerprint IS NULL
           AND linked_device_id IS NULL
           AND last_seen >= :sinceTimestamp
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     suspend fun getUnfingerprintedDevices(sinceTimestamp: Long): List<ScannedDevice>
 
     /**
@@ -470,7 +512,8 @@ interface ScannedDeviceDao {
      * @param minLocationCount Minimum distinct locations required
      * @return List of shadow key strings meeting the threshold
      */
-    @Query("""
+    @Query(
+        """
         SELECT sd.shadow_key
         FROM scanned_devices sd
         INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
@@ -478,7 +521,8 @@ interface ScannedDeviceDao {
           AND sd.id NOT IN (SELECT device_id FROM whitelist_entries)
         GROUP BY sd.shadow_key
         HAVING COUNT(DISTINCT dlr.location_id) >= :minLocationCount
-    """)
+    """,
+    )
     suspend fun getSuspiciousShadowKeys(minLocationCount: Int): List<String>
 
     /**
@@ -487,11 +531,13 @@ interface ScannedDeviceDao {
      * @param shadowKey The shadow key to query
      * @return List of devices matching this shadow profile
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE shadow_key = :shadowKey
         ORDER BY last_seen DESC
-    """)
+    """,
+    )
     suspend fun getDevicesByShadowKey(shadowKey: String): List<ScannedDevice>
 
     /**
@@ -501,7 +547,8 @@ interface ScannedDeviceDao {
      * @param shadowKey The shadow key to analyze
      * @return List of (locationId, deviceCount, maxRssi) per location
      */
-    @Query("""
+    @Query(
+        """
         SELECT dlr.location_id AS locationId,
                COUNT(DISTINCT sd.id) AS deviceCount,
                MAX(dlr.rssi) AS maxRssi
@@ -509,7 +556,8 @@ interface ScannedDeviceDao {
         INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
         WHERE sd.shadow_key = :shadowKey
         GROUP BY dlr.location_id
-    """)
+    """,
+    )
     suspend fun getShadowLocationDeviceCounts(shadowKey: String): List<ShadowLocationCount>
 
     /**
@@ -519,7 +567,10 @@ interface ScannedDeviceDao {
      * @param shadowKey The computed shadow key
      */
     @Query("UPDATE scanned_devices SET shadow_key = :shadowKey WHERE id = :deviceId")
-    suspend fun updateShadowKey(deviceId: Long, shadowKey: String)
+    suspend fun updateShadowKey(
+        deviceId: Long,
+        shadowKey: String,
+    )
 
     /**
      * Get recently seen devices grouped by fingerprint for correlation analysis.
@@ -528,11 +579,13 @@ interface ScannedDeviceDao {
      * @param sinceTimestamp Only consider devices seen after this time
      * @return List of devices with fingerprints, ordered by fingerprint
      */
-    @Query("""
+    @Query(
+        """
         SELECT * FROM scanned_devices
         WHERE payload_fingerprint IS NOT NULL
           AND last_seen >= :sinceTimestamp
         ORDER BY payload_fingerprint, last_seen DESC
-    """)
+    """,
+    )
     suspend fun getDevicesGroupedByFingerprint(sinceTimestamp: Long): List<ScannedDevice>
 }

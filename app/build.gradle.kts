@@ -6,7 +6,8 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
-    // alias(libs.plugins.spotless)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 // Use Gradle toolchain to auto-download JDK 21 (avoids Java version issues)
@@ -33,7 +34,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }
@@ -80,7 +81,6 @@ dependencies {
     implementation(libs.google.accompanist.swiperefresh)
     implementation(libs.google.accompanist.permissions)
 
-
     // Hilt (Dependency Injection)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
@@ -100,7 +100,6 @@ dependencies {
 
     // Kotlin Serialization
     implementation(libs.kotlinx.serialization.json)
-
 
     // Timber (Logging)
     implementation(libs.timber)
@@ -148,20 +147,13 @@ dependencies {
     kspAndroidTest(libs.hilt.compiler)
 }
 
-// Allow spotless to run on .kt files
-// spotless {
-//     kotlin {
-//         target("**/*.kt")
-//         ktlint()
-//     }
-// }
-
 // Specify KSP arguments
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
-// Execute spotless check before each build
-// tasks.named("preBuild").configure {
-//     dependsOn("spotlessCheck")
-// }
+detekt {
+    config.setFrom("$rootDir/detekt-config.yml")
+    buildUponDefaultConfig = true
+    parallel = true
+}

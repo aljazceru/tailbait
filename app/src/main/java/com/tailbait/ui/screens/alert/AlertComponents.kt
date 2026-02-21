@@ -1,16 +1,17 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.tailbait.ui.screens.alert
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,57 +40,61 @@ import java.util.*
  */
 enum class AlertLevel(
     val displayName: String,
-    val icon: ImageVector
+    val icon: ImageVector,
 ) {
     LOW(
         displayName = "Low",
-        icon = Icons.Outlined.Info
+        icon = Icons.Outlined.Info,
     ),
     MEDIUM(
         displayName = "Medium",
-        icon = Icons.Outlined.Warning
+        icon = Icons.Outlined.Warning,
     ),
     HIGH(
         displayName = "High",
-        icon = Icons.Filled.Warning
+        icon = Icons.Filled.Warning,
     ),
     CRITICAL(
         displayName = "Critical",
-        icon = Icons.Filled.Error
-    );
+        icon = Icons.Filled.Error,
+    ),
+    ;
 
     /**
      * Get container color based on theme
      */
     @Composable
-    fun containerColor(): Color = when (this) {
-        LOW -> AlertColors.LowContainer
-        MEDIUM -> AlertColors.MediumContainer
-        HIGH -> AlertColors.HighContainer
-        CRITICAL -> AlertColors.CriticalContainer
-    }
+    fun containerColor(): Color =
+        when (this) {
+            LOW -> AlertColors.LowContainer
+            MEDIUM -> AlertColors.MediumContainer
+            HIGH -> AlertColors.HighContainer
+            CRITICAL -> AlertColors.CriticalContainer
+        }
 
     /**
      * Get content color based on theme
      */
     @Composable
-    fun contentColor(): Color = when (this) {
-        LOW -> AlertColors.OnLowContainer
-        MEDIUM -> AlertColors.OnMediumContainer
-        HIGH -> AlertColors.OnHighContainer
-        CRITICAL -> AlertColors.OnCriticalContainer
-    }
+    fun contentColor(): Color =
+        when (this) {
+            LOW -> AlertColors.OnLowContainer
+            MEDIUM -> AlertColors.OnMediumContainer
+            HIGH -> AlertColors.OnHighContainer
+            CRITICAL -> AlertColors.OnCriticalContainer
+        }
 
     /**
      * Get primary color (for indicators, icons)
      */
     @Composable
-    fun primaryColor(): Color = when (this) {
-        LOW -> AlertColors.Low
-        MEDIUM -> AlertColors.Medium
-        HIGH -> AlertColors.High
-        CRITICAL -> AlertColors.Critical
-    }
+    fun primaryColor(): Color =
+        when (this) {
+            LOW -> AlertColors.Low
+            MEDIUM -> AlertColors.Medium
+            HIGH -> AlertColors.High
+            CRITICAL -> AlertColors.Critical
+        }
 
     companion object {
         fun fromString(level: String): AlertLevel {
@@ -116,35 +121,37 @@ enum class AlertLevel(
 fun AlertCard(
     alert: AlertHistory,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val alertLevel = AlertLevel.fromString(alert.alertLevel)
 
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        ),
-
-        shape = TailBaitShapeTokens.CardShape
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        elevation =
+            CardDefaults.cardElevation(
+                defaultElevation = 2.dp,
+            ),
+        shape = TailBaitShapeTokens.CardShape,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 // Alert level badge
                 AlertLevelBadge(
                     alertLevel = alertLevel,
-                    isDismissed = alert.isDismissed
+                    isDismissed = alert.isDismissed,
                 )
 
                 Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingSM))
@@ -155,7 +162,7 @@ fun AlertCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
 
                 Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingXS))
@@ -166,7 +173,7 @@ fun AlertCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
 
                 Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingMD))
@@ -174,23 +181,23 @@ fun AlertCard(
                 // Metadata
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingLG),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Timestamp
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingXS)
+                        horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingXS),
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Schedule,
                             contentDescription = null,
                             modifier = Modifier.size(TailBaitDimensions.IconSizeSmall),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             text = formatRelativeTime(alert.timestamp),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
 
@@ -199,18 +206,18 @@ fun AlertCard(
                     if (deviceCount > 0) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingXS)
+                            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingXS),
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Devices,
                                 contentDescription = null,
                                 modifier = Modifier.size(TailBaitDimensions.IconSizeSmall),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
                                 text = "$deviceCount device${if (deviceCount != 1) "s" else ""}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -222,7 +229,7 @@ fun AlertCard(
             // Threat score
             ThreatScoreIndicator(
                 threatScore = alert.threatScore,
-                size = TailBaitDimensions.ThreatIndicatorSize
+                size = TailBaitDimensions.ThreatIndicatorSize,
             )
         }
     }
@@ -239,44 +246,48 @@ fun AlertCard(
 fun AlertLevelBadge(
     alertLevel: AlertLevel,
     isDismissed: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier,
         shape = TailBaitShapeTokens.BadgeShape,
-        color = if (isDismissed) {
-            MaterialTheme.colorScheme.surfaceVariant
-        } else {
-            alertLevel.containerColor()
-        }
+        color =
+            if (isDismissed) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                alertLevel.containerColor()
+            },
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = TailBaitDimensions.SpacingSM,
-                vertical = TailBaitDimensions.SpacingXS
-            ),
+            modifier =
+                Modifier.padding(
+                    horizontal = TailBaitDimensions.SpacingSM,
+                    vertical = TailBaitDimensions.SpacingXS,
+                ),
             horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingXS),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = alertLevel.icon,
                 contentDescription = null,
                 modifier = Modifier.size(TailBaitDimensions.IconSizeSmall),
-                tint = if (isDismissed) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    alertLevel.contentColor()
-                }
+                tint =
+                    if (isDismissed) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        alertLevel.contentColor()
+                    },
             )
             Text(
                 text = if (isDismissed) "Dismissed" else alertLevel.displayName,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Medium,
-                color = if (isDismissed) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    alertLevel.contentColor()
-                }
+                color =
+                    if (isDismissed) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        alertLevel.contentColor()
+                    },
             )
         }
     }
@@ -294,30 +305,33 @@ fun AlertLevelBadge(
 fun ThreatScoreIndicator(
     threatScore: Double,
     size: Dp = TailBaitDimensions.ThreatIndicatorSizeLarge,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val animatedProgress = remember { Animatable(0f) }
 
     LaunchedEffect(threatScore) {
         animatedProgress.animateTo(
             targetValue = threatScore.toFloat(),
-            animationSpec = tween(
-                durationMillis = 300, // Reduced from 1000ms for minimal motion
-                easing = FastOutSlowInEasing
-            )
+            animationSpec =
+                tween(
+                    // Reduced from 1000ms for minimal motion
+                    durationMillis = 300,
+                    easing = FastOutSlowInEasing,
+                ),
         )
     }
 
-    val color = when {
-        threatScore >= 0.75 -> AlertColors.Critical
-        threatScore >= 0.50 -> AlertColors.High
-        threatScore >= 0.25 -> AlertColors.Medium
-        else -> AlertColors.Low
-    }
+    val color =
+        when {
+            threatScore >= 0.75 -> AlertColors.Critical
+            threatScore >= 0.50 -> AlertColors.High
+            threatScore >= 0.25 -> AlertColors.Medium
+            else -> AlertColors.Low
+        }
 
     Box(
         modifier = modifier.size(size),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = size.toPx() * 0.12f // Slightly thinner stroke
@@ -326,7 +340,7 @@ fun ThreatScoreIndicator(
             drawCircle(
                 color = color.copy(alpha = 0.15f),
                 radius = (size.toPx() - strokeWidth) / 2,
-                style = Stroke(width = strokeWidth)
+                style = Stroke(width = strokeWidth),
             )
 
             // Progress arc
@@ -338,24 +352,24 @@ fun ThreatScoreIndicator(
                 useCenter = false,
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
                 topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
-                size = Size(size.toPx() - strokeWidth, size.toPx() - strokeWidth)
+                size = Size(size.toPx() - strokeWidth, size.toPx() - strokeWidth),
             )
         }
 
         // Score text
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = "${(threatScore * 100).toInt()}",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = color,
             )
             Text(
                 text = "score",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -375,7 +389,7 @@ fun AlertFilterChip(
     alertLevel: AlertLevel?,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     FilterChip(
         selected = selected,
@@ -383,17 +397,20 @@ fun AlertFilterChip(
         label = {
             Text(alertLevel?.displayName ?: "All")
         },
-        leadingIcon = if (alertLevel != null) {
-            {
-                Icon(
-                    imageVector = alertLevel.icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(TailBaitDimensions.IconSizeSmall)
-                )
-            }
-        } else null,
+        leadingIcon =
+            if (alertLevel != null) {
+                {
+                    Icon(
+                        imageVector = alertLevel.icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(TailBaitDimensions.IconSizeSmall),
+                    )
+                }
+            } else {
+                null
+            },
         shape = TailBaitShapeTokens.ChipShape,
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
@@ -415,63 +432,66 @@ fun ThreatScoreBreakdown(
     timeScore: Double,
     consistencyScore: Double,
     deviceTypeScore: Double,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = TailBaitDimensions.ElevationNone
-        ),
-        shape = TailBaitShapeTokens.CardShape
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        elevation =
+            CardDefaults.cardElevation(
+                defaultElevation = TailBaitDimensions.ElevationNone,
+            ),
+        shape = TailBaitShapeTokens.CardShape,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.CardPadding),
-            verticalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingMD)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingMD),
         ) {
             Text(
                 text = "Threat Score Breakdown",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
 
             ScoreFactorBar(
                 label = "Location Count",
                 score = locationScore,
                 weight = 0.3,
-                icon = Icons.Outlined.LocationOn
+                icon = Icons.Outlined.LocationOn,
             )
 
             ScoreFactorBar(
                 label = "Distance Factor",
                 score = distanceScore,
                 weight = 0.25,
-                icon = Icons.Outlined.SocialDistance
+                icon = Icons.Outlined.SocialDistance,
             )
 
             ScoreFactorBar(
                 label = "Time Correlation",
                 score = timeScore,
                 weight = 0.2,
-                icon = Icons.Outlined.Schedule
+                icon = Icons.Outlined.Schedule,
             )
 
             ScoreFactorBar(
                 label = "Consistency",
                 score = consistencyScore,
                 weight = 0.15,
-                icon = Icons.Outlined.Timeline
+                icon = Icons.Outlined.Timeline,
             )
 
             ScoreFactorBar(
                 label = "Device Type",
                 score = deviceTypeScore,
                 weight = 0.1,
-                icon = Icons.Outlined.PhoneAndroid
+                icon = Icons.Outlined.PhoneAndroid,
             )
         }
     }
@@ -486,36 +506,36 @@ private fun ScoreFactorBar(
     score: Double,
     weight: Double,
     icon: ImageVector,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingXS)
+                horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingXS),
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(TailBaitDimensions.IconSizeSmall),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
             Text(
                 text = "${(score * weight * 100).toInt()}%",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -523,10 +543,11 @@ private fun ScoreFactorBar(
 
         LinearProgressIndicator(
             progress = { (score * weight).toFloat() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(TailBaitDimensions.ProgressBarHeight)
-                .clip(TailBaitShapes.extraSmall),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(TailBaitDimensions.ProgressBarHeight)
+                    .clip(TailBaitShapes.extraSmall),
             trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         )
     }
@@ -541,45 +562,48 @@ fun InvolvedDeviceCard(
     deviceAddress: String,
     deviceName: String?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        ),
-
-        shape = TailBaitShapeTokens.CardShape
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        elevation =
+            CardDefaults.cardElevation(
+                defaultElevation = 2.dp,
+            ),
+        shape = TailBaitShapeTokens.CardShape,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(TailBaitDimensions.ListItemPaddingHorizontal, TailBaitDimensions.ListItemPaddingVertical),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(TailBaitDimensions.ListItemPaddingHorizontal, TailBaitDimensions.ListItemPaddingVertical),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingMD)
+                horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingMD),
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(TailBaitDimensions.AvatarSizeMedium)
-                        .background(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(TailBaitDimensions.AvatarSizeMedium)
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = CircleShape,
+                            ),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Bluetooth,
                         contentDescription = null,
                         modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
 
@@ -587,12 +611,12 @@ fun InvolvedDeviceCard(
                     Text(
                         text = deviceName ?: "Unknown Device",
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
                     )
                     Text(
                         text = deviceAddress,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -601,7 +625,7 @@ fun InvolvedDeviceCard(
                 imageVector = Icons.Filled.ArrowForward,
                 contentDescription = "View details",
                 modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -654,19 +678,20 @@ private fun parseDeviceCount(deviceAddresses: String): Int {
 private fun AlertCardCriticalPreview() {
     TailBaitTheme {
         AlertCard(
-            alert = AlertHistory(
-                id = 1,
-                alertLevel = "CRITICAL",
-                title = "AirTag at 5 locations over 2 days",
-                message = "AA:BB:CC:DD:EE:FF · 2.5 km apart\n\nStrong tracking pattern. Consider contacting authorities if you feel unsafe.",
-                timestamp = System.currentTimeMillis() - 1800000,
-                deviceAddresses = "[\"AA:BB:CC:DD:EE:FF\"]",
-                locationIds = "[1, 2, 3, 4, 5]",
-                threatScore = 0.92,
-                detectionDetails = "{}",
-                isDismissed = false
-            ),
-            onClick = {}
+            alert =
+                AlertHistory(
+                    id = 1,
+                    alertLevel = "CRITICAL",
+                    title = "AirTag at 5 locations over 2 days",
+                    message = "AA:BB:CC:DD:EE:FF · 2.5 km apart\n\nStrong tracking pattern. Consider contacting authorities if you feel unsafe.",
+                    timestamp = System.currentTimeMillis() - 1800000,
+                    deviceAddresses = "[\"AA:BB:CC:DD:EE:FF\"]",
+                    locationIds = "[1, 2, 3, 4, 5]",
+                    threatScore = 0.92,
+                    detectionDetails = "{}",
+                    isDismissed = false,
+                ),
+            onClick = {},
         )
     }
 }
@@ -676,20 +701,21 @@ private fun AlertCardCriticalPreview() {
 private fun AlertCardDismissedPreview() {
     TailBaitTheme {
         AlertCard(
-            alert = AlertHistory(
-                id = 2,
-                alertLevel = "HIGH",
-                title = "Unknown device at 3 locations over 6 hours",
-                message = "11:22:33:44:55:66 · 1.2 km apart\n\nThis device is following your movements.",
-                timestamp = System.currentTimeMillis() - 7200000,
-                deviceAddresses = "[\"11:22:33:44:55:66\", \"AA:BB:CC:DD:EE:FF\"]",
-                locationIds = "[1, 2, 3]",
-                threatScore = 0.75,
-                detectionDetails = "{}",
-                isDismissed = true,
-                dismissedAt = System.currentTimeMillis()
-            ),
-            onClick = {}
+            alert =
+                AlertHistory(
+                    id = 2,
+                    alertLevel = "HIGH",
+                    title = "Unknown device at 3 locations over 6 hours",
+                    message = "11:22:33:44:55:66 · 1.2 km apart\n\nThis device is following your movements.",
+                    timestamp = System.currentTimeMillis() - 7200000,
+                    deviceAddresses = "[\"11:22:33:44:55:66\", \"AA:BB:CC:DD:EE:FF\"]",
+                    locationIds = "[1, 2, 3]",
+                    threatScore = 0.75,
+                    detectionDetails = "{}",
+                    isDismissed = true,
+                    dismissedAt = System.currentTimeMillis(),
+                ),
+            onClick = {},
         )
     }
 }
@@ -700,7 +726,7 @@ private fun AlertLevelBadgesPreview() {
     TailBaitTheme {
         Column(
             modifier = Modifier.padding(TailBaitDimensions.SpacingLG),
-            verticalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingSM)
+            verticalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingSM),
         ) {
             AlertLevelBadge(alertLevel = AlertLevel.LOW)
             AlertLevelBadge(alertLevel = AlertLevel.MEDIUM)
@@ -717,7 +743,7 @@ private fun ThreatScoreIndicatorPreview() {
     TailBaitTheme {
         Row(
             modifier = Modifier.padding(TailBaitDimensions.SpacingLG),
-            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingLG)
+            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingLG),
         ) {
             ThreatScoreIndicator(threatScore = 0.20, size = 60.dp)
             ThreatScoreIndicator(threatScore = 0.40, size = 60.dp)
@@ -733,7 +759,7 @@ private fun AlertFilterChipsPreview() {
     TailBaitTheme {
         Row(
             modifier = Modifier.padding(TailBaitDimensions.SpacingLG),
-            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingSM)
+            horizontalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingSM),
         ) {
             AlertFilterChip(alertLevel = null, selected = true, onClick = {})
             AlertFilterChip(alertLevel = AlertLevel.LOW, selected = false, onClick = {})
@@ -751,7 +777,7 @@ private fun ThreatScoreBreakdownPreview() {
             distanceScore = 0.8,
             timeScore = 0.7,
             consistencyScore = 0.6,
-            deviceTypeScore = 0.5
+            deviceTypeScore = 0.5,
         )
     }
 }
@@ -762,17 +788,17 @@ private fun InvolvedDeviceCardPreview() {
     TailBaitTheme {
         Column(
             modifier = Modifier.padding(TailBaitDimensions.SpacingLG),
-            verticalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingSM)
+            verticalArrangement = Arrangement.spacedBy(TailBaitDimensions.SpacingSM),
         ) {
             InvolvedDeviceCard(
                 deviceAddress = "AA:BB:CC:DD:EE:FF",
                 deviceName = "AirTag",
-                onClick = {}
+                onClick = {},
             )
             InvolvedDeviceCard(
                 deviceAddress = "11:22:33:44:55:66",
                 deviceName = null,
-                onClick = {}
+                onClick = {},
             )
         }
     }

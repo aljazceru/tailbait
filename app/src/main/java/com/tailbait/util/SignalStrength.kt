@@ -32,7 +32,7 @@ enum class SignalStrength(
     val minRssi: Int,
     val maxRssi: Int,
     val threatWeight: Float,
-    val proximityDescription: String
+    val proximityDescription: String,
 ) {
     /**
      * Very weak signal: Device is far away (10+ meters) or heavily obstructed.
@@ -42,7 +42,7 @@ enum class SignalStrength(
         minRssi = -100,
         maxRssi = -80,
         threatWeight = 0.1f,
-        proximityDescription = "Far away (10+ meters)"
+        proximityDescription = "Far away (10+ meters)",
     ),
 
     /**
@@ -53,7 +53,7 @@ enum class SignalStrength(
         minRssi = -80,
         maxRssi = -65,
         threatWeight = 0.25f,
-        proximityDescription = "Moderate distance (5-10 meters)"
+        proximityDescription = "Moderate distance (5-10 meters)",
     ),
 
     /**
@@ -64,7 +64,7 @@ enum class SignalStrength(
         minRssi = -65,
         maxRssi = -50,
         threatWeight = 0.5f,
-        proximityDescription = "Close proximity (2-5 meters)"
+        proximityDescription = "Close proximity (2-5 meters)",
     ),
 
     /**
@@ -75,7 +75,7 @@ enum class SignalStrength(
         minRssi = -50,
         maxRssi = -35,
         threatWeight = 0.75f,
-        proximityDescription = "Very close (1-2 meters)"
+        proximityDescription = "Very close (1-2 meters)",
     ),
 
     /**
@@ -87,8 +87,9 @@ enum class SignalStrength(
         minRssi = -35,
         maxRssi = 0,
         threatWeight = 1.0f,
-        proximityDescription = "Extremely close (< 1 meter)"
-    );
+        proximityDescription = "Extremely close (< 1 meter)",
+    ),
+    ;
 
     /**
      * Check if a given RSSI falls within this signal strength range.
@@ -169,9 +170,9 @@ enum class SignalStrength(
         fun estimateDistance(
             rssi: Int,
             txPower: Int = -59,
-            pathLossExponent: Double = 2.5
+            pathLossExponent: Double = 2.5,
         ): Double {
-            if (rssi == 0) return -1.0  // Unknown
+            if (rssi == 0) return -1.0 // Unknown
 
             return if (rssi >= txPower) {
                 // Very close, less than 1 meter

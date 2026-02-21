@@ -11,5 +11,5 @@ package com.tailbait.data.database.dao
 data class ShadowLocationCount(
     val locationId: Long,
     val deviceCount: Int,
-    val maxRssi: Int
+    val maxRssi: Int,
 )

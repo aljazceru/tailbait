@@ -19,103 +19,91 @@ import androidx.core.view.WindowCompat
  * TailBait Light Color Scheme
  * Clean, minimal iOS-style aesthetic with steel blue accent
  */
-private val TailBaitLightColorScheme = lightColorScheme(
-    // Primary
-    primary = TailBaitLightColors.Primary,
-    onPrimary = TailBaitLightColors.OnPrimary,
-    primaryContainer = TailBaitLightColors.PrimaryContainer,
-    onPrimaryContainer = TailBaitLightColors.OnPrimaryContainer,
-
-    // Secondary
-    secondary = TailBaitLightColors.Secondary,
-    onSecondary = TailBaitLightColors.OnSecondary,
-    secondaryContainer = TailBaitLightColors.SecondaryContainer,
-    onSecondaryContainer = TailBaitLightColors.OnSecondaryContainer,
-
-    // Tertiary
-    tertiary = TailBaitLightColors.Tertiary,
-    onTertiary = TailBaitLightColors.OnTertiary,
-    tertiaryContainer = TailBaitLightColors.TertiaryContainer,
-    onTertiaryContainer = TailBaitLightColors.OnTertiaryContainer,
-
-    // Error
-    error = TailBaitLightColors.Error,
-    onError = TailBaitLightColors.OnError,
-    errorContainer = TailBaitLightColors.ErrorContainer,
-    onErrorContainer = TailBaitLightColors.OnErrorContainer,
-
-    // Background & Surface
-    background = TailBaitLightColors.Background,
-    onBackground = TailBaitLightColors.OnBackground,
-    surface = TailBaitLightColors.Surface,
-    onSurface = TailBaitLightColors.OnSurface,
-    surfaceVariant = TailBaitLightColors.SurfaceVariant,
-    onSurfaceVariant = TailBaitLightColors.OnSurfaceVariant,
-    surfaceTint = TailBaitLightColors.SurfaceTint,
-
-    // Outline
-    outline = TailBaitLightColors.Outline,
-    outlineVariant = TailBaitLightColors.OutlineVariant,
-
-    // Inverse
-    inverseSurface = TailBaitLightColors.InverseSurface,
-    inverseOnSurface = TailBaitLightColors.InverseOnSurface,
-    inversePrimary = TailBaitLightColors.InversePrimary,
-
-    // Scrim
-    scrim = TailBaitLightColors.Scrim
-)
+private val TailBaitLightColorScheme =
+    lightColorScheme(
+        // Primary
+        primary = TailBaitLightColors.Primary,
+        onPrimary = TailBaitLightColors.OnPrimary,
+        primaryContainer = TailBaitLightColors.PrimaryContainer,
+        onPrimaryContainer = TailBaitLightColors.OnPrimaryContainer,
+        // Secondary
+        secondary = TailBaitLightColors.Secondary,
+        onSecondary = TailBaitLightColors.OnSecondary,
+        secondaryContainer = TailBaitLightColors.SecondaryContainer,
+        onSecondaryContainer = TailBaitLightColors.OnSecondaryContainer,
+        // Tertiary
+        tertiary = TailBaitLightColors.Tertiary,
+        onTertiary = TailBaitLightColors.OnTertiary,
+        tertiaryContainer = TailBaitLightColors.TertiaryContainer,
+        onTertiaryContainer = TailBaitLightColors.OnTertiaryContainer,
+        // Error
+        error = TailBaitLightColors.Error,
+        onError = TailBaitLightColors.OnError,
+        errorContainer = TailBaitLightColors.ErrorContainer,
+        onErrorContainer = TailBaitLightColors.OnErrorContainer,
+        // Background & Surface
+        background = TailBaitLightColors.Background,
+        onBackground = TailBaitLightColors.OnBackground,
+        surface = TailBaitLightColors.Surface,
+        onSurface = TailBaitLightColors.OnSurface,
+        surfaceVariant = TailBaitLightColors.SurfaceVariant,
+        onSurfaceVariant = TailBaitLightColors.OnSurfaceVariant,
+        surfaceTint = TailBaitLightColors.SurfaceTint,
+        // Outline
+        outline = TailBaitLightColors.Outline,
+        outlineVariant = TailBaitLightColors.OutlineVariant,
+        // Inverse
+        inverseSurface = TailBaitLightColors.InverseSurface,
+        inverseOnSurface = TailBaitLightColors.InverseOnSurface,
+        inversePrimary = TailBaitLightColors.InversePrimary,
+        // Scrim
+        scrim = TailBaitLightColors.Scrim,
+    )
 
 /**
  * TailBait Dark Color Scheme
  * OLED-friendly black with brighter blue accent
  */
-private val TailBaitDarkColorScheme = darkColorScheme(
-    // Primary
-    primary = TailBaitDarkColors.Primary,
-    onPrimary = TailBaitDarkColors.OnPrimary,
-    primaryContainer = TailBaitDarkColors.PrimaryContainer,
-    onPrimaryContainer = TailBaitDarkColors.OnPrimaryContainer,
-
-    // Secondary
-    secondary = TailBaitDarkColors.Secondary,
-    onSecondary = TailBaitDarkColors.OnSecondary,
-    secondaryContainer = TailBaitDarkColors.SecondaryContainer,
-    onSecondaryContainer = TailBaitDarkColors.OnSecondaryContainer,
-
-    // Tertiary
-    tertiary = TailBaitDarkColors.Tertiary,
-    onTertiary = TailBaitDarkColors.OnTertiary,
-    tertiaryContainer = TailBaitDarkColors.TertiaryContainer,
-    onTertiaryContainer = TailBaitDarkColors.OnTertiaryContainer,
-
-    // Error
-    error = TailBaitDarkColors.Error,
-    onError = TailBaitDarkColors.OnError,
-    errorContainer = TailBaitDarkColors.ErrorContainer,
-    onErrorContainer = TailBaitDarkColors.OnErrorContainer,
-
-    // Background & Surface
-    background = TailBaitDarkColors.Background,
-    onBackground = TailBaitDarkColors.OnBackground,
-    surface = TailBaitDarkColors.Surface,
-    onSurface = TailBaitDarkColors.OnSurface,
-    surfaceVariant = TailBaitDarkColors.SurfaceVariant,
-    onSurfaceVariant = TailBaitDarkColors.OnSurfaceVariant,
-    surfaceTint = TailBaitDarkColors.SurfaceTint,
-
-    // Outline
-    outline = TailBaitDarkColors.Outline,
-    outlineVariant = TailBaitDarkColors.OutlineVariant,
-
-    // Inverse
-    inverseSurface = TailBaitDarkColors.InverseSurface,
-    inverseOnSurface = TailBaitDarkColors.InverseOnSurface,
-    inversePrimary = TailBaitDarkColors.InversePrimary,
-
-    // Scrim
-    scrim = TailBaitDarkColors.Scrim
-)
+private val TailBaitDarkColorScheme =
+    darkColorScheme(
+        // Primary
+        primary = TailBaitDarkColors.Primary,
+        onPrimary = TailBaitDarkColors.OnPrimary,
+        primaryContainer = TailBaitDarkColors.PrimaryContainer,
+        onPrimaryContainer = TailBaitDarkColors.OnPrimaryContainer,
+        // Secondary
+        secondary = TailBaitDarkColors.Secondary,
+        onSecondary = TailBaitDarkColors.OnSecondary,
+        secondaryContainer = TailBaitDarkColors.SecondaryContainer,
+        onSecondaryContainer = TailBaitDarkColors.OnSecondaryContainer,
+        // Tertiary
+        tertiary = TailBaitDarkColors.Tertiary,
+        onTertiary = TailBaitDarkColors.OnTertiary,
+        tertiaryContainer = TailBaitDarkColors.TertiaryContainer,
+        onTertiaryContainer = TailBaitDarkColors.OnTertiaryContainer,
+        // Error
+        error = TailBaitDarkColors.Error,
+        onError = TailBaitDarkColors.OnError,
+        errorContainer = TailBaitDarkColors.ErrorContainer,
+        onErrorContainer = TailBaitDarkColors.OnErrorContainer,
+        // Background & Surface
+        background = TailBaitDarkColors.Background,
+        onBackground = TailBaitDarkColors.OnBackground,
+        surface = TailBaitDarkColors.Surface,
+        onSurface = TailBaitDarkColors.OnSurface,
+        surfaceVariant = TailBaitDarkColors.SurfaceVariant,
+        onSurfaceVariant = TailBaitDarkColors.OnSurfaceVariant,
+        surfaceTint = TailBaitDarkColors.SurfaceTint,
+        // Outline
+        outline = TailBaitDarkColors.Outline,
+        outlineVariant = TailBaitDarkColors.OutlineVariant,
+        // Inverse
+        inverseSurface = TailBaitDarkColors.InverseSurface,
+        inverseOnSurface = TailBaitDarkColors.InverseOnSurface,
+        inversePrimary = TailBaitDarkColors.InversePrimary,
+        // Scrim
+        scrim = TailBaitDarkColors.Scrim,
+    )
 
 /**
  * TailBait Theme - Clean, minimal, professional design
@@ -127,17 +115,19 @@ private val TailBaitDarkColorScheme = darkColorScheme(
 @Composable
 fun TailBaitTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Disabled by default for consistent branding
-    content: @Composable () -> Unit
+    // Disabled by default for consistent branding
+    dynamicColor: Boolean = false,
+    content: @Composable () -> Unit,
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val colorScheme =
+        when {
+            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                val context = LocalContext.current
+                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            }
+            darkTheme -> TailBaitDarkColorScheme
+            else -> TailBaitLightColorScheme
         }
-        darkTheme -> TailBaitDarkColorScheme
-        else -> TailBaitLightColorScheme
-    }
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -153,7 +143,7 @@ fun TailBaitTheme(
         colorScheme = colorScheme,
         typography = TailBaitTypography,
         shapes = TailBaitShapes,
-        content = content
+        content = content,
     )
 }
 
@@ -166,11 +156,11 @@ fun TailBaitTheme(
  */
 @Deprecated(
     message = "Use TailBaitTheme instead",
-    replaceWith = ReplaceWith("TailBaitTheme(darkTheme, dynamicColor, content)")
+    replaceWith = ReplaceWith("TailBaitTheme(darkTheme, dynamicColor, content)"),
 )
 @Composable
 fun BLETrackerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) = TailBaitTheme(darkTheme, dynamicColor, content)

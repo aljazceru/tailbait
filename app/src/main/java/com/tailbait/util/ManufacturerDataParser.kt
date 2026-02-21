@@ -23,7 +23,6 @@ import timber.log.Timber
  * - Samsung SmartTag: https://arxiv.org/pdf/2210.14702
  */
 object ManufacturerDataParser {
-
     // ============================================================================
     // MANUFACTURER IDS (Bluetooth SIG Company Identifiers)
     // Source: https://www.bluetooth.com/specifications/assigned-numbers/
@@ -63,12 +62,12 @@ object ManufacturerDataParser {
 
         // Audio Manufacturers
         const val BOSE = 0x009E
-        const val JABRA = 0x0067  // GN Audio
+        const val JABRA = 0x0067 // GN Audio
         const val SENNHEISER = 0x0082
         const val BANG_OLUFSEN = 0x0057
         const val SKULLCANDY = 0x03B4
-        const val JBL = 0x0057    // Harman
-        const val BEATS = APPLE   // Beats uses Apple ID
+        const val JBL = 0x0057 // Harman
+        const val BEATS = APPLE // Beats uses Apple ID
         const val SONY_AUDIO = SONY
 
         // Smart Home
@@ -87,71 +86,72 @@ object ManufacturerDataParser {
         const val QUALCOMM = 0x000A
         const val BROADCOM = 0x000F
         const val TEXAS_INSTRUMENTS = 0x000D
-        const val INTERPLAN = 0x0212  // Interplan Co., Ltd (Japan)
-        const val RENESAS = 0x00E3    // Renesas Electronics
-        const val CYPRESS = 0x0131    // Cypress Semiconductor
-        const val DIALOG = 0x00D2     // Dialog Semiconductor
-        const val SILABS = 0x02FF     // Silicon Labs
-        const val REALTEK = 0x005D    // Realtek Semiconductor
-        const val MEDIATEK = 0x00A5   // MediaTek
-        const val LENOVO = 0x0640     // Lenovo
-        const val ASUS = 0x04C5       // ASUSTek Computer
-        const val ACER = 0x0491       // Acer
-        const val DELL = 0x0089       // Dell
-        const val HP = 0x000B         // HP
+        const val INTERPLAN = 0x0212 // Interplan Co., Ltd (Japan)
+        const val RENESAS = 0x00E3 // Renesas Electronics
+        const val CYPRESS = 0x0131 // Cypress Semiconductor
+        const val DIALOG = 0x00D2 // Dialog Semiconductor
+        const val SILABS = 0x02FF // Silicon Labs
+        const val REALTEK = 0x005D // Realtek Semiconductor
+        const val MEDIATEK = 0x00A5 // MediaTek
+        const val LENOVO = 0x0640 // Lenovo
+        const val ASUS = 0x04C5 // ASUSTek Computer
+        const val ACER = 0x0491 // Acer
+        const val DELL = 0x0089 // Dell
+        const val HP = 0x000B // HP
     }
 
     /**
      * Map of manufacturer IDs to human-readable names.
      */
-    private val manufacturerNames = mapOf(
-        ManufacturerId.APPLE to "Apple",
-        ManufacturerId.SAMSUNG to "Samsung",
-        ManufacturerId.GOOGLE to "Google",
-        ManufacturerId.MICROSOFT to "Microsoft",
-        ManufacturerId.SONY to "Sony",
-        ManufacturerId.LG to "LG",
-        ManufacturerId.HUAWEI to "Huawei",
-        ManufacturerId.XIAOMI to "Xiaomi",
-        ManufacturerId.OPPO to "OPPO",
-        ManufacturerId.ONEPLUS to "OnePlus",
-        ManufacturerId.REALME to "Realme",
-        ManufacturerId.VIVO to "Vivo",
-        ManufacturerId.MOTOROLA to "Motorola",
-        ManufacturerId.NOKIA to "Nokia",
-        ManufacturerId.HTC to "HTC",
-        ManufacturerId.TILE to "Tile",
-        ManufacturerId.CHIPOLO to "Chipolo",
-        ManufacturerId.PEBBLEBEE to "Pebblebee",
-        ManufacturerId.CUBE to "Cube",
-        ManufacturerId.FITBIT to "Fitbit",
-        ManufacturerId.GARMIN to "Garmin",
-        ManufacturerId.POLAR to "Polar",
-        ManufacturerId.SUUNTO to "Suunto",
-        ManufacturerId.WHOOP to "Whoop",
-        ManufacturerId.OURA to "Oura",
-        ManufacturerId.BOSE to "Bose",
-        ManufacturerId.JABRA to "Jabra",
-        ManufacturerId.SENNHEISER to "Sennheiser",
-        ManufacturerId.BANG_OLUFSEN to "Bang & Olufsen",
-        ManufacturerId.SKULLCANDY to "Skullcandy",
-        ManufacturerId.PHILIPS to "Philips",
-        ManufacturerId.IKEA to "IKEA",
-        ManufacturerId.AMAZON to "Amazon",
-        ManufacturerId.NORDIC to "Nordic Semiconductor",
-        ManufacturerId.INTERPLAN to "Interplan",
-        ManufacturerId.RENESAS to "Renesas",
-        ManufacturerId.CYPRESS to "Cypress",
-        ManufacturerId.DIALOG to "Dialog",
-        ManufacturerId.SILABS to "Silicon Labs",
-        ManufacturerId.REALTEK to "Realtek",
-        ManufacturerId.MEDIATEK to "MediaTek",
-        ManufacturerId.LENOVO to "Lenovo",
-        ManufacturerId.ASUS to "ASUS",
-        ManufacturerId.ACER to "Acer",
-        ManufacturerId.DELL to "Dell",
-        ManufacturerId.HP to "HP",
-    )
+    private val manufacturerNames =
+        mapOf(
+            ManufacturerId.APPLE to "Apple",
+            ManufacturerId.SAMSUNG to "Samsung",
+            ManufacturerId.GOOGLE to "Google",
+            ManufacturerId.MICROSOFT to "Microsoft",
+            ManufacturerId.SONY to "Sony",
+            ManufacturerId.LG to "LG",
+            ManufacturerId.HUAWEI to "Huawei",
+            ManufacturerId.XIAOMI to "Xiaomi",
+            ManufacturerId.OPPO to "OPPO",
+            ManufacturerId.ONEPLUS to "OnePlus",
+            ManufacturerId.REALME to "Realme",
+            ManufacturerId.VIVO to "Vivo",
+            ManufacturerId.MOTOROLA to "Motorola",
+            ManufacturerId.NOKIA to "Nokia",
+            ManufacturerId.HTC to "HTC",
+            ManufacturerId.TILE to "Tile",
+            ManufacturerId.CHIPOLO to "Chipolo",
+            ManufacturerId.PEBBLEBEE to "Pebblebee",
+            ManufacturerId.CUBE to "Cube",
+            ManufacturerId.FITBIT to "Fitbit",
+            ManufacturerId.GARMIN to "Garmin",
+            ManufacturerId.POLAR to "Polar",
+            ManufacturerId.SUUNTO to "Suunto",
+            ManufacturerId.WHOOP to "Whoop",
+            ManufacturerId.OURA to "Oura",
+            ManufacturerId.BOSE to "Bose",
+            ManufacturerId.JABRA to "Jabra",
+            ManufacturerId.SENNHEISER to "Sennheiser",
+            ManufacturerId.BANG_OLUFSEN to "Bang & Olufsen",
+            ManufacturerId.SKULLCANDY to "Skullcandy",
+            ManufacturerId.PHILIPS to "Philips",
+            ManufacturerId.IKEA to "IKEA",
+            ManufacturerId.AMAZON to "Amazon",
+            ManufacturerId.NORDIC to "Nordic Semiconductor",
+            ManufacturerId.INTERPLAN to "Interplan",
+            ManufacturerId.RENESAS to "Renesas",
+            ManufacturerId.CYPRESS to "Cypress",
+            ManufacturerId.DIALOG to "Dialog",
+            ManufacturerId.SILABS to "Silicon Labs",
+            ManufacturerId.REALTEK to "Realtek",
+            ManufacturerId.MEDIATEK to "MediaTek",
+            ManufacturerId.LENOVO to "Lenovo",
+            ManufacturerId.ASUS to "ASUS",
+            ManufacturerId.ACER to "Acer",
+            ManufacturerId.DELL to "Dell",
+            ManufacturerId.HP to "HP",
+        )
 
     // ============================================================================
     // APPLE CONTINUITY PROTOCOL TYPES
@@ -162,17 +162,17 @@ object ManufacturerDataParser {
         const val AIRPRINT = 0x03
         const val AIRDROP = 0x05
         const val HOMEKIT = 0x06
-        const val PROXIMITY_PAIRING = 0x07  // AirPods, Beats
+        const val PROXIMITY_PAIRING = 0x07 // AirPods, Beats
         const val HEY_SIRI = 0x08
         const val AIRPLAY_TARGET = 0x09
         const val AIRPLAY_SOURCE = 0x0A
-        const val MAGIC_SWITCH = 0x0B       // Apple Watch disconnection
-        const val HANDOFF = 0x0C            // Cross-device handoff
+        const val MAGIC_SWITCH = 0x0B // Apple Watch disconnection
+        const val HANDOFF = 0x0C // Cross-device handoff
         const val TETHERING_TARGET = 0x0D
         const val TETHERING_SOURCE = 0x0E
         const val NEARBY_ACTION = 0x0F
-        const val NEARBY_INFO = 0x10        // iPhone broadcasting status
-        const val FIND_MY = 0x12            // AirTag, Find My network! CRITICAL!
+        const val NEARBY_INFO = 0x10 // iPhone broadcasting status
+        const val FIND_MY = 0x12 // AirTag, Find My network! CRITICAL!
 
         // iBeacon uses different format (0x02 0x15 prefix)
         const val IBEACON_TYPE = 0x02
@@ -194,14 +194,15 @@ object ManufacturerDataParser {
         HEADPHONES,
         EARBUDS,
         SPEAKER,
-        TRACKER,       // AirTag, Tile, SmartTag, Chipolo, etc.
+        TRACKER, // AirTag, Tile, SmartTag, Chipolo, etc.
         BEACON,
         FITNESS_BAND,
         SMART_HOME,
         AUTOMOTIVE,
         GAMING,
         MEDICAL,
-        UNKNOWN;
+        UNKNOWN,
+        ;
 
         companion object {
             fun fromString(value: String?): DeviceType {
@@ -229,29 +230,24 @@ object ManufacturerDataParser {
         const val BEATS_FIT_PRO = 0x1220
     }
 
-    private val airpodsModelNames = mapOf(
-        AppleDeviceModel.AIRPODS_1 to "AirPods (1st gen)",
-        AppleDeviceModel.AIRPODS_2 to "AirPods (2nd gen)",
-        AppleDeviceModel.AIRPODS_3 to "AirPods (3rd gen)",
-        AppleDeviceModel.AIRPODS_PRO to "AirPods Pro",
-        AppleDeviceModel.AIRPODS_PRO_2 to "AirPods Pro (2nd gen)",
-        AppleDeviceModel.AIRPODS_MAX to "AirPods Max",
-        AppleDeviceModel.POWERBEATS_PRO to "Powerbeats Pro",
-        AppleDeviceModel.BEATS_SOLO_PRO to "Beats Solo Pro",
-        AppleDeviceModel.BEATS_STUDIO_BUDS to "Beats Studio Buds",
-        AppleDeviceModel.BEATS_FIT_PRO to "Beats Fit Pro",
-    )
+    private val airpodsModelNames =
+        mapOf(
+            AppleDeviceModel.AIRPODS_1 to "AirPods (1st gen)",
+            AppleDeviceModel.AIRPODS_2 to "AirPods (2nd gen)",
+            AppleDeviceModel.AIRPODS_3 to "AirPods (3rd gen)",
+            AppleDeviceModel.AIRPODS_PRO to "AirPods Pro",
+            AppleDeviceModel.AIRPODS_PRO_2 to "AirPods Pro (2nd gen)",
+            AppleDeviceModel.AIRPODS_MAX to "AirPods Max",
+            AppleDeviceModel.POWERBEATS_PRO to "Powerbeats Pro",
+            AppleDeviceModel.BEATS_SOLO_PRO to "Beats Solo Pro",
+            AppleDeviceModel.BEATS_STUDIO_BUDS to "Beats Studio Buds",
+            AppleDeviceModel.BEATS_FIT_PRO to "Beats Fit Pro",
+        )
 
     // ============================================================================
     // MAIN PARSING FUNCTIONS
     // ============================================================================
 
-    /**
-     * Parse manufacturer data to extract comprehensive device information.
-     *
-     * @param manufacturerData Raw manufacturer data as byte array
-     * @return Parsed manufacturer info or null if data is invalid
-     */
     /**
      * Parse manufacturer data when the ID is already extracted (e.g., from sparse array key).
      *
@@ -262,7 +258,10 @@ object ManufacturerDataParser {
      * @param payload The manufacturer-specific data (WITHOUT the 2-byte ID prefix)
      * @return Parsed manufacturer info or null
      */
-    fun parseManufacturerData(manufacturerId: Int, payload: ByteArray?): ManufacturerInfo? {
+    fun parseManufacturerData(
+        manufacturerId: Int,
+        payload: ByteArray?,
+    ): ManufacturerInfo? {
         return try {
             val safePayload = payload ?: byteArrayOf()
             val manufacturerName = getManufacturerName(manufacturerId)
@@ -270,9 +269,12 @@ object ManufacturerDataParser {
                 inferDeviceInfo(manufacturerId, safePayload)
 
             // Extract Find My info for Apple devices with type 0x12
-            val findMyInfo = if (manufacturerId == ManufacturerId.APPLE && safePayload.isNotEmpty()) {
-                parseFindMyPayload(safePayload)
-            } else null
+            val findMyInfo =
+                if (manufacturerId == ManufacturerId.APPLE && safePayload.isNotEmpty()) {
+                    parseFindMyPayload(safePayload)
+                } else {
+                    null
+                }
 
             // Extract payload fingerprint for device correlation across MAC rotations
             val payloadFingerprint = extractPayloadFingerprint(manufacturerId, safePayload)
@@ -287,7 +289,7 @@ object ManufacturerDataParser {
                 payload = safePayload,
                 identificationConfidence = confidence,
                 findMyInfo = findMyInfo,
-                payloadFingerprint = payloadFingerprint
+                payloadFingerprint = payloadFingerprint,
             )
         } catch (e: Exception) {
             Timber.e(e, "Error parsing manufacturer data for ID 0x${manufacturerId.toString(16)}")
@@ -308,14 +310,16 @@ object ManufacturerDataParser {
 
         return try {
             // First 2 bytes are manufacturer ID (little-endian)
-            val manufacturerId = ((manufacturerData[1].toInt() and 0xFF) shl 8) or
+            val manufacturerId =
+                ((manufacturerData[1].toInt() and 0xFF) shl 8) or
                     (manufacturerData[0].toInt() and 0xFF)
 
-            val payload = if (manufacturerData.size > 2) {
-                manufacturerData.copyOfRange(2, manufacturerData.size)
-            } else {
-                byteArrayOf()
-            }
+            val payload =
+                if (manufacturerData.size > 2) {
+                    manufacturerData.copyOfRange(2, manufacturerData.size)
+                } else {
+                    byteArrayOf()
+                }
 
             // Delegate to the ID+payload version
             parseManufacturerData(manufacturerId, payload)
@@ -340,7 +344,7 @@ object ManufacturerDataParser {
      */
     private fun inferDeviceInfo(
         manufacturerId: Int,
-        payload: ByteArray
+        payload: ByteArray,
     ): DeviceInference {
         return when (manufacturerId) {
             ManufacturerId.APPLE -> inferAppleDevice(payload)
@@ -389,7 +393,7 @@ object ManufacturerDataParser {
                     deviceType = DeviceType.TRACKER,
                     deviceModel = "AirTag",
                     appleContinuityType = AppleContinuityType.FIND_MY,
-                    confidence = 0.95f
+                    confidence = 0.95f,
                 )
             }
 
@@ -397,17 +401,21 @@ object ManufacturerDataParser {
             // PROXIMITY PAIRING (Type 0x07) - AIRPODS DETECTION
             // =====================================================
             AppleContinuityType.PROXIMITY_PAIRING -> {
-                val model = if (payload.size >= 3) {
-                    val modelId = ((payload[2].toInt() and 0xFF) shl 8) or
-                                  (payload[1].toInt() and 0xFF)
-                    airpodsModelNames[modelId]
-                } else null
+                val model =
+                    if (payload.size >= 3) {
+                        val modelId =
+                            ((payload[2].toInt() and 0xFF) shl 8) or
+                                (payload[1].toInt() and 0xFF)
+                        airpodsModelNames[modelId]
+                    } else {
+                        null
+                    }
 
                 DeviceInference(
                     deviceType = if (model?.contains("Max") == true) DeviceType.HEADPHONES else DeviceType.EARBUDS,
                     deviceModel = model ?: "AirPods",
                     appleContinuityType = AppleContinuityType.PROXIMITY_PAIRING,
-                    confidence = 0.90f
+                    confidence = 0.90f,
                 )
             }
 
@@ -416,17 +424,18 @@ object ManufacturerDataParser {
             // =====================================================
             AppleContinuityType.NEARBY_INFO -> {
                 val actionCode = if (payload.size >= 3) payload[2].toInt() and 0xFF else 0
-                val deviceModel = when (actionCode) {
-                    0x0A -> "Apple Watch"  // Watch on wrist
-                    0x0D -> "iPhone (Driving)"
-                    0x0E -> "iPhone (On Call)"
-                    else -> "iPhone/iPad"
-                }
+                val deviceModel =
+                    when (actionCode) {
+                        0x0A -> "Apple Watch" // Watch on wrist
+                        0x0D -> "iPhone (Driving)"
+                        0x0E -> "iPhone (On Call)"
+                        else -> "iPhone/iPad"
+                    }
                 DeviceInference(
                     deviceType = if (actionCode == 0x0A) DeviceType.WATCH else DeviceType.PHONE,
                     deviceModel = deviceModel,
                     appleContinuityType = AppleContinuityType.NEARBY_INFO,
-                    confidence = 0.85f
+                    confidence = 0.85f,
                 )
             }
 
@@ -438,7 +447,7 @@ object ManufacturerDataParser {
                     deviceType = DeviceType.PHONE,
                     deviceModel = "iPhone/iPad/Mac",
                     appleContinuityType = AppleContinuityType.HANDOFF,
-                    confidence = 0.75f
+                    confidence = 0.75f,
                 )
             }
 
@@ -450,7 +459,7 @@ object ManufacturerDataParser {
                     deviceType = DeviceType.WATCH,
                     deviceModel = "Apple Watch",
                     appleContinuityType = AppleContinuityType.MAGIC_SWITCH,
-                    confidence = 0.85f
+                    confidence = 0.85f,
                 )
             }
 
@@ -463,7 +472,7 @@ object ManufacturerDataParser {
                         deviceType = DeviceType.BEACON,
                         deviceModel = "iBeacon",
                         appleContinuityType = null,
-                        confidence = 0.95f
+                        confidence = 0.95f,
                     )
                 } else {
                     DeviceInference(DeviceType.UNKNOWN, null, messageType, 0.50f)
@@ -478,7 +487,7 @@ object ManufacturerDataParser {
                     deviceType = DeviceType.PHONE,
                     deviceModel = "iPhone (Siri Active)",
                     appleContinuityType = AppleContinuityType.HEY_SIRI,
-                    confidence = 0.80f
+                    confidence = 0.80f,
                 )
             }
 
@@ -490,7 +499,7 @@ object ManufacturerDataParser {
                     deviceType = DeviceType.PHONE,
                     deviceModel = "iPhone/iPad/Mac (AirDrop)",
                     appleContinuityType = AppleContinuityType.AIRDROP,
-                    confidence = 0.75f
+                    confidence = 0.75f,
                 )
             }
 
@@ -502,7 +511,7 @@ object ManufacturerDataParser {
                     deviceType = DeviceType.PHONE,
                     deviceModel = "iPhone (Hotspot)",
                     appleContinuityType = messageType,
-                    confidence = 0.80f
+                    confidence = 0.80f,
                 )
             }
 
@@ -514,7 +523,7 @@ object ManufacturerDataParser {
                     deviceType = DeviceType.SPEAKER,
                     deviceModel = "AirPlay Device",
                     appleContinuityType = messageType,
-                    confidence = 0.70f
+                    confidence = 0.70f,
                 )
             }
 
@@ -527,7 +536,7 @@ object ManufacturerDataParser {
                     deviceType = DeviceType.PHONE,
                     deviceModel = null,
                     appleContinuityType = messageType,
-                    confidence = 0.50f
+                    confidence = 0.50f,
                 )
             }
         }
@@ -554,7 +563,7 @@ object ManufacturerDataParser {
     /**
      * Infer Google device type.
      */
-    private fun inferGoogleDevice(payload: ByteArray): DeviceInference {
+    private fun inferGoogleDevice(_payload: ByteArray): DeviceInference {
         // Google Fast Pair uses specific patterns
         return DeviceInference(DeviceType.PHONE, "Pixel", null, 0.65f)
     }
@@ -562,7 +571,7 @@ object ManufacturerDataParser {
     /**
      * Infer Garmin device type.
      */
-    private fun inferGarminDevice(payload: ByteArray): DeviceInference {
+    private fun inferGarminDevice(_payload: ByteArray): DeviceInference {
         // Garmin makes both watches and fitness bands
         return DeviceInference(DeviceType.WATCH, "Garmin", null, 0.80f)
     }
@@ -570,7 +579,7 @@ object ManufacturerDataParser {
     /**
      * Infer Xiaomi device type.
      */
-    private fun inferXiaomiDevice(payload: ByteArray): DeviceInference {
+    private fun inferXiaomiDevice(_payload: ByteArray): DeviceInference {
         // Xiaomi makes phones, bands, and earbuds
         return DeviceInference(DeviceType.PHONE, "Xiaomi", null, 0.60f)
     }
@@ -578,7 +587,7 @@ object ManufacturerDataParser {
     /**
      * Infer Huawei device type.
      */
-    private fun inferHuaweiDevice(payload: ByteArray): DeviceInference {
+    private fun inferHuaweiDevice(_payload: ByteArray): DeviceInference {
         return DeviceInference(DeviceType.PHONE, "Huawei", null, 0.60f)
     }
 
@@ -594,21 +603,24 @@ object ManufacturerDataParser {
     private fun isTrackerDevice(
         manufacturerId: Int,
         deviceType: DeviceType,
-        appleContinuityType: Int?
+        appleContinuityType: Int?,
     ): Boolean {
         // Direct tracker manufacturers
-        if (manufacturerId in listOf(
-            ManufacturerId.TILE,
-            ManufacturerId.CHIPOLO,
-            ManufacturerId.PEBBLEBEE,
-            ManufacturerId.CUBE
-        )) {
+        if (manufacturerId in
+            listOf(
+                ManufacturerId.TILE,
+                ManufacturerId.CHIPOLO,
+                ManufacturerId.PEBBLEBEE,
+                ManufacturerId.CUBE,
+            )
+        ) {
             return true
         }
 
         // Apple Find My (AirTag)
         if (manufacturerId == ManufacturerId.APPLE &&
-            appleContinuityType == AppleContinuityType.FIND_MY) {
+            appleContinuityType == AppleContinuityType.FIND_MY
+        ) {
             return true
         }
 
@@ -653,11 +665,11 @@ object ManufacturerDataParser {
      * - Bits 6-7: Battery level hint (00=full, 01=medium, 10=low, 11=critical)
      */
     object FindMyPayload {
-        const val MIN_PAYLOAD_LENGTH = 3  // Minimum for type + length + status
-        const val FULL_PAYLOAD_LENGTH = 27  // Type + length + 25 bytes of data
+        const val MIN_PAYLOAD_LENGTH = 3 // Minimum for type + length + status
+        const val FULL_PAYLOAD_LENGTH = 27 // Type + length + 25 bytes of data
 
         // Status byte bit masks
-        const val SEPARATED_FROM_OWNER_MASK = 0x04  // Bit 2
+        const val SEPARATED_FROM_OWNER_MASK = 0x04 // Bit 2
 
         // Battery level bits (bits 6-7)
         const val BATTERY_MASK = 0xC0
@@ -668,8 +680,8 @@ object ManufacturerDataParser {
 
         // Fingerprint extraction: We use bytes 3-8 (first 6 bytes of public key)
         // These rotate less frequently than the MAC and provide device correlation
-        const val FINGERPRINT_START = 3  // After type, length, and status byte
-        const val FINGERPRINT_LENGTH = 6  // 6 bytes = 12 hex chars
+        const val FINGERPRINT_START = 3 // After type, length, and status byte
+        const val FINGERPRINT_LENGTH = 6 // 6 bytes = 12 hex chars
     }
 
     /**
@@ -680,10 +692,14 @@ object ManufacturerDataParser {
         val separatedFromOwner: Boolean,
         val batteryLevel: BatteryLevel,
         val payloadFingerprint: String,
-        val rawPayload: ByteArray
+        val rawPayload: ByteArray,
     ) {
         enum class BatteryLevel {
-            FULL, MEDIUM, LOW, CRITICAL, UNKNOWN
+            FULL,
+            MEDIUM,
+            LOW,
+            CRITICAL,
+            UNKNOWN,
         }
 
         override fun equals(other: Any?): Boolean {
@@ -741,8 +757,6 @@ object ManufacturerDataParser {
 
         try {
             // Extract length byte (byte 1)
-            val length = if (payload.size > 1) payload[1].toInt() and 0xFF else 0
-
             // Extract status byte (byte 2)
             val statusByte = if (payload.size > 2) payload[2].toInt() and 0xFF else 0
 
@@ -750,32 +764,35 @@ object ManufacturerDataParser {
             val separatedFromOwner = (statusByte and FindMyPayload.SEPARATED_FROM_OWNER_MASK) != 0
 
             // Extract battery level
-            val batteryLevel = when (statusByte and FindMyPayload.BATTERY_MASK) {
-                FindMyPayload.BATTERY_FULL -> FindMyInfo.BatteryLevel.FULL
-                FindMyPayload.BATTERY_MEDIUM -> FindMyInfo.BatteryLevel.MEDIUM
-                FindMyPayload.BATTERY_LOW -> FindMyInfo.BatteryLevel.LOW
-                FindMyPayload.BATTERY_CRITICAL -> FindMyInfo.BatteryLevel.CRITICAL
-                else -> FindMyInfo.BatteryLevel.UNKNOWN
-            }
+            val batteryLevel =
+                when (statusByte and FindMyPayload.BATTERY_MASK) {
+                    FindMyPayload.BATTERY_FULL -> FindMyInfo.BatteryLevel.FULL
+                    FindMyPayload.BATTERY_MEDIUM -> FindMyInfo.BatteryLevel.MEDIUM
+                    FindMyPayload.BATTERY_LOW -> FindMyInfo.BatteryLevel.LOW
+                    FindMyPayload.BATTERY_CRITICAL -> FindMyInfo.BatteryLevel.CRITICAL
+                    else -> FindMyInfo.BatteryLevel.UNKNOWN
+                }
 
             // Extract fingerprint from bytes 3-8 (or as many as available)
             // This is the semi-stable portion of the public key
             val fingerprintStart = FindMyPayload.FINGERPRINT_START
-            val fingerprintEnd = minOf(
-                fingerprintStart + FindMyPayload.FINGERPRINT_LENGTH,
-                payload.size
-            )
+            val fingerprintEnd =
+                minOf(
+                    fingerprintStart + FindMyPayload.FINGERPRINT_LENGTH,
+                    payload.size,
+                )
 
-            val fingerprint = if (fingerprintEnd > fingerprintStart) {
-                payload.copyOfRange(fingerprintStart, fingerprintEnd).toHexString()
-            } else {
-                // Fallback: use status byte + any available bytes
-                payload.copyOfRange(0, minOf(4, payload.size)).toHexString()
-            }
+            val fingerprint =
+                if (fingerprintEnd > fingerprintStart) {
+                    payload.copyOfRange(fingerprintStart, fingerprintEnd).toHexString()
+                } else {
+                    // Fallback: use status byte + any available bytes
+                    payload.copyOfRange(0, minOf(4, payload.size)).toHexString()
+                }
 
             Timber.d(
                 "Find My payload parsed: separated=$separatedFromOwner, " +
-                    "battery=$batteryLevel, fingerprint=$fingerprint"
+                    "battery=$batteryLevel, fingerprint=$fingerprint",
             )
 
             return FindMyInfo(
@@ -783,7 +800,7 @@ object ManufacturerDataParser {
                 separatedFromOwner = separatedFromOwner,
                 batteryLevel = batteryLevel,
                 payloadFingerprint = fingerprint,
-                rawPayload = payload
+                rawPayload = payload,
             )
         } catch (e: Exception) {
             Timber.e(e, "Error parsing Find My payload")
@@ -818,7 +835,10 @@ object ManufacturerDataParser {
      * @return Fingerprint string prefixed with type (e.g., "FM:AABBCCDD" for Find My)
      *         or null if fingerprint cannot be extracted
      */
-    fun extractPayloadFingerprint(manufacturerId: Int, payload: ByteArray?): String? {
+    fun extractPayloadFingerprint(
+        manufacturerId: Int,
+        payload: ByteArray?,
+    ): String? {
         if (payload == null || payload.isEmpty()) return null
 
         // Only process Apple devices for now (Samsung/Tile handled separately via service UUIDs)
@@ -855,7 +875,9 @@ object ManufacturerDataParser {
                     // Include color byte (byte 6) if available for better differentiation
                     val colorByte = if (payload.size >= 7) payload[6].toInt() and 0xFF else 0
                     "PP:%04X%02X%02X".format(modelId, statusByte and 0xF0, colorByte)
-                } else null
+                } else {
+                    null
+                }
             }
 
             // =====================================================
@@ -886,7 +908,7 @@ object ManufacturerDataParser {
             // Apple Watches are not stalking threats - don't fingerprint.
             // =====================================================
             AppleContinuityType.MAGIC_SWITCH -> {
-                null  // Not a tracker, not fingerprintable
+                null // Not a tracker, not fingerprintable
             }
 
             // =====================================================
@@ -895,7 +917,7 @@ object ManufacturerDataParser {
             // Auth tag rotates with MAC. Not a tracker threat.
             // =====================================================
             AppleContinuityType.HANDOFF -> {
-                null  // Not a tracker, not fingerprintable
+                null // Not a tracker, not fingerprintable
             }
 
             // =====================================================
@@ -913,8 +935,9 @@ object ManufacturerDataParser {
             AppleContinuityType.TETHERING_SOURCE,
             AppleContinuityType.TETHERING_TARGET,
             AppleContinuityType.AIRPLAY_SOURCE,
-            AppleContinuityType.AIRPLAY_TARGET -> {
-                null  // Not trackers, not fingerprintable
+            AppleContinuityType.AIRPLAY_TARGET,
+            -> {
+                null // Not trackers, not fingerprintable
             }
 
             // Unknown Apple Continuity type
@@ -989,82 +1012,98 @@ object ManufacturerDataParser {
      * @param manufacturerData Raw manufacturer data bytes
      * @return Fingerprint string or null if no tracker UUID found
      */
+    @Suppress("CyclomaticComplexMethod", "ReturnCount")
     fun extractServiceUuidFingerprint(
         manufacturerId: Int?,
         serviceUuids: List<android.os.ParcelUuid>?,
-        manufacturerData: ByteArray?
+        manufacturerData: ByteArray?,
     ): String? {
         if (serviceUuids.isNullOrEmpty()) return null
 
         // Convert service UUIDs to uppercase strings for comparison
         val uuidStrings = serviceUuids.map { it.uuid.toString().uppercase() }
-        val shortUuids = uuidStrings.map { uuid ->
-            // Extract short UUID from full UUID (e.g., "0000FD5A-0000-1000-8000-00805F9B34FB" -> "FD5A")
-            if (uuid.startsWith("0000") && uuid.contains("-0000-1000-8000-00805F9B34FB")) {
-                uuid.substring(4, 8)
-            } else uuid
-        }
+        val shortUuids =
+            uuidStrings.map { uuid ->
+                // Extract short UUID from full UUID (e.g., "0000FD5A-0000-1000-8000-00805F9B34FB" -> "FD5A")
+                if (uuid.startsWith("0000") && uuid.contains("-0000-1000-8000-00805F9B34FB")) {
+                    uuid.substring(4, 8)
+                } else {
+                    uuid
+                }
+            }
 
         // Extract payload hash for differentiation between multiple devices of same type
-        val payloadHash = manufacturerData?.let {
-            if (it.size >= 4) {
-                it.copyOfRange(0, minOf(4, it.size)).joinToString("") { b -> "%02X".format(b) }
-            } else if (it.isNotEmpty()) {
-                it.joinToString("") { b -> "%02X".format(b) }
-            } else null
-        } ?: ""
+        val payloadHash =
+            manufacturerData?.let {
+                if (it.size >= 4) {
+                    it.copyOfRange(0, minOf(4, it.size)).joinToString("") { b -> "%02X".format(b) }
+                } else if (it.isNotEmpty()) {
+                    it.joinToString("") { b -> "%02X".format(b) }
+                } else {
+                    null
+                }
+            } ?: ""
 
         // Check for Samsung SmartTag
         if (shortUuids.contains(TrackerServiceUuid.SAMSUNG_SMARTTAG_SHORT) ||
-            uuidStrings.any { it.contains("FD5A") }) {
+            uuidStrings.any { it.contains("FD5A") }
+        ) {
             return "ST:FD5A:$payloadHash"
         }
 
         // Check for Tile
         if (shortUuids.contains(TrackerServiceUuid.TILE_SHORT) ||
-            uuidStrings.any { it.contains("FEED") }) {
+            uuidStrings.any { it.contains("FEED") }
+        ) {
             return "TL:FEED:$payloadHash"
         }
 
         // Check for Chipolo
         if (shortUuids.contains(TrackerServiceUuid.CHIPOLO_SHORT) ||
-            uuidStrings.any { it.contains("FE8C") }) {
+            uuidStrings.any { it.contains("FE8C") }
+        ) {
             return "CH:FE8C:$payloadHash"
         }
 
         // Check for Google Find My Device
         if (shortUuids.contains(TrackerServiceUuid.GOOGLE_FIND_MY_SHORT) ||
-            uuidStrings.any { it.contains("FE2C") }) {
+            uuidStrings.any { it.contains("FE2C") }
+        ) {
             return "GF:FE2C:$payloadHash"
         }
 
         // Check for Pebblebee
         if (shortUuids.contains(TrackerServiceUuid.PEBBLEBEE_SHORT) ||
-            uuidStrings.any { it.contains("FE8D") }) {
+            uuidStrings.any { it.contains("FE8D") }
+        ) {
             return "PB:FE8D:$payloadHash"
         }
 
         // Check for Cube
         if (shortUuids.contains(TrackerServiceUuid.CUBE_SHORT) ||
-            uuidStrings.any { it.contains("FE8E") }) {
+            uuidStrings.any { it.contains("FE8E") }
+        ) {
             return "CB:FE8E:$payloadHash"
         }
 
         // Check for eufy
         if (shortUuids.contains(TrackerServiceUuid.EUFY_SHORT) ||
-            uuidStrings.any { it.contains("FE9F") }) {
+            uuidStrings.any { it.contains("FE9F") }
+        ) {
             return "EF:FE9F:$payloadHash"
         }
 
         // Check for Jio Tag
         if (shortUuids.contains(TrackerServiceUuid.JIO_TAG_SHORT) ||
-            uuidStrings.any { it.contains("FEA0") }) {
+            uuidStrings.any { it.contains("FEA0") }
+        ) {
             return "JT:FEA0:$payloadHash"
         }
 
         // Check for Apple Find My Network (third-party accessories)
         if (shortUuids.contains(TrackerServiceUuid.APPLE_FIND_MY_SHORT) ||
-            uuidStrings.any { it.contains("FD6F") }) {
+            uuidStrings.any { it.contains("FD6F") }
+        ) {
             return "AF:FD6F:$payloadHash"
         }
 
@@ -1094,7 +1133,7 @@ object ManufacturerDataParser {
     fun extractBestFingerprint(
         manufacturerId: Int?,
         manufacturerData: ByteArray?,
-        serviceUuids: List<android.os.ParcelUuid>?
+        serviceUuids: List<android.os.ParcelUuid>?,
     ): String? {
         // Try Apple payload fingerprint first (most specific for Apple devices)
         if (manufacturerId == ManufacturerId.APPLE) {
@@ -1125,7 +1164,7 @@ object ManufacturerDataParser {
         val deviceType: DeviceType,
         val deviceModel: String?,
         val appleContinuityType: Int?,
-        val confidence: Float
+        val confidence: Float,
     )
 
     /**
@@ -1140,10 +1179,9 @@ object ManufacturerDataParser {
         val isTracker: Boolean,
         val payload: ByteArray,
         val identificationConfidence: Float,
-
         // Find My network specific fields (for AirTag detection)
         val findMyInfo: FindMyInfo? = null,
-        val payloadFingerprint: String? = null
+        val payloadFingerprint: String? = null,
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true

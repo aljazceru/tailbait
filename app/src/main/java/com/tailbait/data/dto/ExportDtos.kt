@@ -42,43 +42,44 @@ data class ScannedDeviceDto(
     val highestRssi: Int?,
     val signalStrength: String?,
     val beaconType: String?,
-    val threatLevel: String?
+    val threatLevel: String?,
 )
 
-fun ScannedDevice.toDto() = ScannedDeviceDto(
-    id = id,
-    address = address,
-    name = name,
-    advertisedName = advertisedName,
-    firstSeen = firstSeen,
-    lastSeen = lastSeen,
-    detectionCount = detectionCount,
-    createdAt = createdAt,
-    manufacturerData = manufacturerData,
-    manufacturerId = manufacturerId,
-    manufacturerName = manufacturerName,
-    deviceType = deviceType,
-    deviceModel = deviceModel,
-    isTracker = isTracker,
-    serviceUuids = serviceUuids,
-    appearance = appearance,
-    txPowerLevel = txPowerLevel,
-    advertisingFlags = advertisingFlags,
-    appleContinuityType = appleContinuityType,
-    identificationConfidence = identificationConfidence,
-    identificationMethod = identificationMethod,
-    payloadFingerprint = payloadFingerprint,
-    findMyStatus = findMyStatus,
-    findMySeparated = findMySeparated,
-    linkedDeviceId = linkedDeviceId,
-    linkStrength = linkStrength,
-    linkReason = linkReason,
-    lastMacRotation = lastMacRotation,
-    highestRssi = highestRssi,
-    signalStrength = signalStrength,
-    beaconType = beaconType,
-    threatLevel = threatLevel
-)
+fun ScannedDevice.toDto() =
+    ScannedDeviceDto(
+        id = id,
+        address = address,
+        name = name,
+        advertisedName = advertisedName,
+        firstSeen = firstSeen,
+        lastSeen = lastSeen,
+        detectionCount = detectionCount,
+        createdAt = createdAt,
+        manufacturerData = manufacturerData,
+        manufacturerId = manufacturerId,
+        manufacturerName = manufacturerName,
+        deviceType = deviceType,
+        deviceModel = deviceModel,
+        isTracker = isTracker,
+        serviceUuids = serviceUuids,
+        appearance = appearance,
+        txPowerLevel = txPowerLevel,
+        advertisingFlags = advertisingFlags,
+        appleContinuityType = appleContinuityType,
+        identificationConfidence = identificationConfidence,
+        identificationMethod = identificationMethod,
+        payloadFingerprint = payloadFingerprint,
+        findMyStatus = findMyStatus,
+        findMySeparated = findMySeparated,
+        linkedDeviceId = linkedDeviceId,
+        linkStrength = linkStrength,
+        linkReason = linkReason,
+        lastMacRotation = lastMacRotation,
+        highestRssi = highestRssi,
+        signalStrength = signalStrength,
+        beaconType = beaconType,
+        threatLevel = threatLevel,
+    )
 
 @Serializable
 data class LocationDto(
@@ -89,19 +90,20 @@ data class LocationDto(
     val altitude: Double?,
     val timestamp: Long,
     val provider: String,
-    val createdAt: Long
+    val createdAt: Long,
 )
 
-fun Location.toDto() = LocationDto(
-    id = id,
-    latitude = latitude,
-    longitude = longitude,
-    accuracy = accuracy,
-    altitude = altitude,
-    timestamp = timestamp,
-    provider = provider,
-    createdAt = createdAt
-)
+fun Location.toDto() =
+    LocationDto(
+        id = id,
+        latitude = latitude,
+        longitude = longitude,
+        accuracy = accuracy,
+        altitude = altitude,
+        timestamp = timestamp,
+        provider = provider,
+        createdAt = createdAt,
+    )
 
 @Serializable
 data class DeviceLocationRecordDto(
@@ -114,21 +116,22 @@ data class DeviceLocationRecordDto(
     val locationChanged: Boolean,
     val distanceFromLast: Double?,
     val scanTriggerType: String,
-    val createdAt: Long
+    val createdAt: Long,
 )
 
-fun DeviceLocationRecord.toDto() = DeviceLocationRecordDto(
-    id = id,
-    deviceId = deviceId,
-    locationId = locationId,
-    rssi = rssi,
-    timestamp = timestamp,
-    scanDurationMs = scanDurationMs,
-    locationChanged = locationChanged,
-    distanceFromLast = distanceFromLast,
-    scanTriggerType = scanTriggerType,
-    createdAt = createdAt
-)
+fun DeviceLocationRecord.toDto() =
+    DeviceLocationRecordDto(
+        id = id,
+        deviceId = deviceId,
+        locationId = locationId,
+        rssi = rssi,
+        timestamp = timestamp,
+        scanDurationMs = scanDurationMs,
+        locationChanged = locationChanged,
+        distanceFromLast = distanceFromLast,
+        scanTriggerType = scanTriggerType,
+        createdAt = createdAt,
+    )
 
 @Serializable
 data class UserPathDto(
@@ -136,22 +139,25 @@ data class UserPathDto(
     val locationId: Long,
     val timestamp: Long,
     val accuracy: Float,
-    val createdAt: Long
+    val createdAt: Long,
 )
 
-fun UserPath.toDto() = UserPathDto(
-    id = id,
-    locationId = locationId,
-    timestamp = timestamp,
-    accuracy = accuracy,
-    createdAt = createdAt
-)
+fun UserPath.toDto() =
+    UserPathDto(
+        id = id,
+        locationId = locationId,
+        timestamp = timestamp,
+        accuracy = accuracy,
+        createdAt = createdAt,
+    )
 
 @Serializable
 data class AppSettingsDto(
     val id: Int,
     val isTrackingEnabled: Boolean,
-    val trackingMode: String = "CONTINUOUS", // Default as per previous schema if missing, or handle removal? Wait, did user remove trackingMode? Yes in previous conversation.
+    // Default as per previous schema if missing, or handle removal?
+    // Wait, did user remove trackingMode? Yes in previous conversation.
+    val trackingMode: String = "CONTINUOUS",
     // Wait, AppSettings.kt I just viewed DOES NOT have trackingMode! It was removed.
     // Let me check AppSettings.kt content again from Step 319.
     // Lines 45-90.
@@ -170,27 +176,28 @@ data class AppSettingsDto(
     val dataRetentionDays: Int,
     val batteryOptimizationEnabled: Boolean,
     val themeMode: String,
-    val updatedAt: Long
+    val updatedAt: Long,
 )
 
-fun AppSettings.toDto() = AppSettingsDto(
-    id = id,
-    isTrackingEnabled = isTrackingEnabled,
-    // trackingMode removed
-    scanIntervalSeconds = scanIntervalSeconds,
-    scanDurationSeconds = scanDurationSeconds,
-    minDetectionDistanceMeters = minDetectionDistanceMeters,
-    alertThresholdCount = alertThresholdCount,
-    alertNotificationEnabled = alertNotificationEnabled,
-    alertSoundEnabled = alertSoundEnabled,
-    alertVibrationEnabled = alertVibrationEnabled,
-    learnModeActive = learnModeActive,
-    learnModeStartedAt = learnModeStartedAt,
-    dataRetentionDays = dataRetentionDays,
-    batteryOptimizationEnabled = batteryOptimizationEnabled,
-    themeMode = themeMode,
-    updatedAt = updatedAt
-)
+fun AppSettings.toDto() =
+    AppSettingsDto(
+        id = id,
+        isTrackingEnabled = isTrackingEnabled,
+        // trackingMode removed
+        scanIntervalSeconds = scanIntervalSeconds,
+        scanDurationSeconds = scanDurationSeconds,
+        minDetectionDistanceMeters = minDetectionDistanceMeters,
+        alertThresholdCount = alertThresholdCount,
+        alertNotificationEnabled = alertNotificationEnabled,
+        alertSoundEnabled = alertSoundEnabled,
+        alertVibrationEnabled = alertVibrationEnabled,
+        learnModeActive = learnModeActive,
+        learnModeStartedAt = learnModeStartedAt,
+        dataRetentionDays = dataRetentionDays,
+        batteryOptimizationEnabled = batteryOptimizationEnabled,
+        themeMode = themeMode,
+        updatedAt = updatedAt,
+    )
 
 @Serializable
 data class AlertHistoryDto(
@@ -205,23 +212,24 @@ data class AlertHistoryDto(
     val detectionDetails: String,
     val isDismissed: Boolean,
     val dismissedAt: Long?,
-    val createdAt: Long
+    val createdAt: Long,
 )
 
-fun AlertHistory.toDto() = AlertHistoryDto(
-    id = id,
-    alertLevel = alertLevel,
-    title = title,
-    message = message,
-    timestamp = timestamp,
-    deviceAddresses = deviceAddresses,
-    locationIds = locationIds,
-    threatScore = threatScore,
-    detectionDetails = detectionDetails,
-    isDismissed = isDismissed,
-    dismissedAt = dismissedAt,
-    createdAt = createdAt
-)
+fun AlertHistory.toDto() =
+    AlertHistoryDto(
+        id = id,
+        alertLevel = alertLevel,
+        title = title,
+        message = message,
+        timestamp = timestamp,
+        deviceAddresses = deviceAddresses,
+        locationIds = locationIds,
+        threatScore = threatScore,
+        detectionDetails = detectionDetails,
+        isDismissed = isDismissed,
+        dismissedAt = dismissedAt,
+        createdAt = createdAt,
+    )
 
 @Serializable
 data class WhitelistEntryDto(
@@ -231,15 +239,16 @@ data class WhitelistEntryDto(
     val category: String,
     val addedViaLearnMode: Boolean,
     val notes: String?,
-    val createdAt: Long
+    val createdAt: Long,
 )
 
-fun WhitelistEntry.toDto() = WhitelistEntryDto(
-    id = id,
-    deviceId = deviceId,
-    label = label,
-    category = category,
-    addedViaLearnMode = addedViaLearnMode,
-    notes = notes,
-    createdAt = createdAt
-)
+fun WhitelistEntry.toDto() =
+    WhitelistEntryDto(
+        id = id,
+        deviceId = deviceId,
+        label = label,
+        category = category,
+        addedViaLearnMode = addedViaLearnMode,
+        notes = notes,
+        createdAt = createdAt,
+    )

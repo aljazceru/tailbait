@@ -91,63 +91,64 @@ interface SettingsRepository {
  * Implementation of SettingsRepository.
  */
 @Singleton
-class SettingsRepositoryImpl @Inject constructor(
-    private val appSettingsDao: AppSettingsDao
-) : SettingsRepository {
+class SettingsRepositoryImpl
+    @Inject
+    constructor(
+        private val appSettingsDao: AppSettingsDao,
+    ) : SettingsRepository {
+        override fun getSettings(): Flow<AppSettings> {
+            return appSettingsDao.getSettingsFlow().map { settings ->
+                settings ?: run {
+                    // Initialize default settings if not present
+                    val defaultSettings = AppSettings()
+                    appSettingsDao.insert(defaultSettings)
+                    defaultSettings
+                }
+            }
+        }
 
-    override fun getSettings(): Flow<AppSettings> {
-        return appSettingsDao.getSettingsFlow().map { settings ->
-            settings ?: run {
+        override suspend fun getSettingsOnce(): AppSettings {
+            return appSettingsDao.getSettings() ?: run {
                 // Initialize default settings if not present
                 val defaultSettings = AppSettings()
                 appSettingsDao.insert(defaultSettings)
                 defaultSettings
             }
         }
-    }
 
-    override suspend fun getSettingsOnce(): AppSettings {
-        return appSettingsDao.getSettings() ?: run {
-            // Initialize default settings if not present
-            val defaultSettings = AppSettings()
-            appSettingsDao.insert(defaultSettings)
-            defaultSettings
+        override suspend fun updateSettings(settings: AppSettings) {
+            appSettingsDao.update(settings.copy(updatedAt = System.currentTimeMillis()))
+        }
+
+        override suspend fun updateTrackingEnabled(enabled: Boolean) {
+            appSettingsDao.updateTrackingEnabled(enabled)
+        }
+
+        override suspend fun updateScanInterval(intervalSeconds: Int) {
+            appSettingsDao.updateScanInterval(intervalSeconds)
+        }
+
+        override suspend fun updateScanDuration(durationSeconds: Int) {
+            appSettingsDao.updateScanDuration(durationSeconds)
+        }
+
+        override suspend fun startLearnMode() {
+            appSettingsDao.startLearnMode()
+        }
+
+        override suspend fun stopLearnMode() {
+            appSettingsDao.stopLearnMode()
+        }
+
+        override fun isLearnModeActive(): Flow<Boolean> {
+            return appSettingsDao.isLearnModeActive().map { it ?: false }
+        }
+
+        override fun getThemeMode(): Flow<String> {
+            return appSettingsDao.getThemeMode().map { it ?: "SYSTEM" }
+        }
+
+        override suspend fun updateThemeMode(mode: String) {
+            appSettingsDao.updateThemeMode(mode)
         }
     }
-
-    override suspend fun updateSettings(settings: AppSettings) {
-        appSettingsDao.update(settings.copy(updatedAt = System.currentTimeMillis()))
-    }
-
-    override suspend fun updateTrackingEnabled(enabled: Boolean) {
-        appSettingsDao.updateTrackingEnabled(enabled)
-    }
-
-    override suspend fun updateScanInterval(intervalSeconds: Int) {
-        appSettingsDao.updateScanInterval(intervalSeconds)
-    }
-
-    override suspend fun updateScanDuration(durationSeconds: Int) {
-        appSettingsDao.updateScanDuration(durationSeconds)
-    }
-
-    override suspend fun startLearnMode() {
-        appSettingsDao.startLearnMode()
-    }
-
-    override suspend fun stopLearnMode() {
-        appSettingsDao.stopLearnMode()
-    }
-
-    override fun isLearnModeActive(): Flow<Boolean> {
-        return appSettingsDao.isLearnModeActive().map { it ?: false }
-    }
-
-    override fun getThemeMode(): Flow<String> {
-        return appSettingsDao.getThemeMode().map { it ?: "SYSTEM" }
-    }
-
-    override suspend fun updateThemeMode(mode: String) {
-        appSettingsDao.updateThemeMode(mode)
-    }
-}

@@ -28,23 +28,24 @@ import kotlin.math.roundToInt
 fun SettingsSection(
     title: String,
     icon: ImageVector? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = TailBaitDimensions.ContentPaddingHorizontal,
-                vertical = TailBaitDimensions.ListItemPaddingVertical
-            ),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = TailBaitDimensions.ContentPaddingHorizontal,
+                    vertical = TailBaitDimensions.ListItemPaddingVertical,
+                ),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(TailBaitDimensions.IconSizeDefault)
+                modifier = Modifier.size(TailBaitDimensions.IconSizeDefault),
             )
             Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingSM))
         }
@@ -52,7 +53,7 @@ fun SettingsSection(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }
@@ -79,59 +80,64 @@ fun SettingsSwitchItem(
     onCheckedChange: (Boolean) -> Unit,
     icon: ImageVector? = null,
     enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled) { onCheckedChange(!checked) },
-        color = MaterialTheme.colorScheme.surface
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled) { onCheckedChange(!checked) },
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = TailBaitDimensions.ListItemPaddingHorizontal,
-                    vertical = TailBaitDimensions.ListItemPaddingVertical
-                ),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = TailBaitDimensions.ListItemPaddingHorizontal,
+                        vertical = TailBaitDimensions.ListItemPaddingVertical,
+                    ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (enabled) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    },
-                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium)
+                    tint =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
+                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
                 )
                 Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingLG))
             }
 
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    }
+                    color =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
                 )
                 if (description != null) {
                     Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingXS))
                     Text(
                         text = description,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (enabled) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        }
+                        color =
+                            if (enabled) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            },
                     )
                 }
             }
@@ -141,7 +147,7 @@ fun SettingsSwitchItem(
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
-                enabled = enabled
+                enabled = enabled,
             )
         }
     }
@@ -175,60 +181,64 @@ fun SettingsSliderItem(
     valueLabel: (Float) -> String = { it.roundToInt().toString() },
     icon: ImageVector? = null,
     enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = TailBaitDimensions.ListItemPaddingHorizontal,
-                    vertical = TailBaitDimensions.ListItemPaddingVertical
-                )
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = TailBaitDimensions.ListItemPaddingHorizontal,
+                        vertical = TailBaitDimensions.ListItemPaddingVertical,
+                    ),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (icon != null) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (enabled) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        },
-                        modifier = Modifier.size(TailBaitDimensions.IconSizeMedium)
+                        tint =
+                            if (enabled) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            },
+                        modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
                     )
                     Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingLG))
                 }
 
                 Column(
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = if (enabled) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        }
+                        color =
+                            if (enabled) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            },
                     )
                     if (description != null) {
                         Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingXS))
                         Text(
                             text = description,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (enabled) {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                            }
+                            color =
+                                if (enabled) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                },
                         )
                     }
                 }
@@ -239,11 +249,12 @@ fun SettingsSliderItem(
                     text = valueLabel(value),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    }
+                    color =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
                 )
             }
 
@@ -255,7 +266,7 @@ fun SettingsSliderItem(
                 valueRange = valueRange,
                 steps = steps,
                 enabled = enabled,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -285,61 +296,66 @@ fun SettingsDropdownItem(
     onOptionSelected: (String) -> Unit,
     icon: ImageVector? = null,
     enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled) { expanded = true },
-        color = MaterialTheme.colorScheme.surface
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled) { expanded = true },
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = TailBaitDimensions.ListItemPaddingHorizontal,
-                    vertical = TailBaitDimensions.ListItemPaddingVertical
-                ),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = TailBaitDimensions.ListItemPaddingHorizontal,
+                        vertical = TailBaitDimensions.ListItemPaddingVertical,
+                    ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (enabled) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    },
-                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium)
+                    tint =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
+                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
                 )
                 Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingLG))
             }
 
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    }
+                    color =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
                 )
                 if (description != null) {
                     Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingXS))
                     Text(
                         text = description,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (enabled) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        }
+                        color =
+                            if (enabled) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            },
                     )
                 }
             }
@@ -347,32 +363,34 @@ fun SettingsDropdownItem(
             Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingSM))
 
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = selectedOption,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    },
-                    fontWeight = FontWeight.Medium
+                    color =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
+                    fontWeight = FontWeight.Medium,
                 )
                 Icon(
                     imageVector = Icons.Default.ArrowDropDown,
                     contentDescription = null,
-                    tint = if (enabled) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    }
+                    tint =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
                 )
             }
 
             DropdownMenu(
                 expanded = expanded,
-                onDismissRequest = { expanded = false }
+                onDismissRequest = { expanded = false },
             ) {
                 options.forEach { option ->
                     DropdownMenuItem(
@@ -381,14 +399,17 @@ fun SettingsDropdownItem(
                             onOptionSelected(option)
                             expanded = false
                         },
-                        leadingIcon = if (option == selectedOption) {
-                            {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null
-                                )
-                            }
-                        } else null
+                        leadingIcon =
+                            if (option == selectedOption) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                    )
+                                }
+                            } else {
+                                null
+                            },
                     )
                 }
             }
@@ -418,59 +439,64 @@ fun SettingsActionItem(
     icon: ImageVector? = null,
     trailingIcon: ImageVector? = Icons.Default.ChevronRight,
     enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick),
-        color = MaterialTheme.colorScheme.surface
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled, onClick = onClick),
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = TailBaitDimensions.ListItemPaddingHorizontal,
-                    vertical = TailBaitDimensions.ListItemPaddingVertical
-                ),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = TailBaitDimensions.ListItemPaddingHorizontal,
+                        vertical = TailBaitDimensions.ListItemPaddingVertical,
+                    ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (enabled) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    },
-                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium)
+                    tint =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
+                    modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
                 )
                 Spacer(modifier = Modifier.width(TailBaitDimensions.SpacingLG))
             }
 
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    }
+                    color =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
                 )
                 if (description != null) {
                     Spacer(modifier = Modifier.height(TailBaitDimensions.SpacingXS))
                     Text(
                         text = description,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (enabled) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        }
+                        color =
+                            if (enabled) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            },
                     )
                 }
             }
@@ -481,11 +507,12 @@ fun SettingsActionItem(
                     imageVector = trailingIcon,
                     contentDescription = null,
                     modifier = Modifier.size(TailBaitDimensions.IconSizeMedium),
-                    tint = if (enabled) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    }
+                    tint =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
                 )
             }
         }
@@ -498,13 +525,11 @@ fun SettingsActionItem(
  * A thin horizontal line to separate settings items or sections.
  */
 @Composable
-fun SettingsDivider(
-    modifier: Modifier = Modifier
-) {
+fun SettingsDivider(modifier: Modifier = Modifier) {
     HorizontalDivider(
         modifier = modifier.padding(horizontal = TailBaitDimensions.ContentPaddingHorizontal),
         thickness = TailBaitDimensions.DividerThickness,
-        color = MaterialTheme.colorScheme.outlineVariant
+        color = MaterialTheme.colorScheme.outlineVariant,
     )
 }
 
@@ -528,7 +553,7 @@ fun ConfirmationDialog(
     confirmText: String = "Confirm",
     dismissText: String = "Cancel",
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -537,19 +562,19 @@ fun ConfirmationDialog(
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(TailBaitDimensions.IconSizeLarge)
+                modifier = Modifier.size(TailBaitDimensions.IconSizeLarge),
             )
         },
         title = {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineSmall,
             )
         },
         text = {
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
             )
         },
         confirmButton = {
@@ -557,11 +582,11 @@ fun ConfirmationDialog(
                 onClick = {
                     onConfirm()
                     onDismiss()
-                }
+                },
             ) {
                 Text(
                     text = confirmText,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
         },
@@ -570,6 +595,6 @@ fun ConfirmationDialog(
                 Text(dismissText)
             }
         },
-        shape = TailBaitShapeTokens.DialogShape
+        shape = TailBaitShapeTokens.DialogShape,
     )
 }

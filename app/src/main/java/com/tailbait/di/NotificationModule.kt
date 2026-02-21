@@ -14,13 +14,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NotificationModule {
-
     @Provides
     @Singleton
     fun provideNotificationHelper(
         @ApplicationContext context: Context,
         alertRepository: AlertRepository,
-        settingsRepository: SettingsRepository
+        settingsRepository: SettingsRepository,
     ): NotificationHelper {
         return NotificationHelper(context, alertRepository, settingsRepository)
     }

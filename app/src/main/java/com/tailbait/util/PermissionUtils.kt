@@ -9,15 +9,15 @@ import android.provider.Settings
  * Utility functions for permission-related operations
  */
 object PermissionUtils {
-
     /**
      * Open app settings page where user can manually grant permissions
      */
     fun openAppSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", context.packageName, null)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        val intent =
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
         context.startActivity(intent)
     }
 
@@ -25,9 +25,10 @@ object PermissionUtils {
      * Open location settings page
      */
     fun openLocationSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        val intent =
+            Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
         context.startActivity(intent)
     }
 
@@ -35,9 +36,10 @@ object PermissionUtils {
      * Open Bluetooth settings page
      */
     fun openBluetoothSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        val intent =
+            Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
         context.startActivity(intent)
     }
 
@@ -45,17 +47,18 @@ object PermissionUtils {
      * Open notification settings page for the app
      */
     fun openNotificationSettings(context: Context) {
-        val intent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent =
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
-        } else {
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", context.packageName, null)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-        }
         context.startActivity(intent)
     }
 
@@ -66,14 +69,14 @@ object PermissionUtils {
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
         return locationManager?.let {
             it.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
-                    it.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+                it.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
         } ?: false
     }
 
     /**
      * Check if Bluetooth is enabled on the device
      */
-    fun isBluetoothEnabled(context: Context): Boolean {
+    fun isBluetoothEnabled(_context: Context): Boolean {
         val bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
         return bluetoothAdapter?.isEnabled == true
     }
@@ -85,19 +88,19 @@ object PermissionUtils {
         return when {
             permissionName.contains("BLUETOOTH") ->
                 "Bluetooth permission is required to scan for nearby tracking devices. " +
-                        "Without this permission, the app cannot function."
+                    "Without this permission, the app cannot function."
 
             permissionName.contains("LOCATION") && permissionName.contains("BACKGROUND") ->
                 "Background location permission enables 24/7 protection. " +
-                        "Without it, the app can only detect devices when actively open."
+                    "Without it, the app can only detect devices when actively open."
 
             permissionName.contains("LOCATION") ->
                 "Location permission is required to track where devices are detected. " +
-                        "This is essential for identifying if devices are following you."
+                    "This is essential for identifying if devices are following you."
 
             permissionName.contains("NOTIFICATION") ->
                 "Notification permission is required to alert you of potential threats. " +
-                        "Without it, you won't receive important security alerts."
+                    "Without it, you won't receive important security alerts."
 
             else -> "This permission is required for the app to function properly."
         }
@@ -113,7 +116,7 @@ object PermissionUtils {
 
             permissionName.contains("LOCATION") && permissionName.contains("BACKGROUND") ->
                 "Consider enabling background location for maximum protection. " +
-                        "You can enable this later in settings."
+                    "You can enable this later in settings."
 
             permissionName.contains("LOCATION") ->
                 "Please enable location permissions in app settings to continue."

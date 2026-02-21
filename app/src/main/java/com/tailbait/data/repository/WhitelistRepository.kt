@@ -17,7 +17,6 @@ import javax.inject.Singleton
  * through Learn Mode, and are categorized for better organization.
  */
 interface WhitelistRepository {
-
     /**
      * Device category constants for whitelist entries.
      */
@@ -38,8 +37,9 @@ interface WhitelistRepository {
      */
     data class WhitelistEntryWithDevice(
         val entry: WhitelistEntry,
-        val device: ScannedDevice
+        val device: ScannedDevice,
     )
+
     /**
      * Add a device to the whitelist.
      *
@@ -55,7 +55,7 @@ interface WhitelistRepository {
         label: String,
         category: String,
         addedViaLearnMode: Boolean = false,
-        notes: String? = null
+        notes: String? = null,
     ): Long
 
     /**
@@ -198,141 +198,141 @@ interface WhitelistRepository {
  * Implementation of WhitelistRepository.
  */
 @Singleton
-class WhitelistRepositoryImpl @Inject constructor(
-    private val whitelistEntryDao: WhitelistEntryDao,
-    private val scannedDeviceDao: ScannedDeviceDao
-) : WhitelistRepository {
+class WhitelistRepositoryImpl
+    @Inject
+    constructor(
+        private val whitelistEntryDao: WhitelistEntryDao,
+        private val scannedDeviceDao: ScannedDeviceDao,
+    ) : WhitelistRepository {
+        override suspend fun addToWhitelist(
+            deviceId: Long,
+            label: String,
+            category: String,
+            addedViaLearnMode: Boolean,
+            notes: String?,
+        ): Long {
+            val entry =
+                WhitelistEntry(
+                    deviceId = deviceId,
+                    label = label,
+                    category = category,
+                    addedViaLearnMode = addedViaLearnMode,
+                    notes = notes,
+                )
+            return whitelistEntryDao.insert(entry)
+        }
 
-    override suspend fun addToWhitelist(
-        deviceId: Long,
-        label: String,
-        category: String,
-        addedViaLearnMode: Boolean,
-        notes: String?
-    ): Long {
-        val entry = WhitelistEntry(
-            deviceId = deviceId,
-            label = label,
-            category = category,
-            addedViaLearnMode = addedViaLearnMode,
-            notes = notes
-        )
-        return whitelistEntryDao.insert(entry)
-    }
+        override suspend fun addMultipleToWhitelist(entries: List<WhitelistEntry>): List<Long> {
+            return whitelistEntryDao.insertAll(entries)
+        }
 
-    override suspend fun addMultipleToWhitelist(entries: List<WhitelistEntry>): List<Long> {
-        return whitelistEntryDao.insertAll(entries)
-    }
+        override suspend fun removeFromWhitelist(deviceId: Long): Int {
+            return whitelistEntryDao.deleteByDeviceId(deviceId)
+        }
 
-    override suspend fun removeFromWhitelist(deviceId: Long): Int {
-        return whitelistEntryDao.deleteByDeviceId(deviceId)
-    }
+        override suspend fun isDeviceWhitelisted(deviceId: Long): Boolean {
+            return whitelistEntryDao.isDeviceWhitelisted(deviceId)
+        }
 
-    override suspend fun isDeviceWhitelisted(deviceId: Long): Boolean {
-        return whitelistEntryDao.isDeviceWhitelisted(deviceId)
-    }
+        override fun getAllWhitelistEntries(): Flow<List<WhitelistEntry>> {
+            return whitelistEntryDao.getAllEntries()
+        }
 
-    override fun getAllWhitelistEntries(): Flow<List<WhitelistEntry>> {
-        return whitelistEntryDao.getAllEntries()
-    }
+        override fun getAllEntriesWithDevices(): Flow<List<WhitelistRepository.WhitelistEntryWithDevice>> {
+            return combine(
+                whitelistEntryDao.getAllEntries(),
+                scannedDeviceDao.getAllDevices(),
+            ) { entries, devices ->
+                // Create a map for quick device lookup
+                val deviceMap = devices.associateBy { it.id }
 
-    override fun getAllEntriesWithDevices(): Flow<List<WhitelistRepository.WhitelistEntryWithDevice>> {
-        return combine(
-            whitelistEntryDao.getAllEntries(),
-            scannedDeviceDao.getAllDevices()
-        ) { entries, devices ->
-            // Create a map for quick device lookup
-            val deviceMap = devices.associateBy { it.id }
-
-            // Combine entries with their corresponding devices
-            entries.mapNotNull { entry ->
-                deviceMap[entry.deviceId]?.let { device ->
-                    WhitelistRepository.WhitelistEntryWithDevice(
-                        entry = entry,
-                        device = device
-                    )
+                // Combine entries with their corresponding devices
+                entries.mapNotNull { entry ->
+                    deviceMap[entry.deviceId]?.let { device ->
+                        WhitelistRepository.WhitelistEntryWithDevice(
+                            entry = entry,
+                            device = device,
+                        )
+                    }
                 }
             }
         }
-    }
 
-    override fun getAllWhitelistedDeviceIds(): Flow<List<Long>> {
-        return whitelistEntryDao.getAllWhitelistedDeviceIds()
-    }
+        override fun getAllWhitelistedDeviceIds(): Flow<List<Long>> {
+            return whitelistEntryDao.getAllWhitelistedDeviceIds()
+        }
 
-    override fun getEntriesByCategory(category: String): Flow<List<WhitelistEntry>> {
-        return whitelistEntryDao.getEntriesByCategory(category)
-    }
+        override fun getEntriesByCategory(category: String): Flow<List<WhitelistEntry>> {
+            return whitelistEntryDao.getEntriesByCategory(category)
+        }
 
-    override fun getEntriesWithDevicesByCategory(
-        category: String
-    ): Flow<List<WhitelistRepository.WhitelistEntryWithDevice>> {
-        return combine(
-            whitelistEntryDao.getEntriesByCategory(category),
-            scannedDeviceDao.getAllDevices()
-        ) { entries, devices ->
-            val deviceMap = devices.associateBy { it.id }
-            entries.mapNotNull { entry ->
-                deviceMap[entry.deviceId]?.let { device ->
-                    WhitelistRepository.WhitelistEntryWithDevice(
-                        entry = entry,
-                        device = device
-                    )
+        override fun getEntriesWithDevicesByCategory(category: String): Flow<List<WhitelistRepository.WhitelistEntryWithDevice>> {
+            return combine(
+                whitelistEntryDao.getEntriesByCategory(category),
+                scannedDeviceDao.getAllDevices(),
+            ) { entries, devices ->
+                val deviceMap = devices.associateBy { it.id }
+                entries.mapNotNull { entry ->
+                    deviceMap[entry.deviceId]?.let { device ->
+                        WhitelistRepository.WhitelistEntryWithDevice(
+                            entry = entry,
+                            device = device,
+                        )
+                    }
                 }
             }
         }
-    }
 
-    override fun getLearnModeEntries(): Flow<List<WhitelistEntry>> {
-        return whitelistEntryDao.getLearnModeEntries()
-    }
+        override fun getLearnModeEntries(): Flow<List<WhitelistEntry>> {
+            return whitelistEntryDao.getLearnModeEntries()
+        }
 
-    override suspend fun updateEntry(entry: WhitelistEntry) {
-        whitelistEntryDao.update(entry)
-    }
+        override suspend fun updateEntry(entry: WhitelistEntry) {
+            whitelistEntryDao.update(entry)
+        }
 
-    override fun searchEntries(query: String): Flow<List<WhitelistEntry>> {
-        return whitelistEntryDao.searchEntries(query)
-    }
+        override fun searchEntries(query: String): Flow<List<WhitelistEntry>> {
+            return whitelistEntryDao.searchEntries(query)
+        }
 
-    override fun searchEntriesWithDevices(query: String): Flow<List<WhitelistRepository.WhitelistEntryWithDevice>> {
-        return combine(
-            whitelistEntryDao.searchEntries(query),
-            scannedDeviceDao.getAllDevices()
-        ) { entries, devices ->
-            val deviceMap = devices.associateBy { it.id }
-            entries.mapNotNull { entry ->
-                deviceMap[entry.deviceId]?.let { device ->
-                    WhitelistRepository.WhitelistEntryWithDevice(
-                        entry = entry,
-                        device = device
-                    )
+        override fun searchEntriesWithDevices(query: String): Flow<List<WhitelistRepository.WhitelistEntryWithDevice>> {
+            return combine(
+                whitelistEntryDao.searchEntries(query),
+                scannedDeviceDao.getAllDevices(),
+            ) { entries, devices ->
+                val deviceMap = devices.associateBy { it.id }
+                entries.mapNotNull { entry ->
+                    deviceMap[entry.deviceId]?.let { device ->
+                        WhitelistRepository.WhitelistEntryWithDevice(
+                            entry = entry,
+                            device = device,
+                        )
+                    }
                 }
             }
         }
-    }
 
-    override fun getWhitelistCount(): Flow<Int> {
-        return whitelistEntryDao.getWhitelistCount()
-    }
+        override fun getWhitelistCount(): Flow<Int> {
+            return whitelistEntryDao.getWhitelistCount()
+        }
 
-    override suspend fun clearWhitelist() {
-        whitelistEntryDao.deleteAll()
-    }
+        override suspend fun clearWhitelist() {
+            whitelistEntryDao.deleteAll()
+        }
 
-    override fun getCountByCategory(category: String): Flow<Int> {
-        return whitelistEntryDao.getCountByCategory(category)
-    }
+        override fun getCountByCategory(category: String): Flow<Int> {
+            return whitelistEntryDao.getCountByCategory(category)
+        }
 
-    override suspend fun getEntryById(entryId: Long): WhitelistEntry? {
-        return whitelistEntryDao.getById(entryId)
-    }
+        override suspend fun getEntryById(entryId: Long): WhitelistEntry? {
+            return whitelistEntryDao.getById(entryId)
+        }
 
-    override suspend fun getEntryByDeviceId(deviceId: Long): WhitelistEntry? {
-        return whitelistEntryDao.getByDeviceId(deviceId)
-    }
+        override suspend fun getEntryByDeviceId(deviceId: Long): WhitelistEntry? {
+            return whitelistEntryDao.getByDeviceId(deviceId)
+        }
 
-    override fun getManualEntries(): Flow<List<WhitelistEntry>> {
-        return whitelistEntryDao.getManualEntries()
+        override fun getManualEntries(): Flow<List<WhitelistEntry>> {
+            return whitelistEntryDao.getManualEntries()
+        }
     }
-}
