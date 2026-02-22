@@ -57,7 +57,7 @@ jobs:
           EOF
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace --no-daemon
+        run: ./gradlew assembleRelease --stacktrace --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
       - name: Determine version
         id: version
