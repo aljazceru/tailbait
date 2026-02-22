@@ -5,7 +5,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.google.services)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
 }
@@ -115,10 +114,7 @@ dependencies {
 
     // Location Services (kept for location access)
     implementation(libs.google.play.services.location)
-
-    // Firebase
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
