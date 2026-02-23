@@ -51,6 +51,3 @@ Known tracker types get a score boost because an unknown AirTag following you ac
 ## Privacy
 
 All data stays on your phone. There are no API calls, no cloud sync, no analytics, no ads. The app needs Bluetooth and Location permissions to function, and optionally background location permission if you want it scanning while the app is closed. That's it.
-
-
-Apache 2.0
