@@ -59,6 +59,17 @@ jobs:
           keyPassword=${KEY_PASSWORD}
           EOF
 
+      - name: Create debug keystore (fallback signing)
+        if: env.HAS_KEYSTORE != 'true'
+        env:
+          HAS_KEYSTORE: ${{ secrets.KEYSTORE_FILE != '' }}
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
