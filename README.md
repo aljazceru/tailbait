@@ -52,10 +52,5 @@ Known tracker types get a score boost because an unknown AirTag following you ac
 
 All data stays on your phone. There are no API calls, no cloud sync, no analytics, no ads. The app needs Bluetooth and Location permissions to function, and optionally background location permission if you want it scanning while the app is closed. That's it.
 
-## Battery
-
-Continuous scanning uses roughly 3-5% per hour. Periodic mode drops that to 1-2%. Location-based mode (only scans when you move significantly) is under 1% per hour. The app backs off automatically when your battery is low.
-
-## License
 
 Apache 2.0
