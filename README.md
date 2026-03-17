@@ -29,12 +29,6 @@ If you feel unsafe, contact law enforcement. This app is one signal among many, 
 4. If a device crosses that threshold, the app scores it based on how many locations, how far apart they are, time correlation, and whether it looks like a known tracker type.
 5. You get a notification with a threat level. You can review the device, see it on a map, or whitelist it.
 
-## Learn mode
-
-The first thing you should do is teach the app about your own devices. Your phone, your watch, your car's Bluetooth, your headphones - these will all trigger alerts if you don't whitelist them first.
-
-Open Learn Mode, let it scan for a few minutes, then mark everything that's yours. Do this at home and maybe once at work to catch devices you carry between locations.
-
 ## Detection scoring
 
 The threat score runs from 0.0 to 1.0:
