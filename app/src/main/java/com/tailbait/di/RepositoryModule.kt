@@ -16,6 +16,11 @@ abstract class RepositoryModule {
     abstract fun bindDeviceRepository(impl: DeviceRepositoryImpl): DeviceRepository
 
     @Binds
+    abstract fun bindCompanionDeviceRepository(
+        impl: com.tailbait.data.repository.CompanionDeviceRepositoryImpl,
+    ): com.tailbait.data.repository.CompanionDeviceRepository
+
+    @Binds
     abstract fun bindWhitelistRepository(impl: WhitelistRepositoryImpl): WhitelistRepository
 
     @Binds

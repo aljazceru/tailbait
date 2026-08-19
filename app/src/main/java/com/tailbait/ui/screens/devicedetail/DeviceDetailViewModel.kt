@@ -77,6 +77,10 @@ class DeviceDetailViewModel
             val lastSeen: Long,
             val detectionCount: Int,
             val isTracker: Boolean = false,
+            // Companion / radio metadata
+            val radio: String = "BLE",
+            val ssid: String? = null,
+            val channel: Int? = null,
         )
 
         /**
@@ -178,6 +182,9 @@ class DeviceDetailViewModel
                                     lastSeen = device.lastSeen,
                                     detectionCount = device.detectionCount,
                                     isTracker = device.isTracker,
+                                    radio = device.radio,
+                                    ssid = device.ssid,
+                                    channel = device.channel,
                                 ),
                             locationHistory = locationWithDetections,
                             detectionStats = stats,

@@ -8,6 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.tailbait.data.database.dao.AlertHistoryDao
 import com.tailbait.data.database.dao.AppSettingsDao
+import com.tailbait.data.database.dao.CompanionDeviceDao
 import com.tailbait.data.database.dao.DeviceLocationRecordDao
 import com.tailbait.data.database.dao.LocationDao
 import com.tailbait.data.database.dao.ScannedDeviceDao
@@ -15,6 +16,7 @@ import com.tailbait.data.database.dao.UserPathDao
 import com.tailbait.data.database.dao.WhitelistEntryDao
 import com.tailbait.data.database.entities.AlertHistory
 import com.tailbait.data.database.entities.AppSettings
+import com.tailbait.data.database.entities.CompanionDevice
 import com.tailbait.data.database.entities.DeviceLocationRecord
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
@@ -59,8 +61,9 @@ import kotlinx.coroutines.launch
         AlertHistory::class,
         AppSettings::class,
         UserPath::class,
+        CompanionDevice::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class TailBaitDatabase : RoomDatabase() {
@@ -98,6 +101,9 @@ abstract class TailBaitDatabase : RoomDatabase() {
      * Provides access to UserPath DAO for movement history operations.
      */
     abstract fun userPathDao(): UserPathDao
+
+    /** Companion device registry (paired ESP32 units). */
+    abstract fun companionDeviceDao(): CompanionDeviceDao
 
     companion object {
         /**
@@ -399,6 +405,53 @@ abstract class TailBaitDatabase : RoomDatabase() {
             }
 
         /**
+         * Migration from version 11 to 12.
+         * Companion-device integration (ESP32 tailbait-companion):
+         * - scanned_devices gains radio/ssid/channel/wifi_flags columns for
+         *   WiFi observations (STA probes/assoc + AP beacons). Uniqueness
+         *   moves from (address) to (address, radio).
+         * - app_settings gains companion_enabled toggle.
+         * - New companion_devices table (paired ESP32 registry).
+         */
+        private val MIGRATION_11_12 =
+            object : Migration(11, 12) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE scanned_devices ADD COLUMN radio TEXT NOT NULL DEFAULT 'BLE'")
+                    db.execSQL("ALTER TABLE scanned_devices ADD COLUMN ssid TEXT")
+                    db.execSQL("ALTER TABLE scanned_devices ADD COLUMN channel INTEGER")
+                    db.execSQL("ALTER TABLE scanned_devices ADD COLUMN wifi_flags INTEGER")
+                    db.execSQL("DROP INDEX IF EXISTS `index_scanned_devices_address`")
+                    db.execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_scanned_devices_address_radio` " +
+                            "ON `scanned_devices` (`address`, `radio`)",
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_scanned_devices_radio` ON `scanned_devices` (`radio`)",
+                    )
+                    db.execSQL("ALTER TABLE app_settings ADD COLUMN companion_enabled INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `companion_devices` (
+                            `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            `address` TEXT NOT NULL,
+                            `name` TEXT,
+                            `firmware_version` TEXT,
+                            `mode` TEXT,
+                            `is_enabled` INTEGER NOT NULL,
+                            `records_received` INTEGER NOT NULL,
+                            `last_connected_at` INTEGER,
+                            `created_at` INTEGER NOT NULL,
+                            `last_stats_json` TEXT
+                        )
+                        """.trimIndent(),
+                    )
+                    db.execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_companion_devices_address` ON `companion_devices` (`address`)",
+                    )
+                }
+            }
+
+        /**
          * Gets the singleton database instance.
          * Creates a new instance if one doesn't exist, using double-checked locking
          * for thread safety.
@@ -444,7 +497,7 @@ abstract class TailBaitDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                    MIGRATION_9_10, MIGRATION_10_11,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                 )
                 // Enable Write-Ahead Logging for better concurrent access
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)

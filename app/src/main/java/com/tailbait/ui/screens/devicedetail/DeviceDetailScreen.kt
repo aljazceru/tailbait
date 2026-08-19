@@ -447,6 +447,34 @@ private fun DeviceDetailGrid(device: DeviceDetailViewModel.DeviceDetail) {
             isMonospace = true,
         )
 
+        // Radio layer (companion observations)
+        if (device.radio != "BLE") {
+            DeviceDetailRow(
+                icon = Icons.Outlined.Wifi,
+                label = "Radio",
+                value =
+                    when (device.radio) {
+                        "WIFI_AP" -> "WiFi AP (beacon)"
+                        "WIFI_STA" -> "WiFi client (probe/assoc)"
+                        else -> device.radio
+                    },
+            )
+        }
+        if (device.ssid != null) {
+            DeviceDetailRow(
+                icon = Icons.Outlined.Label,
+                label = "SSID",
+                value = device.ssid,
+            )
+        }
+        if (device.channel != null) {
+            DeviceDetailRow(
+                icon = Icons.Outlined.Wifi,
+                label = "Channel",
+                value = device.channel.toString(),
+            )
+        }
+
         // Advertised Name (if available and different from main name)
         if (device.advertisedName != null) {
             DeviceDetailRow(

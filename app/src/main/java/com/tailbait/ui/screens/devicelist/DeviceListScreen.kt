@@ -620,6 +620,19 @@ private fun DeviceListItem(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (device.radio != "BLE") {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text =
+                            buildString {
+                                append(if (device.radio == "WIFI_AP") "AP" else "WiFi")
+                                device.ssid?.let { append("  \"").append(it).append("\"") }
+                                device.channel?.let { append("  ch").append(it) }
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))

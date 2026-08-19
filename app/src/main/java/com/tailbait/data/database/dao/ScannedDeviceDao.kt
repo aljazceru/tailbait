@@ -70,8 +70,15 @@ interface ScannedDeviceDao {
      * @param address The MAC address
      * @return The device, or null if not found
      */
-    @Query("SELECT * FROM scanned_devices WHERE address = :address")
+    @Query("SELECT * FROM scanned_devices WHERE address = :address AND radio = 'BLE'")
     suspend fun getByAddress(address: String): ScannedDevice?
+
+    /** Radio-aware lookup for companion (WiFi) observations. */
+    @Query("SELECT * FROM scanned_devices WHERE address = :address AND radio = :radio")
+    suspend fun getByAddressAndRadio(
+        address: String,
+        radio: String,
+    ): ScannedDevice?
 
     /**
      * Get all scanned devices as a Flow for reactive updates.

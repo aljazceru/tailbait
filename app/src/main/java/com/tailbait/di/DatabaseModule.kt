@@ -168,4 +168,9 @@ object DatabaseModule {
     fun provideUserPathDao(database: TailBaitDatabase): UserPathDao {
         return database.userPathDao()
     }
+
+    @Provides
+    fun provideCompanionDeviceDao(database: TailBaitDatabase): com.tailbait.data.database.dao.CompanionDeviceDao {
+        return database.companionDeviceDao()
+    }
 }

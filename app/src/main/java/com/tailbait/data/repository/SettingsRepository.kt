@@ -85,6 +85,9 @@ interface SettingsRepository {
      * @param mode Theme mode ("SYSTEM", "LIGHT", "DARK")
      */
     suspend fun updateThemeMode(mode: String)
+
+    /** Enable/disable connecting to the paired companion while tracking. */
+    suspend fun updateCompanionEnabled(enabled: Boolean)
 }
 
 /**
@@ -150,5 +153,9 @@ class SettingsRepositoryImpl
 
         override suspend fun updateThemeMode(mode: String) {
             appSettingsDao.updateThemeMode(mode)
+        }
+
+        override suspend fun updateCompanionEnabled(enabled: Boolean) {
+            appSettingsDao.updateCompanionEnabled(enabled)
         }
     }

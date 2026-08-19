@@ -15,11 +15,15 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.lifecycleScope
 import com.tailbait.R
 import com.tailbait.algorithm.DetectionAlgorithm
+import com.tailbait.companion.CompanionIngestor
+import com.tailbait.companion.CompanionLinkManager
+import com.tailbait.data.repository.CompanionDeviceRepository
 import com.tailbait.data.repository.LocationRepository
 import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.util.Constants
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -68,6 +72,15 @@ class TailBaitService : NotificationService() {
     lateinit var detectionAlgorithm: DetectionAlgorithm
 
     @Inject
+    lateinit var companionLink: CompanionLinkManager
+
+    @Inject
+    lateinit var companionIngestor: CompanionIngestor
+
+    @Inject
+    lateinit var companionRepository: CompanionDeviceRepository
+
+    @Inject
     lateinit var alertGenerator: AlertGenerator
 
     // Flow collector jobs - tracked to prevent duplicate collectors on pause/resume
@@ -97,6 +110,9 @@ class TailBaitService : NotificationService() {
                 if (locationResult.isFailure) {
                     Timber.e(locationResult.exceptionOrNull(), "Failed to start location tracking")
                 }
+
+                // Companion link (ESP32): connect if paired + enabled
+                startCompanionIfNeeded()
 
                 // Trigger first scan immediately via the new mechanism
                 // This ensures consistent behavior with periodic scans
@@ -182,6 +198,17 @@ class TailBaitService : NotificationService() {
     private fun handleTriggerScan() {
         if (!isTracking) {
             Timber.w("Scan triggered but tracking is disabled")
+            return
+        }
+
+        // Prefer companion: when the companion ESP32 is connected it streams
+        // continuous BLE+WiFi coverage; skip the phone's own scan burst to
+        // avoid radio contention (and the GATT 133 storms it causes).
+        val companionConnected =
+            companionLink.state.value is CompanionLinkManager.State.Connected
+        if (companionConnected) {
+            Timber.i("Companion connected - skipping phone scan (companion provides coverage)")
+            scheduleNextScan()
             return
         }
 
@@ -291,6 +318,26 @@ class TailBaitService : NotificationService() {
 
     // ...
 
+    /**
+     * Connect the companion link when a paired+enabled ESP32 exists.
+     * Records flow into the repositories via CompanionIngestor.
+     */
+    private fun startCompanionIfNeeded() {
+        lifecycleScope.launch {
+            try {
+                val settings = settingsRepository.getSettingsOnce()
+                if (!settings.companionEnabled) return@launch
+                val paired = companionRepository.getFirst()
+                val device = paired.firstOrNull() ?: return@launch
+                companionIngestor.attach(companionLink)
+                companionLink.start(device.address)
+                Timber.i("Companion link started for ${device.address}")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to start companion link")
+            }
+        }
+    }
+
     private fun stopTracking() {
         lifecycleScope.launch {
             try {
@@ -309,6 +356,9 @@ class TailBaitService : NotificationService() {
 
                 // Stop BLE scanning and save results
                 bleScannerManager.stopAndSaveScanResults()
+
+                // Stop companion link
+                companionLink.stop()
 
                 Timber.i("Tracking stopped, terminating service")
 

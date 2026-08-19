@@ -62,6 +62,9 @@ data class AppSettings(
     val dataRetentionDays: Int = 30,
     @ColumnInfo(name = "battery_optimization_enabled")
     val batteryOptimizationEnabled: Boolean = true,
+    /** Connect to the paired companion ESP32 while tracking runs. */
+    @ColumnInfo(name = "companion_enabled", defaultValue = "0")
+    val companionEnabled: Boolean = false,
     /**
      * Theme mode preference.
      * Values: "SYSTEM" (follow system), "LIGHT" (always light), "DARK" (always dark)

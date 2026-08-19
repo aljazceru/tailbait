@@ -140,7 +140,7 @@ class MapViewModelTest {
     @Test
     fun `initial state is loading`() =
         runTest {
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
 
             val initialState = viewModel.uiState.value
             assertTrue(initialState.isLoading)
@@ -151,7 +151,7 @@ class MapViewModelTest {
     @Test
     fun `loads map data successfully`() =
         runTest {
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -166,7 +166,7 @@ class MapViewModelTest {
     @Test
     fun `markers contain correct device and location data`() =
         runTest {
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -183,7 +183,7 @@ class MapViewModelTest {
     @Test
     fun `device paths are created correctly`() =
         runTest {
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -200,7 +200,7 @@ class MapViewModelTest {
     @Test
     fun `camera position is calculated as center of markers`() =
         runTest {
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -229,7 +229,7 @@ class MapViewModelTest {
                 )
             } returns flowOf(device1Data)
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             // Filter by device 1
@@ -256,7 +256,7 @@ class MapViewModelTest {
                 )
             } returns flowOf(filteredData)
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             // Filter to show only records between 1200L and 1800L
@@ -284,7 +284,7 @@ class MapViewModelTest {
                 )
             } returns flowOf(filteredData)
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             viewModel.filterByDateRange(1500L, null)
@@ -311,7 +311,7 @@ class MapViewModelTest {
                 )
             } returns flowOf(filteredData)
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             viewModel.filterByDateRange(null, 1500L)
@@ -348,7 +348,7 @@ class MapViewModelTest {
                 )
             } returns flowOf(device1DateFiltered)
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             // Apply filters
@@ -390,7 +390,7 @@ class MapViewModelTest {
                 )
             } returns flowOf(filteredData)
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             // Filter by device 1 AND date range 1200-1800
@@ -423,7 +423,7 @@ class MapViewModelTest {
                 )
             } throws RuntimeException("Database error")
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -447,7 +447,7 @@ class MapViewModelTest {
                 )
             } throws RuntimeException("Error")
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             // Verify error exists
@@ -473,7 +473,7 @@ class MapViewModelTest {
             } returns flowOf(emptyList())
             every { scannedDeviceDao.getAllDevices() } returns flowOf(emptyList())
 
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -488,7 +488,7 @@ class MapViewModelTest {
     @Test
     fun `getAvailableDevices returns all devices`() =
         runTest {
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
 
             val devices = viewModel.getAvailableDevices().first()
 
@@ -500,7 +500,7 @@ class MapViewModelTest {
     @Test
     fun `device colors are consistent for same device ID`() =
         runTest {
-            viewModel = MapViewModel(deviceLocationRecordDao, locationDao, scannedDeviceDao)
+            viewModel = MapViewModel(deviceLocationRecordDao, scannedDeviceDao)
             testDispatcher.scheduler.advanceUntilIdle()
 
             val state = viewModel.uiState.value

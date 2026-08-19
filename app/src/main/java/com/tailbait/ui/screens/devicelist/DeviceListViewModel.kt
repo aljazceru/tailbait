@@ -85,6 +85,9 @@ class DeviceListViewModel
             val whitelistLabel: String? = null,
             val whitelistCategory: String? = null,
             val locationPreview: List<LocationPreview>? = null,
+            val radio: String = "BLE",
+            val ssid: String? = null,
+            val channel: Int? = null,
         )
 
         /**
@@ -423,6 +426,9 @@ class DeviceListViewModel
                 manufacturerData = manufacturerData,
                 // Will be loaded separately
                 locationPreview = null,
+                radio = radio,
+                ssid = ssid,
+                channel = channel,
             )
         }
 

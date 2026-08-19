@@ -43,6 +43,10 @@ data class ScannedDeviceDto(
     val signalStrength: String?,
     val beaconType: String?,
     val threatLevel: String?,
+    val radio: String,
+    val ssid: String?,
+    val channel: Int?,
+    val wifiFlags: Int?,
 )
 
 fun ScannedDevice.toDto() =
@@ -79,6 +83,10 @@ fun ScannedDevice.toDto() =
         signalStrength = signalStrength,
         beaconType = beaconType,
         threatLevel = threatLevel,
+        radio = radio,
+        ssid = ssid,
+        channel = channel,
+        wifiFlags = wifiFlags,
     )
 
 @Serializable

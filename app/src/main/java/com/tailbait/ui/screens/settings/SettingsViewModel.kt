@@ -46,6 +46,9 @@ class SettingsViewModel
         private val csvDataExporter: CsvDataExporter,
         private val dataExportService: DataExportService,
         private val fileShareHelper: FileShareHelper,
+        private val companionRepository: com.tailbait.data.repository.CompanionDeviceRepository,
+        val companionIngestor: com.tailbait.companion.CompanionIngestor,
+        private val companionLink: com.tailbait.companion.CompanionLinkManager,
     ) : ViewModel() {
         /**
          * UI State for Settings Screen.
@@ -71,6 +74,108 @@ class SettingsViewModel
         private val settingsFlow = settingsRepository.getSettings()
 
         // Combine all data sources into UI state
+        // ==================== Companion (ESP32) ====================
+
+        val pairedCompanion: kotlinx.coroutines.flow.StateFlow<com.tailbait.data.database.entities.CompanionDevice?> =
+            companionRepository.getFirst()
+                .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+
+        val companionLinkState: kotlinx.coroutines.flow.StateFlow<String> =
+            companionLink.state
+                .map { linkState ->
+                    when (linkState) {
+                        is com.tailbait.companion.CompanionLinkManager.State.Idle -> "Idle"
+                        is com.tailbait.companion.CompanionLinkManager.State.Scanning -> "Scanning"
+                        is com.tailbait.companion.CompanionLinkManager.State.Connecting -> "Connecting"
+                        is com.tailbait.companion.CompanionLinkManager.State.Connected ->
+                            "Connected (fw ${linkState.firmware ?: "?"})"
+                        is com.tailbait.companion.CompanionLinkManager.State.Reconnecting -> "Reconnecting"
+                        is com.tailbait.companion.CompanionLinkManager.State.Error -> "Error: ${linkState.message}"
+                    }
+                }
+                .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, "Idle")
+
+        private val _companionScan = MutableStateFlow<List<Pair<String, String?>>>(emptyList())
+        val companionScan: kotlinx.coroutines.flow.StateFlow<List<Pair<String, String?>>> =
+            _companionScan.asStateFlow()
+
+        fun updateCompanionEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                try {
+                    settingsRepository.updateCompanionEnabled(enabled)
+                } catch (e: Exception) {
+                    showError("Failed to update companion setting: ${e.message}")
+                }
+            }
+        }
+
+        fun startCompanionScan() {
+            _companionScan.value = emptyList()
+            companionLink.scanForCompanions(
+                timeoutSeconds = 15,
+                onFound = { result ->
+                    val name =
+                        try {
+                            result.scanRecord?.deviceName
+                        } catch (_: Exception) {
+                            null
+                        }
+                    _companionScan.value =
+                        (_companionScan.value + (result.device.address to name)).distinctBy { it.first }
+                },
+                onDone = { },
+            )
+        }
+
+        fun stopCompanionScan() {
+            _companionScan.value = emptyList()
+        }
+
+        fun pairCompanion(
+            address: String,
+            name: String?,
+        ) {
+            viewModelScope.launch {
+                try {
+                    companionRepository.pair(address, name)
+                    settingsRepository.updateCompanionEnabled(true)
+                    stopCompanionScan()
+                    // start the link immediately if tracking is already running
+                    companionIngestor.attach(companionLink)
+                    companionLink.start(address)
+                } catch (e: Exception) {
+                    showError("Pairing failed: ${e.message}")
+                }
+            }
+        }
+
+        fun setCompanionMode(mode: Int) {
+            companionLink.setMode(mode)
+            viewModelScope.launch {
+                pairedCompanion.value?.let {
+                    companionRepository.updateLinkStats(
+                        it.address,
+                        0,
+                        null,
+                        if (mode == 1) "CARRY" else "SENTINEL",
+                        null,
+                    )
+                }
+            }
+        }
+
+        fun forgetCompanion() {
+            viewModelScope.launch {
+                try {
+                    companionLink.stop()
+                    pairedCompanion.value?.let { companionRepository.forget(it.address) }
+                    settingsRepository.updateCompanionEnabled(false)
+                } catch (e: Exception) {
+                    showError("Failed to forget companion: ${e.message}")
+                }
+            }
+        }
+
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> =
             combine(

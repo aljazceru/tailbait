@@ -199,6 +199,9 @@ class SettingsViewModelTest {
                 csvDataExporter,
                 dataExportService,
                 fileShareHelper,
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
             )
         collectJob = backgroundScope.launch { vm.uiState.collect {} }
         return vm
@@ -217,6 +220,9 @@ class SettingsViewModelTest {
                     csvDataExporter,
                     dataExportService,
                     fileShareHelper,
+                    mockk(relaxed = true),
+                    mockk(relaxed = true),
+                    mockk(relaxed = true),
                 )
 
             val initialState = viewModel.uiState.value

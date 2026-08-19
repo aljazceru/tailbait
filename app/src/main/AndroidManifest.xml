@@ -64,11 +64,12 @@
             </intent-filter>
         </activity>
 
-        <!-- TailBait Foreground Service -->
+        <!-- TailBait Foreground Service (exported for adb-driven e2e:
+             am start-foreground-service -a com.tailbait.action.START_TRACKING) -->
         <service
             android:name=".service.TailBaitService"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="location"
             tools:targetApi="29" />
 

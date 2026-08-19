@@ -335,6 +335,29 @@ interface DeviceRepository {
     ): Long
 
     // ============================================================================
+    // COMPANION (ESP32) OBSERVATIONS — radio-aware upsert
+    // ============================================================================
+
+    /**
+     * Insert or update a device observed via the companion's WiFi radio.
+     * Keyed by (address, radio): WiFi STA and AP rows live beside BLE rows.
+     * Companion BLE observations go through [upsertDeviceWithFingerprint]
+     * instead (full identification pipeline).
+     *
+     * @return Device id
+     */
+    suspend fun upsertCompanionObservation(
+        radio: String,
+        address: String,
+        ssid: String?,
+        channel: Int?,
+        rssi: Int,
+        timestamp: Long,
+        deviceType: String?,
+        wifiFlags: Int?,
+    ): Long
+
+    // ============================================================================
     // SHADOW-BASED DETECTION (MAC-agnostic device profiling)
     // ============================================================================
 
@@ -1165,6 +1188,53 @@ class DeviceRepositoryImpl
                 if (newSpecificity <= existingSpecificity) return device
             }
             return device.copy(shadowKey = newKey)
+        }
+
+        override suspend fun upsertCompanionObservation(
+            radio: String,
+            address: String,
+            ssid: String?,
+            channel: Int?,
+            rssi: Int,
+            timestamp: Long,
+            deviceType: String?,
+            wifiFlags: Int?,
+        ): Long {
+            val existing = scannedDeviceDao.getByAddressAndRadio(address, radio)
+            return if (existing != null) {
+                val updated =
+                    existing.copy(
+                        ssid = ssid ?: existing.ssid,
+                        channel = channel ?: existing.channel,
+                        wifiFlags = wifiFlags ?: existing.wifiFlags,
+                        lastSeen = maxOf(timestamp, existing.lastSeen),
+                        detectionCount = existing.detectionCount + 1,
+                        highestRssi = maxOf(rssi, existing.highestRssi ?: rssi),
+                        deviceType = deviceType ?: existing.deviceType,
+                    )
+                scannedDeviceDao.update(updated)
+                existing.id
+            } else {
+                scannedDeviceDao.insert(
+                    com.tailbait.data.database.entities.ScannedDevice(
+                        address = address,
+                        radio = radio,
+                        ssid = ssid,
+                        channel = channel,
+                        wifiFlags = wifiFlags,
+                        name =
+                            when (radio) {
+                                "WIFI_AP" -> ssid ?: address
+                                else -> address
+                            },
+                        firstSeen = timestamp,
+                        lastSeen = timestamp,
+                        detectionCount = 1,
+                        deviceType = deviceType,
+                        highestRssi = rssi,
+                    ),
+                )
+            }
         }
 
         // ============================================================================

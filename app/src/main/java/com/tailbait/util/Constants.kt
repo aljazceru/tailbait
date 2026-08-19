@@ -82,6 +82,7 @@ object Constants {
     const val SCAN_TRIGGER_CONTINUOUS = "CONTINUOUS"
     const val SCAN_TRIGGER_PERIODIC = "PERIODIC"
     const val SCAN_TRIGGER_LOCATION_BASED = "LOCATION_BASED"
+    const val SCAN_TRIGGER_COMPANION = "COMPANION"
 
     // Whitelist Categories
     const val WHITELIST_CATEGORY_OWN = "OWN"

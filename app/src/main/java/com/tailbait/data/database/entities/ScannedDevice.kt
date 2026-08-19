@@ -50,7 +50,9 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "scanned_devices",
     indices = [
-        Index(value = ["address"], unique = true),
+        // Unique per (MAC, radio): the same MAC string may exist as a BLE
+        // device and as a WiFi STA/AP — different namespaces.
+        Index(value = ["address", "radio"], unique = true),
         Index(value = ["last_seen"]),
         Index(value = ["device_type"]),
         Index(value = ["is_tracker"]),
@@ -60,6 +62,7 @@ import androidx.room.PrimaryKey
         Index(value = ["highest_rssi"]), // For signal strength queries
         Index(value = ["threat_level"]), // For threat-based filtering
         Index(value = ["shadow_key"]), // For shadow-based detection queries
+        Index(value = ["radio"]), // For companion/wardriving radio filtering
     ],
 )
 data class ScannedDevice(
@@ -68,6 +71,18 @@ data class ScannedDevice(
     // Core identification
     @ColumnInfo(name = "address")
     val address: String,
+    /** Radio layer this device was observed on: BLE, WIFI_STA, WIFI_AP. */
+    @ColumnInfo(name = "radio", defaultValue = "BLE")
+    val radio: String = "BLE",
+    /** WiFi SSID (AP beacon, directed probe, or network joined via assoc). */
+    @ColumnInfo(name = "ssid")
+    val ssid: String? = null,
+    /** WiFi channel of the observation. */
+    @ColumnInfo(name = "channel")
+    val channel: Int? = null,
+    /** Beacon flags from the AP (b0 = privacy/encrypted) — wardriving metadata. */
+    @ColumnInfo(name = "wifi_flags")
+    val wifiFlags: Int? = null,
     @ColumnInfo(name = "name")
     val name: String?,
     @ColumnInfo(name = "advertised_name")

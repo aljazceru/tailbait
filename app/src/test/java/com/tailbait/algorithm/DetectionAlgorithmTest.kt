@@ -95,7 +95,6 @@ class DetectionAlgorithmTest {
                 whitelistRepository = whitelistRepository,
                 settingsRepository = settingsRepository,
                 threatScoreCalculator = threatScoreCalculator,
-                patternMatcher = patternMatcher,
                 shadowAnalyzer = shadowAnalyzer,
             )
     }

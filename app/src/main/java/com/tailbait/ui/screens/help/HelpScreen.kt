@@ -89,6 +89,61 @@ fun HelpScreen(onNavigateBack: () -> Unit) {
                 }
             }
 
+            // Companion device section
+            SectionHeader(
+                title = "Companion Device (ESP32)",
+                icon = Icons.Outlined.Usb,
+            )
+
+            ExpandableHelpItem(
+                title = "What is the companion device?",
+                icon = Icons.Outlined.Usb,
+            ) {
+                Text(
+                    text =
+                        "An optional ESP32 board running the tailbait-companion firmware " +
+                            "extends TailBait's coverage beyond your phone's BLE scanner: " +
+                            "it continuously sniffs WiFi (client probes, AP beacons, " +
+                            "associations) and forwards BLE advertisements it hears. " +
+                            "The phone remains the brain — it geotags every observation " +
+                            "with GPS and runs the full detection pipeline on the combined data.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text =
+                        "Two modes: CARRY (keep the board with you; it streams live) and " +
+                            "SENTINEL (leave it powered at a fixed location; it runs " +
+                            "detection locally and reports alerts when you connect).",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            ExpandableHelpItem(
+                title = "How do I flash my own ESP32?",
+                icon = Icons.Outlined.Bolt,
+            ) {
+                Text(
+                    text = "You need: an ESP32 board (ESP32-S3 recommended, e.g. DevKitC-1; classic ESP32 works with reduced link windows), a USB cable, and Python.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text =
+                        "1. Install PlatformIO:  pip install platformio\n" +
+                            "2. Clone the firmware:  git clone <tailbait-companion repo>\n" +
+                            "3. Build + flash:  pio run -e esp32-s3-pioa-coex -t upload\n" +
+                            "   (use -e ttgo-t-display for the TTGO T-Display board)\n" +
+                            "4. The board now advertises as \"TailBait-Companion\" over BLE.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text =
+                        "Then open Settings ▸ Companion Device ▸ enable and pair — the app " +
+                            "scans for the companion service and bonds automatically. No WiFi " +
+                            "credentials or accounts involved; all data stays on your phone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
             // Getting Started section
             SectionHeader(
                 title = "Getting Started",

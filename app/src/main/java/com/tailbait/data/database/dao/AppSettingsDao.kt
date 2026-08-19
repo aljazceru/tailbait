@@ -244,6 +244,18 @@ interface AppSettingsDao {
     @Query(
         """
         UPDATE app_settings
+        SET companion_enabled = :enabled, updated_at = :updatedAt
+        WHERE id = 1
+    """,
+    )
+    suspend fun updateCompanionEnabled(
+        enabled: Boolean,
+        updatedAt: Long = System.currentTimeMillis(),
+    )
+
+    @Query(
+        """
+        UPDATE app_settings
         SET battery_optimization_enabled = :enabled, updated_at = :updatedAt
         WHERE id = 1
     """,

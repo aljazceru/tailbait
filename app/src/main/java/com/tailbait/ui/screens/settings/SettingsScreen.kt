@@ -196,6 +196,14 @@ private fun SettingsContent(
 
         SettingsDivider()
 
+        // Companion Device (ESP32) Section
+        CompanionDeviceSection(
+            uiState = uiState,
+            viewModel = viewModel,
+        )
+
+        SettingsDivider()
+
         // Battery Optimization Section
         BatteryOptimizationSection(
             uiState = uiState,
