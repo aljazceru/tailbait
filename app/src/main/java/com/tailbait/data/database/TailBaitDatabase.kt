@@ -545,10 +545,13 @@ abstract class TailBaitDatabase : RoomDatabase() {
 
     /**
      * Performs database maintenance operations.
-     * This should be called periodically (e.g., daily) to:
-     * - Remove old data based on retention settings
-     * - Optimize database performance
-     * - Clean up orphaned records
+     * This should be called periodically (daily, via DataCleanupWorker) to:
+     * - Enforce the retention policy (time-based pruning)
+     * - Enforce hard row caps (size guardrails — see Constants.MAX_*)
+     * - Return freed space to the OS (WAL truncate + VACUUM)
+     *
+     * Order matters: caps first (they may trim newer-but-excess rows), then
+     * time-based retention, then space reclamation.
      */
     suspend fun performMaintenance() {
         val settings = appSettingsDao().getSettings() ?: return
@@ -556,10 +559,39 @@ abstract class TailBaitDatabase : RoomDatabase() {
             System.currentTimeMillis() -
                 (settings.dataRetentionDays * 24 * 60 * 60 * 1000L)
 
-        // Delete old records based on retention policy
+        // ---- Hard caps (size guardrails) ----
+        // RF-dense environments can ingest 90k+ observation records/day
+        // (companion streaming); retention alone would allow ~270 MB+.
+        deviceLocationRecordDao().trimToNewestRecords(com.tailbait.util.Constants.MAX_OBSERVATION_RECORDS)
+        userPathDao().trimToNewestPaths(com.tailbait.util.Constants.MAX_USER_PATH_POINTS)
+        alertHistoryDao().trimUndismissedAlerts(com.tailbait.util.Constants.MAX_UNDISMISSED_ALERTS)
+
+        // ---- Time-based retention ----
         deviceLocationRecordDao().deleteOldRecords(retentionCutoff)
         locationDao().deleteOldLocations(retentionCutoff)
         scannedDeviceDao().deleteOldDevices(retentionCutoff)
+        userPathDao().deleteOldPaths(retentionCutoff) // was never pruned before
         alertHistoryDao().deleteOldDismissedAlerts(retentionCutoff)
+
+        // ---- Space reclamation ----
+        // WAL auto-checkpoint keeps the -wal file bounded, but deleted pages
+        // stay inside the main DB file until a VACUUM. Reclaim both.
+        reclaimSpace()
+    }
+
+    /**
+     * Truncate the WAL and vacuum the main file so deleted rows actually
+     * return space to the OS. Safe to run from the background worker;
+     * a ≤50 MB TailBait DB vacuums in well under a second on mid-range HW.
+     */
+    private suspend fun reclaimSpace() {
+        try {
+            val db = openHelper.writableDatabase
+            db.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+            db.execSQL("VACUUM")
+        } catch (e: Exception) {
+            // Maintenance is best-effort; never fail the worker on reclamation
+            android.util.Log.w("TailBaitDatabase", "space reclamation failed", e)
+        }
     }
 }

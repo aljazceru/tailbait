@@ -279,6 +279,17 @@ interface DeviceLocationRecordDao {
     suspend fun deleteOldRecords(beforeTimestamp: Long): Int
 
     /**
+     * Hard cap guardrail: keep only the newest [maxRows] observation records.
+     * Belt-and-suspenders beyond time-based retention — bounds DB size even
+     * in RF-dense environments where ingest rates outpace retention math.
+     */
+    @Query(
+        "DELETE FROM device_location_records WHERE id NOT IN " +
+            "(SELECT id FROM device_location_records ORDER BY timestamp DESC LIMIT :maxRows)",
+    )
+    suspend fun trimToNewestRecords(maxRows: Long): Int
+
+    /**
      * Delete all records for a specific device.
      *
      * @param deviceId The device ID

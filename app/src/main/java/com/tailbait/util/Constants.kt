@@ -34,6 +34,18 @@ object Constants {
     const val DEFAULT_DATA_RETENTION_DAYS = 30
     const val CLEANUP_WORKER_INTERVAL_DAYS = 1L
 
+    // ==================== DATABASE SIZE GUARDRAILS ====================
+    // Hard row caps enforced by TailBaitDatabase.performMaintenance() on top
+    // of time-based retention. Companion streaming in RF-dense environments
+    // can ingest 90k+ observation records/day; retention alone (30d) would
+    // allow ~270 MB+. Caps bound the DB regardless of ingest rate.
+    /** Max device_location_records rows (~100 B/row -> ~25 MB at 250k). */
+    const val MAX_OBSERVATION_RECORDS = 250_000L
+    /** Max user_path points (movement breadcrumbs, ~40 B/row). */
+    const val MAX_USER_PATH_POINTS = 50_000
+    /** Max undismissed alerts kept (dismissed are pruned by retention). */
+    const val MAX_UNDISMISSED_ALERTS = 500
+
     // WorkManager Tags
     const val WORK_TAG_DETECTION = "detection_work"
     const val WORK_TAG_CLEANUP = "cleanup_work"

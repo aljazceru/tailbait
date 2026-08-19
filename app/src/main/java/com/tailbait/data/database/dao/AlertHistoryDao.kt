@@ -364,6 +364,16 @@ interface AlertHistoryDao {
      * Delete all alerts.
      * WARNING: This removes all alert history.
      */
+    /**
+     * Hard cap guardrail: keep only the newest [maxRows] undismissed alerts
+     * (dismissed ones are already pruned by retention).
+     */
+    @Query(
+        "DELETE FROM alert_history WHERE is_dismissed = 0 AND id NOT IN " +
+            "(SELECT id FROM alert_history WHERE is_dismissed = 0 ORDER BY timestamp DESC LIMIT :maxRows)",
+    )
+    suspend fun trimUndismissedAlerts(maxRows: Int): Int
+
     @Query("DELETE FROM alert_history")
     suspend fun deleteAll()
 }

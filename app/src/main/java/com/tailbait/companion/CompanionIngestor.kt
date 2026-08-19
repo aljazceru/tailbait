@@ -147,12 +147,13 @@ class CompanionIngestor
                         serviceUuids,
                     )
 
+            val timestamp = saneTimestamp(record.timestamp)
             val deviceId =
                 deviceRepository.upsertDeviceWithFingerprint(
                     address = record.mac,
                     name = parsed.name,
                     advertisedName = parsed.name,
-                    lastSeen = record.timestamp,
+                    lastSeen = timestamp,
                     manufacturerData = parsed.manufacturerData,
                     manufacturerId = identification.manufacturerId,
                     manufacturerName = identification.manufacturerName,
@@ -172,7 +173,7 @@ class CompanionIngestor
                     highestRssi = record.rssi,
                 )
 
-            attachLocation(deviceId, record.rssi, record.timestamp)
+            attachLocation(deviceId, record.rssi, timestamp)
         }
 
         private suspend fun ingestWifi(
@@ -189,6 +190,7 @@ class CompanionIngestor
                     CompanionRadio.WIFI_AP -> "ACCESS_POINT"
                     else -> if (mac.startsWith("02:") || isLocallyAdministered(mac)) "PHONE" else "WIFI_CLIENT"
                 }
+            val ts = saneTimestamp(timestamp)
             val deviceId =
                 deviceRepository.upsertCompanionObservation(
                     radio = radio,
@@ -196,11 +198,11 @@ class CompanionIngestor
                     ssid = ssid,
                     channel = channel,
                     rssi = rssi,
-                    timestamp = timestamp,
+                    timestamp = ts,
                     deviceType = deviceType,
                     wifiFlags = wifiFlags,
                 )
-            attachLocation(deviceId, rssi, timestamp)
+            attachLocation(deviceId, rssi, ts)
         }
 
         private suspend fun ingestAlert(record: CompanionProtocol.Record.Alert) {
@@ -267,6 +269,14 @@ class CompanionIngestor
             return id
         }
 
+        /**
+         * Companion records stamped before SET_TIME lands carry device-millis
+         * (since boot) as their timestamp. Those look like 1970-epoch values:
+         * they would be purged as ancient by the retention cleanup and skew
+         * every timestamp-windowed query. Clamp to receive time instead.
+         */
+        private fun saneTimestamp(t: Long): Long = if (t < MIN_EPOCH_MS) System.currentTimeMillis() else t
+
         private fun isLocallyAdministered(mac: String): Boolean {
             val first = mac.substringBefore(':').toIntOrNull(16) ?: return false
             return (first and 0x40) != 0
@@ -274,6 +284,7 @@ class CompanionIngestor
 
         companion object {
             private const val LOCATION_CACHE_MS = 30_000L
+            private const val MIN_EPOCH_MS = 1_577_836_800_000L // 2020-01-01
         }
     }
 
