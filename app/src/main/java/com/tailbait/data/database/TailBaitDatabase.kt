@@ -422,11 +422,12 @@ abstract class TailBaitDatabase : RoomDatabase() {
                     db.execSQL("ALTER TABLE scanned_devices ADD COLUMN wifi_flags INTEGER")
                     db.execSQL("DROP INDEX IF EXISTS `index_scanned_devices_address`")
                     db.execSQL(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_scanned_devices_address_radio` " +
-                            "ON `scanned_devices` (`address`, `radio`)",
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_scanned_devices_address_radio`" +
+                            " ON `scanned_devices` (`address`, `radio`)",
                     )
                     db.execSQL(
-                        "CREATE INDEX IF NOT EXISTS `index_scanned_devices_radio` ON `scanned_devices` (`radio`)",
+                        "CREATE INDEX IF NOT EXISTS `index_scanned_devices_radio`" +
+                            " ON `scanned_devices` (`radio`)",
                     )
                     db.execSQL("ALTER TABLE app_settings ADD COLUMN companion_enabled INTEGER NOT NULL DEFAULT 0")
                     db.execSQL(
