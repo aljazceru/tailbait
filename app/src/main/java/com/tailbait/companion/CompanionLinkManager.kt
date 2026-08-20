@@ -129,14 +129,16 @@ class CompanionLinkManager
                     continue
                 }
                 if (gatt == null) {
-                    if (failures >= 2) {
+                    // Resync only every 3rd failure (failures 4, 7, 10, ...).
+                    // The resync runs a FILTERED scan; Android suspends the
+                    // app's unfiltered main BLE scan while a filtered scan is
+                    // active (verified on-device: 60s main scans were 100%
+                    // suspended). Rare + brief (3s) keeps that impact bounded.
+                    if (failures >= 4 && (failures - 1) % 3 == 0) {
                         // The companion's BLE address is not guaranteed stable
                         // (regenerated on reflash / NVS layout change). After
                         // repeated GATT failures re-resolve it by scanning for
                         // the companion service UUID and persist the new one.
-                        // NOTE: failures is counted in the disconnect callback —
-                        // connectGatt returns non-null while pending, so the
-                        // loop must not treat a pending gatt as success.
                         resyncAddress()
                     }
                     connectDirect(addr)
@@ -201,7 +203,7 @@ class CompanionLinkManager
                 } catch (_: SecurityException) {
                     return
                 }
-                val deadline = System.currentTimeMillis() + 10_000
+                val deadline = System.currentTimeMillis() + 3_000
                 while (found.get() == null && System.currentTimeMillis() < deadline) {
                     Thread.sleep(200)
                 }
