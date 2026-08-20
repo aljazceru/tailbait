@@ -294,7 +294,7 @@ False-positive considerations: neighbors' static devices near sentinels (mitigat
 
 ## 13. Fork base: `tailbait-esp32` (existing sibling project)
 
-A repo already exists at `../tailbait-esp32`: a single-file Arduino sketch (~950 lines) porting the **entire detection core** to the LILYGO TTGO T-Display v1.1. It is *not* a companion device — it's a **standalone self-contained detector**: no phone involved, places computed from surrounding-AP fingerprints (Jaccard similarity) instead of GPS, full 7-factor threat score ported, whitelist + buttons + ST7789 UI, serial JSON event stream.
+A repo already exists ([tailbait-esp32](https://github.com/aljazceru/tailbait-esp32)): a single-file Arduino sketch (~950 lines) porting the **entire detection core** to the LILYGO TTGO T-Display v1.1. It is *not* a companion device — it's a **standalone self-contained detector**: no phone involved, places computed from surrounding-AP fingerprints (Jaccard similarity) instead of GPS, full 7-factor threat score ported, whitelist + buttons + ST7789 UI, serial JSON event stream.
 
 ### 13.1 What it already solves (the hard parts)
 
@@ -346,7 +346,7 @@ These are opposite designs **per mode**, but complementary **on one board**:
 
 ### 13.6 Fork mechanics
 
-**Update: forked.** The restructure was done as a copy at `../tailbait-companion` (PlatformIO project, modules split per §13.3, Find My + IE fixes applied, channel hopping added, GATT link implemented, all four board envs building green). The original `tailbait-esp32` stays untouched as the hardware-verified v0 baseline.
+**Update: forked.** The restructure lives in [tailbait-companion](https://github.com/aljazceru/tailbait-companion) (PlatformIO project, modules split per §13.3, Find My + IE fixes applied, channel hopping added, GATT link implemented, all four board envs building green). The original `tailbait-esp32` stays untouched as the hardware-verified v0 baseline.
 
 ---
 
