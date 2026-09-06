@@ -110,3 +110,5 @@ local.properties
 
 # ========== Documentation Build Output ==========
 docs/_build/
+
+.planning/debug/
