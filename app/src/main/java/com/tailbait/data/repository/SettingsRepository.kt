@@ -88,6 +88,9 @@ interface SettingsRepository {
 
     /** Enable/disable connecting to the paired companion while tracking. */
     suspend fun updateCompanionEnabled(enabled: Boolean)
+
+    /** Enable/disable camera glasses presence ("camera in the room") alerts. */
+    suspend fun updateCameraGlassesAlertsEnabled(enabled: Boolean)
 }
 
 /**
@@ -157,5 +160,9 @@ class SettingsRepositoryImpl
 
         override suspend fun updateCompanionEnabled(enabled: Boolean) {
             appSettingsDao.updateCompanionEnabled(enabled)
+        }
+
+        override suspend fun updateCameraGlassesAlertsEnabled(enabled: Boolean) {
+            appSettingsDao.updateCameraGlassesAlertsEnabled(enabled)
         }
     }

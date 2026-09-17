@@ -342,6 +342,24 @@ class SettingsViewModel
             }
         }
 
+        /**
+         * Update camera glasses presence alerts.
+         *
+         * @param enabled Whether to alert when camera glasses are detected nearby
+         */
+        fun updateCameraGlassesAlertsEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                try {
+                    val currentSettings = settingsRepository.getSettingsOnce()
+                    settingsRepository.updateSettings(
+                        currentSettings.copy(cameraGlassesAlertsEnabled = enabled),
+                    )
+                } catch (e: Exception) {
+                    showError("Failed to update camera glasses alerts setting: ${e.message}")
+                }
+            }
+        }
+
         // ==================== Location Settings ====================
 
         // Location Change Threshold removed as per simplified scanning requirements

@@ -34,6 +34,10 @@ object DeviceIdentifier {
         const val GOOGLE_FAST_PAIR = "0000FE2C-0000-1000-8000-00805F9B34FB"
         const val GOOGLE_FAST_PAIR_SHORT = "FE2C"
 
+        // Camera glasses: Oculus VR service, advertised by Ray-Ban Meta (zuckoff.app signal)
+        const val META_OCULUS = "0000FD5F-0000-1000-8000-00805F9B34FB"
+        const val META_OCULUS_SHORT = "FD5F"
+
         // Apple (various services)
         const val APPLE_NEARBY = "D0611E78-BBB4-4591-A5F8-487910AE4366"
         const val APPLE_CONTINUITY = "7DFC6000-7D1C-4951-86AA-8D9728F8D66C"
@@ -196,6 +200,10 @@ object DeviceIdentifier {
             category == Appearance.CATEGORY_CYCLING -> ManufacturerDataParser.DeviceType.FITNESS_BAND
             category == Appearance.CATEGORY_WEARABLE -> ManufacturerDataParser.DeviceType.FITNESS_BAND
             category == Appearance.CATEGORY_HEARING_AID -> ManufacturerDataParser.DeviceType.HEADPHONES
+            // NOTE: CATEGORY_EYEGLASSES (0x01C0) is deliberately NOT mapped to
+            // CAMERA_GLASSES — the generic SIG appearance says nothing about a
+            // camera. Glasses detection requires a manufacturer ID, FD5F service
+            // UUID, or a known model name.
             else -> ManufacturerDataParser.DeviceType.UNKNOWN
         }
     }
@@ -237,6 +245,7 @@ object DeviceIdentifier {
                     Appearance.CATEGORY_TAG -> "Tag/Tracker"
                     Appearance.CATEGORY_KEYRING -> "Keyring"
                     Appearance.CATEGORY_WEARABLE -> "Wearable"
+                    Appearance.CATEGORY_EYEGLASSES -> "Glasses"
                     else -> "Unknown (0x${appearance.toString(16).uppercase()})"
                 }
             }
@@ -302,6 +311,10 @@ object DeviceIdentifier {
                     shortUuid == ServiceUuid.GOOGLE_FAST_PAIR_SHORT.lowercase() -> {
                     return "Google Fast Pair Device"
                 }
+                uuidString == ServiceUuid.META_OCULUS.lowercase() ||
+                    shortUuid == ServiceUuid.META_OCULUS_SHORT.lowercase() -> {
+                    return "Meta camera wearable (glasses/Quest)"
+                }
             }
         }
 
@@ -321,6 +334,13 @@ object DeviceIdentifier {
             // Tracker detection
             if (isTrackerByServiceUuid(listOf(uuid))) {
                 return ManufacturerDataParser.DeviceType.TRACKER
+            }
+
+            // Camera glasses detection (Ray-Ban Meta advertise the Oculus VR service)
+            if (shortUuid == ServiceUuid.META_OCULUS_SHORT.lowercase() ||
+                uuidString == ServiceUuid.META_OCULUS.lowercase()
+            ) {
+                return ManufacturerDataParser.DeviceType.CAMERA_GLASSES
             }
 
             // Fitness device detection
@@ -560,6 +580,13 @@ object DeviceIdentifier {
                 Triple(ManufacturerDataParser.DeviceType.TRACKER, "Tile", true)
             nameLower.contains("chipolo") -> Triple(ManufacturerDataParser.DeviceType.TRACKER, "Chipolo", true)
             nameLower.contains("tracker") -> Triple(ManufacturerDataParser.DeviceType.TRACKER, null, true)
+
+            // Camera glasses
+            nameLower.contains("ray-ban") || nameLower.contains("rayban") ||
+                nameLower.contains("meta view") ->
+                Triple(ManufacturerDataParser.DeviceType.CAMERA_GLASSES, "Ray-Ban Meta", false)
+            nameLower.contains("spectacles") ->
+                Triple(ManufacturerDataParser.DeviceType.CAMERA_GLASSES, "Snap Spectacles", false)
 
             // Audio devices
             nameLower.contains("airpods") -> Triple(ManufacturerDataParser.DeviceType.EARBUDS, "AirPods", false)

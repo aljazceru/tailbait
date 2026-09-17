@@ -43,6 +43,9 @@ class AlertGenerator
         private val alertRepository: AlertRepository,
         private val notificationHelper: NotificationHelper,
     ) {
+        /** Per-deviceId presence-alert throttle state (deviceId -> last alert timestamp). */
+        private val lastPresenceAlertByDevice = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
         companion object {
             // Default throttle window: 1 hour (used by insertAlertWithThrottling as final safety net)
             private const val DEFAULT_THROTTLE_WINDOW_MS = 60 * 60 * 1000L
@@ -51,6 +54,11 @@ class AlertGenerator
             private const val MIN_ALERT_INTERVAL_MS = 6 * 60 * 60 * 1000L // 6 hours minimum
             private const val ESCALATION_WINDOW_MS = 72 * 60 * 60 * 1000L // 72 hours
             private const val ESCALATION_THRESHOLD = 0.15 // Score increase needed
+
+            // Camera glasses presence alerts: re-alert at most every 15 minutes per device.
+            // Keyed by database device ID (not BLE address) so MAC rotation cannot
+            // turn the throttle into per-address spam.
+            private const val GLASSES_PRESENCE_THROTTLE_MS = 15 * 60 * 1000L
         }
 
         /**
@@ -146,6 +154,76 @@ class AlertGenerator
                 return alertId
             } catch (e: Exception) {
                 Timber.e(e, "Error generating alert for device ${detectionResult.device.address}")
+                return null
+            }
+        }
+
+        /**
+         * Generate a presence ("camera in the room") alert for camera glasses detected nearby.
+         *
+         * Unlike tracking alerts this fires on a single sighting, ZuckOff-style:
+         * - Throttled in-memory per deviceId (15 min), so BLE MAC rotation can't spam
+         * - Throttled in the DB against recent tracking alerts for the same device
+         *   (if the user was already tracking-alerted, a presence ping adds nothing)
+         * - Never feeds back into tracking-alert throttling: hasSimilarRecentAlert
+         *   and getLatestAlertForDevice both skip camera_glasses_presence alerts,
+         *   so a stalking alert for the same device always gets through
+         *
+         * @param deviceId Database ID of the detected device (throttle key, whitelisting)
+         * @param address BLE MAC address
+         * @param deviceName Advertised device name, if any
+         * @param deviceModel Identified model (e.g. "Ray-Ban Meta / Oakley Meta")
+         * @param manufacturerName Identified manufacturer, if any
+         * @return The alert ID if created, null if throttled or on error
+         */
+        suspend fun generateCameraGlassesPresenceAlert(
+            deviceId: Long,
+            address: String,
+            deviceName: String?,
+            deviceModel: String?,
+            manufacturerName: String?,
+        ): Long? {
+            try {
+                // Per-device throttle (in-memory: presence alerts are ephemeral by
+                // nature — after a process restart, one re-alert is fine)
+                val now = System.currentTimeMillis()
+                val lastAlertAt = lastPresenceAlertByDevice[deviceId]
+                if (lastAlertAt != null && now - lastAlertAt < GLASSES_PRESENCE_THROTTLE_MS) {
+                    Timber.d("Camera glasses presence throttled for deviceId=$deviceId (${(now - lastAlertAt) / 60000} min ago)")
+                    return null
+                }
+
+                val displayName = deviceModel ?: deviceName ?: manufacturerName ?: "Camera glasses"
+                val alert =
+                    AlertHistory(
+                        alertLevel = Constants.ALERT_LEVEL_MEDIUM,
+                        title = "Camera glasses nearby",
+                        message = "$displayName ($address) is within Bluetooth range right now.",
+                        timestamp = System.currentTimeMillis(),
+                        deviceAddresses = JSONArray().put(address).toString(),
+                        locationIds = "[]",
+                        threatScore = 0.0,
+                        detectionDetails =
+                            JSONObject()
+                                .put("type", "camera_glasses_presence")
+                                .put("deviceId", deviceId)
+                                .put("deviceName", deviceName ?: "Unknown")
+                                .put("deviceModel", deviceModel ?: "Camera glasses")
+                                .put("detectionReason", "Camera glasses signature detected nearby")
+                                .toString(),
+                    )
+
+                val alertId = alertRepository.insertAlertWithThrottling(alert, GLASSES_PRESENCE_THROTTLE_MS)
+                if (alertId != null) {
+                    lastPresenceAlertByDevice[deviceId] = now
+                    Timber.d("Camera glasses presence alert created: id=$alertId, device=$address")
+                    notificationHelper.showAlertNotification(alert.copy(id = alertId))
+                } else {
+                    Timber.d("Camera glasses presence alert throttled by recent tracking alert for $address")
+                }
+                return alertId
+            } catch (e: Exception) {
+                Timber.e(e, "Error generating camera glasses presence alert for $address")
                 return null
             }
         }

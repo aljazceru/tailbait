@@ -442,6 +442,8 @@ class CsvDataExporter
                 writer.appendLine("learn_mode_started_at,${settings.learnModeStartedAt ?: ""}")
                 writer.appendLine("data_retention_days,${settings.dataRetentionDays}")
                 writer.appendLine("battery_optimization_enabled,${settings.batteryOptimizationEnabled}")
+                writer.appendLine("companion_enabled,${settings.companionEnabled}")
+                writer.appendLine("camera_glasses_alerts_enabled,${settings.cameraGlassesAlertsEnabled}")
                 writer.appendLine("theme_mode,\"${settings.themeMode}\"")
                 writer.appendLine("updated_at,${settings.updatedAt}")
             }

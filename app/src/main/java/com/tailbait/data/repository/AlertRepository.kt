@@ -357,6 +357,8 @@ class AlertRepositoryImpl
         /**
          * CRITICAL FIX: Implementation of hasSimilarRecentAlert.
          * Checks for duplicate alerts based on device addresses and timestamp.
+         * Camera glasses presence alerts are excluded: a presence alert must never
+         * suppress a subsequent tracking alert for the same device.
          */
         override suspend fun hasSimilarRecentAlert(
             deviceAddresses: String,
@@ -365,9 +367,10 @@ class AlertRepositoryImpl
             // Get recent alerts after the threshold timestamp
             val recentAlerts = getRecentAlerts(afterTimestamp).first()
 
-            // Check if any recent alert has the same device addresses
+            // Check if any recent tracking alert has the same device addresses
             return recentAlerts.any { alert ->
-                alert.deviceAddresses == deviceAddresses
+                alert.deviceAddresses == deviceAddresses &&
+                    !alert.isCameraGlassesPresence
             }
         }
 

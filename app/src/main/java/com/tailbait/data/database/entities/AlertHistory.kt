@@ -61,4 +61,12 @@ data class AlertHistory(
     val dismissedAt: Long? = null,
     @ColumnInfo(name = "created_at")
     val createdAt: Long = System.currentTimeMillis(),
-)
+) {
+    /**
+     * True if this is a camera glasses presence ("camera in the room") alert.
+     * Presence alerts must be invisible to tracking-alert throttling so they can
+     * never suppress a real stalking alert for the same device.
+     */
+    val isCameraGlassesPresence: Boolean
+        get() = detectionDetails.contains("camera_glasses_presence")
+}

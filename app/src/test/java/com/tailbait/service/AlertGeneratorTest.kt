@@ -79,7 +79,7 @@ class AlertGeneratorTest {
                     match { alert ->
                         alert.alertLevel == Constants.ALERT_LEVEL_CRITICAL &&
                             alert.threatScore == 0.95 &&
-                            alert.title.contains("Critical", ignoreCase = true)
+                            alert.title.contains("Test Device")
                     },
                     any(),
                 )
@@ -117,7 +117,7 @@ class AlertGeneratorTest {
                 alertRepository.insertAlertWithThrottling(
                     match { alert ->
                         alert.alertLevel == Constants.ALERT_LEVEL_HIGH &&
-                            alert.title.contains("High", ignoreCase = true)
+                            alert.title.contains("Test Device")
                     },
                     any(),
                 )
@@ -155,7 +155,7 @@ class AlertGeneratorTest {
                 alertRepository.insertAlertWithThrottling(
                     match { alert ->
                         alert.alertLevel == Constants.ALERT_LEVEL_MEDIUM &&
-                            alert.title.contains("Medium", ignoreCase = true)
+                            alert.title.contains("Test Device")
                     },
                     any(),
                 )
@@ -193,7 +193,7 @@ class AlertGeneratorTest {
                 alertRepository.insertAlertWithThrottling(
                     match { alert ->
                         alert.alertLevel == Constants.ALERT_LEVEL_LOW &&
-                            alert.title.contains("Low", ignoreCase = true)
+                            alert.title.contains("Test Device")
                     },
                     any(),
                 )
@@ -257,7 +257,8 @@ class AlertGeneratorTest {
             coVerify {
                 alertRepository.insertAlertWithThrottling(
                     match { alert ->
-                        alert.message.contains(deviceName) &&
+                        // Device name lives in the title; address in the message
+                        alert.title.contains(deviceName) &&
                             alert.message.contains(deviceAddress)
                     },
                     any(),
@@ -605,4 +606,53 @@ class AlertGeneratorTest {
             detectionReason = "Test detection reason",
         )
     }
+
+    // ==================== Camera glasses presence alerts ====================
+
+    @Test
+    fun `camera glasses presence alert is created as MEDIUM with zero threat score and notified`() =
+        runTest {
+            coEvery { alertRepository.insertAlertWithThrottling(any(), any()) } returns 42L
+
+            val alertId =
+                alertGenerator.generateCameraGlassesPresenceAlert(
+                    deviceId = 7L,
+                    address = "AA:BB:CC:DD:EE:FF",
+                    deviceName = "Ray-Ban Meta",
+                    deviceModel = null,
+                    manufacturerName = "Luxottica (Ray-Ban/Oakley Meta)",
+                )
+
+            assertEquals(42L, alertId)
+            coVerify {
+                alertRepository.insertAlertWithThrottling(
+                    match { alert ->
+                        alert.alertLevel == Constants.ALERT_LEVEL_MEDIUM &&
+                            alert.threatScore == 0.0 &&
+                            alert.title == "Camera glasses nearby" &&
+                            alert.deviceAddresses.contains("AA:BB:CC:DD:EE:FF")
+                    },
+                    any(),
+                )
+            }
+            coVerify { notificationHelper.showAlertNotification(any()) }
+        }
+
+    @Test
+    fun `camera glasses presence alert throttled returns null without notification`() =
+        runTest {
+            coEvery { alertRepository.insertAlertWithThrottling(any(), any()) } returns null
+
+            val alertId =
+                alertGenerator.generateCameraGlassesPresenceAlert(
+                    deviceId = 1L,
+                    address = "AA:BB:CC:DD:EE:FF",
+                    deviceName = null,
+                    deviceModel = null,
+                    manufacturerName = null,
+                )
+
+            assertNull(alertId)
+            coVerify(exactly = 0) { notificationHelper.showAlertNotification(any()) }
+        }
 }

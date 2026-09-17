@@ -335,6 +335,15 @@ private fun AlertSettingsSection(
         icon = Icons.Outlined.Vibration,
         enabled = uiState.settings.alertNotificationEnabled,
     )
+
+    SettingsSwitchItem(
+        title = "Camera Glasses Alerts",
+        description = "Notify when camera glasses (Ray-Ban Meta, Spectacles) are nearby",
+        checked = uiState.settings.cameraGlassesAlertsEnabled,
+        onCheckedChange = { viewModel.updateCameraGlassesAlertsEnabled(it) },
+        icon = Icons.Outlined.Visibility,
+        enabled = uiState.settings.alertNotificationEnabled,
+    )
 }
 
 /**

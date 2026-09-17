@@ -230,7 +230,7 @@ class ThreatScoreCalculator
                 when {
                     device.isTracker -> 1.0
                     device.deviceType?.uppercase() == "TRACKER" -> 1.0
-                    device.deviceType?.uppercase() in listOf("PHONE", "TABLET") -> 0.8
+                    device.deviceType?.uppercase() in listOf("PHONE", "TABLET", "CAMERA_GLASSES") -> 0.8
                     device.deviceType?.uppercase() == "WATCH" -> 0.6
                     device.deviceType?.uppercase() == "FITNESS_BAND" -> 0.4
                     else -> 0.3
@@ -487,7 +487,7 @@ class ThreatScoreCalculator
             // Score based on device type
             return when (device.deviceType?.uppercase()) {
                 "TRACKER" -> SCORE_TRACKER
-                "PHONE", "TABLET" -> SCORE_PHONE_TABLET
+                "PHONE", "TABLET", "CAMERA_GLASSES" -> SCORE_PHONE_TABLET
                 "WATCH" -> SCORE_WATCH
                 "FITNESS_BAND" -> SCORE_FITNESS_BAND
                 "EARBUDS" -> SCORE_EARBUDS

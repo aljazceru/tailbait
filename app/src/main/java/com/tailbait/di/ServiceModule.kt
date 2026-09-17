@@ -160,6 +160,8 @@ object ServiceModule {
      * @param deviceRepository Repository for device data operations
      * @param locationRepository Repository for location operations
      * @param settingsRepository Repository for app settings
+     * @param whitelistRepository Repository for whitelist checks (camera glasses alerts)
+     * @param alertGenerator Generator for camera glasses presence alerts
      * @param context Application context
      * @return BleScannerManager singleton instance
      */
@@ -169,12 +171,16 @@ object ServiceModule {
         deviceRepository: com.tailbait.data.repository.DeviceRepository,
         locationRepository: com.tailbait.data.repository.LocationRepository,
         settingsRepository: com.tailbait.data.repository.SettingsRepository,
+        whitelistRepository: com.tailbait.data.repository.WhitelistRepository,
+        alertGenerator: com.tailbait.service.AlertGenerator,
         @ApplicationContext context: Context,
     ): com.tailbait.service.BleScannerManager {
         return com.tailbait.service.BleScannerManager(
             deviceRepository,
             locationRepository,
             settingsRepository,
+            whitelistRepository,
+            alertGenerator,
             context,
         )
     }

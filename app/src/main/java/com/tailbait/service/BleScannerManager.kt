@@ -7,6 +7,7 @@ import com.tailbait.data.database.entities.Location
 import com.tailbait.data.repository.DeviceRepository
 import com.tailbait.data.repository.LocationRepository
 import com.tailbait.data.repository.SettingsRepository
+import com.tailbait.data.repository.WhitelistRepository
 import com.tailbait.util.BeaconDetectionUtils
 import com.tailbait.util.Constants
 import com.tailbait.util.DeviceFingerprinter
@@ -54,6 +55,8 @@ class BleScannerManager
         private val deviceRepository: DeviceRepository,
         private val locationRepository: LocationRepository,
         private val settingsRepository: SettingsRepository,
+        private val whitelistRepository: WhitelistRepository,
+        private val alertGenerator: AlertGenerator,
         @ApplicationContext private val context: Context,
     ) {
         private val bleScanner = BleScanner(context)
@@ -663,6 +666,15 @@ class BleScannerManager
                     }
                 }
 
+                // Camera glasses presence alerts: read the toggle once per scan batch
+                val glassesAlertsEnabled =
+                    try {
+                        settingsRepository.getSettingsOnce().cameraGlassesAlertsEnabled
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to read camera glasses alerts setting")
+                        false
+                    }
+
                 // Process each device
                 var devicesProcessed = 0
                 scanResults.values.forEach { result ->
@@ -758,6 +770,22 @@ class BleScannerManager
                                 locationChanged = locationChanged ?: false,
                                 distanceFromLast = distanceFromLast,
                                 scanTriggerType = scanTriggerType,
+                            )
+                        }
+
+                        // Camera glasses presence alert ("camera in the room", zuckoff.app-style).
+                        // Fires on a single sighting when the toggle is on; whitelisted devices
+                        // (e.g. your own glasses) are skipped.
+                        if (glassesAlertsEnabled &&
+                            identification.deviceType == ManufacturerDataParser.DeviceType.CAMERA_GLASSES &&
+                            !whitelistRepository.isDeviceWhitelisted(deviceId)
+                        ) {
+                            alertGenerator.generateCameraGlassesPresenceAlert(
+                                deviceId = deviceId,
+                                address = result.address,
+                                deviceName = result.name ?: result.advertisedName,
+                                deviceModel = identification.deviceModel,
+                                manufacturerName = identification.manufacturerName,
                             )
                         }
 

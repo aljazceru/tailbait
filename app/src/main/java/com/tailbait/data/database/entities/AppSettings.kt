@@ -65,6 +65,9 @@ data class AppSettings(
     /** Connect to the paired companion ESP32 while tracking runs. */
     @ColumnInfo(name = "companion_enabled", defaultValue = "0")
     val companionEnabled: Boolean = false,
+    /** Alert when camera glasses (Ray-Ban Meta, Spectacles...) are detected nearby. */
+    @ColumnInfo(name = "camera_glasses_alerts_enabled", defaultValue = "0")
+    val cameraGlassesAlertsEnabled: Boolean = false,
     /**
      * Theme mode preference.
      * Values: "SYSTEM" (follow system), "LIGHT" (always light), "DARK" (always dark)

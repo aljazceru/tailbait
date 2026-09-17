@@ -9,6 +9,7 @@ import com.tailbait.data.database.entities.Location
 import com.tailbait.data.repository.DeviceRepository
 import com.tailbait.data.repository.LocationRepository
 import com.tailbait.data.repository.SettingsRepository
+import com.tailbait.data.repository.WhitelistRepository
 import com.tailbait.util.Constants
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,8 @@ class BleScannerManagerTest {
     private lateinit var deviceRepository: DeviceRepository
     private lateinit var locationRepository: LocationRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var whitelistRepository: WhitelistRepository
+    private lateinit var alertGenerator: AlertGenerator
     private lateinit var context: Context
 
     // System under test
@@ -72,6 +75,8 @@ class BleScannerManagerTest {
         deviceRepository = mockk(relaxed = true)
         locationRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
+        whitelistRepository = mockk(relaxed = true)
+        alertGenerator = mockk(relaxed = true)
         context = mockk(relaxed = true)
 
         // Set up default mock behaviors
@@ -121,6 +126,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -141,6 +148,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -165,6 +174,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -207,6 +218,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -223,6 +236,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -259,6 +274,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -298,6 +315,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -326,6 +345,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -354,6 +375,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -370,6 +393,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -388,6 +413,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -409,6 +436,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -432,6 +461,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 
@@ -451,6 +482,8 @@ class BleScannerManagerTest {
                     deviceRepository,
                     locationRepository,
                     settingsRepository,
+                    whitelistRepository,
+                    alertGenerator,
                     context,
                 )
 

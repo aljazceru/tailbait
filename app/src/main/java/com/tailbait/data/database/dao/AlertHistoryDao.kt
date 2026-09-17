@@ -322,14 +322,17 @@ interface AlertHistoryDao {
     /**
      * Get the most recent alert for a specific device address string.
      * Used for smart throttling: check previous alert score to decide on escalation.
+     * Camera glasses presence alerts are excluded — they must never suppress
+     * a tracking alert for the same device.
      *
      * @param deviceAddresses The JSON device addresses string to match
-     * @return The most recent alert for this device, or null if none
+     * @return The most recent tracking alert for this device, or null if none
      */
     @Query(
         """
         SELECT * FROM alert_history
         WHERE device_addresses = :deviceAddresses
+          AND detection_details NOT LIKE '%camera_glasses_presence%'
         ORDER BY timestamp DESC
         LIMIT 1
     """,

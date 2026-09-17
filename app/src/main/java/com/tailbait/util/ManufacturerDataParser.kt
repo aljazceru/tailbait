@@ -52,6 +52,12 @@ object ManufacturerDataParser {
         const val PEBBLEBEE = 0x0636
         const val CUBE = 0x05B8
 
+        // Camera glasses (lens-in-the-room detection, signals from zuckoff.app)
+        const val LUXOTTICA = 0x0D53 // Ray-Ban Meta, Oakley Meta
+        const val META_PLATFORMS = 0x058E // Meta Platforms Technologies wearable
+        const val META = 0x01AB // Meta Platforms, Inc. (glasses/headsets)
+        const val SNAP = 0x03C2 // Snap Spectacles
+
         // Wearables & Fitness
         const val FITBIT = 0x0224
         const val GARMIN = 0x0087
@@ -124,6 +130,10 @@ object ManufacturerDataParser {
             ManufacturerId.CHIPOLO to "Chipolo",
             ManufacturerId.PEBBLEBEE to "Pebblebee",
             ManufacturerId.CUBE to "Cube",
+            ManufacturerId.LUXOTTICA to "Luxottica (Ray-Ban/Oakley Meta)",
+            ManufacturerId.META_PLATFORMS to "Meta Platforms",
+            ManufacturerId.META to "Meta Platforms",
+            ManufacturerId.SNAP to "Snap",
             ManufacturerId.FITBIT to "Fitbit",
             ManufacturerId.GARMIN to "Garmin",
             ManufacturerId.POLAR to "Polar",
@@ -195,6 +205,7 @@ object ManufacturerDataParser {
         EARBUDS,
         SPEAKER,
         TRACKER, // AirTag, Tile, SmartTag, Chipolo, etc.
+        CAMERA_GLASSES, // Ray-Ban Meta, Oakley Meta, Snap Spectacles
         BEACON,
         FITNESS_BAND,
         SMART_HOME,
@@ -353,6 +364,10 @@ object ManufacturerDataParser {
             ManufacturerId.CHIPOLO -> DeviceInference(DeviceType.TRACKER, "Chipolo", null, 0.95f)
             ManufacturerId.PEBBLEBEE -> DeviceInference(DeviceType.TRACKER, "Pebblebee", null, 0.95f)
             ManufacturerId.CUBE -> DeviceInference(DeviceType.TRACKER, "Cube", null, 0.95f)
+            ManufacturerId.LUXOTTICA -> DeviceInference(DeviceType.CAMERA_GLASSES, "Ray-Ban Meta / Oakley Meta", null, 0.95f)
+            ManufacturerId.META_PLATFORMS -> DeviceInference(DeviceType.CAMERA_GLASSES, "Meta camera wearable (glasses/Quest)", null, 0.90f)
+            ManufacturerId.META -> DeviceInference(DeviceType.CAMERA_GLASSES, "Meta camera wearable (glasses/Quest)", null, 0.85f)
+            ManufacturerId.SNAP -> DeviceInference(DeviceType.CAMERA_GLASSES, "Snap Spectacles", null, 0.95f)
             ManufacturerId.FITBIT -> DeviceInference(DeviceType.FITNESS_BAND, "Fitbit", null, 0.85f)
             ManufacturerId.GARMIN -> inferGarminDevice(payload)
             ManufacturerId.POLAR -> DeviceInference(DeviceType.FITNESS_BAND, "Polar", null, 0.85f)
@@ -988,6 +1003,10 @@ object ManufacturerDataParser {
         // Apple Find My Network (for third-party Find My accessories)
         const val APPLE_FIND_MY = "0000FD6F-0000-1000-8000-00805F9B34FB"
         const val APPLE_FIND_MY_SHORT = "FD6F"
+
+        // Camera glasses (Ray-Ban Meta advertise the Oculus VR service)
+        const val META_OCULUS = "0000FD5F-0000-1000-8000-00805F9B34FB"
+        const val META_OCULUS_SHORT = "FD5F"
     }
 
     /**
@@ -1107,12 +1126,23 @@ object ManufacturerDataParser {
             return "AF:FD6F:$payloadHash"
         }
 
+        // Check for camera glasses (Ray-Ban Meta advertise the Oculus VR service UUID)
+        if (shortUuids.contains(TrackerServiceUuid.META_OCULUS_SHORT) ||
+            uuidStrings.any { it.contains("FD5F") }
+        ) {
+            return "CG:FD5F:$payloadHash"
+        }
+
         // Also check by manufacturer ID for known tracker manufacturers
         return when (manufacturerId) {
             ManufacturerId.TILE -> "TL:MFR:$payloadHash"
             ManufacturerId.CHIPOLO -> "CH:MFR:$payloadHash"
             ManufacturerId.PEBBLEBEE -> "PB:MFR:$payloadHash"
             ManufacturerId.CUBE -> "CB:MFR:$payloadHash"
+            ManufacturerId.LUXOTTICA -> "CG:MFR:$payloadHash"
+            ManufacturerId.META_PLATFORMS -> "CG:MFR:$payloadHash"
+            ManufacturerId.META -> "CG:MFR:$payloadHash"
+            ManufacturerId.SNAP -> "CG:MFR:$payloadHash"
             else -> null
         }
     }
