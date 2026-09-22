@@ -29,6 +29,8 @@ object DeviceIdentifier {
         const val SAMSUNG_SMARTTAG_SHORT = "FD5A"
         const val TILE = "0000FEED-0000-1000-8000-00805F9B34FB"
         const val TILE_SHORT = "FEED"
+        const val TILE_SECOND = "0000FEEC-0000-1000-8000-00805F9B34FB"
+        const val TILE_SECOND_SHORT = "FEEC"
 
         // Google Fast Pair (for detecting Google-compatible devices)
         const val GOOGLE_FAST_PAIR = "0000FE2C-0000-1000-8000-00805F9B34FB"
@@ -37,6 +39,14 @@ object DeviceIdentifier {
         // Camera glasses: Oculus VR service, advertised by Ray-Ban Meta (zuckoff.app signal)
         const val META_OCULUS = "0000FD5F-0000-1000-8000-00805F9B34FB"
         const val META_OCULUS_SHORT = "FD5F"
+
+        // Flipper Zero — one of three fixed service UUIDs, one per case colour
+        const val FLIPPER_1 = "00003081-0000-1000-8000-00805F9B34FB"
+        const val FLIPPER_2 = "00003082-0000-1000-8000-00805F9B34FB"
+        const val FLIPPER_3 = "00003083-0000-1000-8000-00805F9B34FB"
+
+        // OpenDroneID / ASTM F3411 Remote ID (drones)
+        const val OPEN_DRONE_ID = "0000FFFA-0000-1000-8000-00805F9B34FB"
 
         // Apple (various services)
         const val APPLE_NEARBY = "D0611E78-BBB4-4591-A5F8-487910AE4366"
@@ -65,6 +75,8 @@ object DeviceIdentifier {
         setOf(
             ServiceUuid.SAMSUNG_SMARTTAG.lowercase(),
             ServiceUuid.TILE.lowercase(),
+            // Tile's second SIG-assigned service UUID
+            ServiceUuid.TILE_SECOND.lowercase(),
         )
 
     /**
@@ -115,6 +127,7 @@ object DeviceIdentifier {
         setOf(
             ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase(),
             ServiceUuid.TILE_SHORT.lowercase(),
+            ServiceUuid.TILE_SECOND_SHORT.lowercase(),
         )
 
     // ============================================================================
@@ -294,28 +307,31 @@ object DeviceIdentifier {
     fun getDeviceModelFromServiceUuid(serviceUuids: List<ParcelUuid>?): String? {
         if (serviceUuids.isNullOrEmpty()) return null
 
+        val models =
+            mapOf(
+                ServiceUuid.SAMSUNG_SMARTTAG.lowercase() to "Samsung SmartTag",
+                ServiceUuid.TILE.lowercase() to "Tile",
+                ServiceUuid.TILE_SECOND.lowercase() to "Tile",
+                ServiceUuid.GOOGLE_FAST_PAIR.lowercase() to "Google Fast Pair Device",
+                ServiceUuid.META_OCULUS.lowercase() to "Meta camera wearable (glasses/Quest)",
+                ServiceUuid.FLIPPER_1.lowercase() to "Flipper Zero",
+                ServiceUuid.FLIPPER_2.lowercase() to "Flipper Zero",
+                ServiceUuid.FLIPPER_3.lowercase() to "Flipper Zero",
+                ServiceUuid.OPEN_DRONE_ID.lowercase() to "Drone (Remote ID)",
+            )
+        val shortModels =
+            mapOf(
+                ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase() to "Samsung SmartTag",
+                ServiceUuid.TILE_SHORT.lowercase() to "Tile",
+                ServiceUuid.TILE_SECOND_SHORT.lowercase() to "Tile",
+                ServiceUuid.GOOGLE_FAST_PAIR_SHORT.lowercase() to "Google Fast Pair Device",
+                ServiceUuid.META_OCULUS_SHORT.lowercase() to "Meta camera wearable (glasses/Quest)",
+            )
+
         for (uuid in serviceUuids) {
             val uuidString = uuid.uuid.toString().lowercase()
-            val shortUuid = extractShortUuid(uuidString)
-
-            when {
-                uuidString == ServiceUuid.SAMSUNG_SMARTTAG.lowercase() ||
-                    shortUuid == ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase() -> {
-                    return "Samsung SmartTag"
-                }
-                uuidString == ServiceUuid.TILE.lowercase() ||
-                    shortUuid == ServiceUuid.TILE_SHORT.lowercase() -> {
-                    return "Tile"
-                }
-                uuidString == ServiceUuid.GOOGLE_FAST_PAIR.lowercase() ||
-                    shortUuid == ServiceUuid.GOOGLE_FAST_PAIR_SHORT.lowercase() -> {
-                    return "Google Fast Pair Device"
-                }
-                uuidString == ServiceUuid.META_OCULUS.lowercase() ||
-                    shortUuid == ServiceUuid.META_OCULUS_SHORT.lowercase() -> {
-                    return "Meta camera wearable (glasses/Quest)"
-                }
-            }
+            models[uuidString]?.let { return it }
+            extractShortUuid(uuidString)?.let { shortModels[it] }?.let { return it }
         }
 
         return null
@@ -331,25 +347,30 @@ object DeviceIdentifier {
             val uuidString = uuid.uuid.toString().lowercase()
             val shortUuid = extractShortUuid(uuidString)
 
-            // Tracker detection
-            if (isTrackerByServiceUuid(listOf(uuid))) {
-                return ManufacturerDataParser.DeviceType.TRACKER
-            }
-
-            // Camera glasses detection (Ray-Ban Meta advertise the Oculus VR service)
-            if (shortUuid == ServiceUuid.META_OCULUS_SHORT.lowercase() ||
-                uuidString == ServiceUuid.META_OCULUS.lowercase()
-            ) {
-                return ManufacturerDataParser.DeviceType.CAMERA_GLASSES
-            }
-
-            // Fitness device detection
-            when {
-                shortUuid == "180d" || shortUuid == "1814" ||
-                    shortUuid == "1818" || shortUuid == "1826" -> {
-                    return ManufacturerDataParser.DeviceType.FITNESS_BAND
+            // First-match-wins per UUID, in this order
+            val type =
+                when {
+                    // Tracker UUIDs (SmartTag FD5A, Tile FEED/FEEC)
+                    isTrackerByServiceUuid(listOf(uuid)) -> ManufacturerDataParser.DeviceType.TRACKER
+                    // Camera glasses (Ray-Ban Meta advertise the Oculus VR service)
+                    shortUuid == ServiceUuid.META_OCULUS_SHORT.lowercase() ||
+                        uuidString == ServiceUuid.META_OCULUS.lowercase() -> ManufacturerDataParser.DeviceType.CAMERA_GLASSES
+                    // Flipper Zero (three fixed service UUIDs, one per case colour)
+                    uuidString == ServiceUuid.FLIPPER_1.lowercase() ||
+                        uuidString == ServiceUuid.FLIPPER_2.lowercase() ||
+                        uuidString == ServiceUuid.FLIPPER_3.lowercase() -> ManufacturerDataParser.DeviceType.PENTEST_DEVICE
+                    // OpenDroneID / Remote ID (ASTM F3411 drones)
+                    uuidString == ServiceUuid.OPEN_DRONE_ID.lowercase() -> ManufacturerDataParser.DeviceType.DRONE
+                    // Raven gunshot detectors — proprietary UUID range 0x3100-0x3500
+                    // (not in the Bluetooth SIG registry — proprietary range)
+                    shortUuid?.toIntOrNull(16)?.let { it in 0x3100..0x3500 } == true ->
+                        ManufacturerDataParser.DeviceType.SURVEILLANCE
+                    // Fitness device detection
+                    shortUuid == "180d" || shortUuid == "1814" ||
+                        shortUuid == "1818" || shortUuid == "1826" -> ManufacturerDataParser.DeviceType.FITNESS_BAND
+                    else -> null
                 }
-            }
+            if (type != null) return type
         }
 
         return null
@@ -580,6 +601,10 @@ object DeviceIdentifier {
                 Triple(ManufacturerDataParser.DeviceType.TRACKER, "Tile", true)
             nameLower.contains("chipolo") -> Triple(ManufacturerDataParser.DeviceType.TRACKER, "Chipolo", true)
             nameLower.contains("tracker") -> Triple(ManufacturerDataParser.DeviceType.TRACKER, null, true)
+
+            // Pentest hardware
+            nameLower.contains("flipper") ->
+                Triple(ManufacturerDataParser.DeviceType.PENTEST_DEVICE, "Flipper Zero", false)
 
             // Camera glasses
             nameLower.contains("ray-ban") || nameLower.contains("rayban") ||

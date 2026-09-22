@@ -47,10 +47,20 @@ object ManufacturerDataParser {
         const val HTC = 0x000A
 
         // Tracker Manufacturers (CRITICAL for stalking detection)
-        const val TILE = 0x0099
-        const val CHIPOLO = 0x02E5
-        const val PEBBLEBEE = 0x0636
-        const val CUBE = 0x05B8
+        // Values verified against the official Bluetooth SIG company identifier
+        // registry (bitbucket.org/bluetooth-SIG/public, commit 3267e25):
+        //   Tile, Inc. = 0x067C (0x0099 is i.Tech Dynamic — NOT Tile)
+        //   Chipolo d.o.o. = 0x08C3 (0x02E5 is Espressif — NOT Chipolo)
+        const val TILE = 0x067C
+        const val CHIPOLO = 0x08C3
+        // NOTE: Pebblebee and Cube have no SIG company IDs. 0x0636 is Electronica
+        // Integral de Sonido and 0x05B8 is Ambystoma Labs — both were previously
+        // misattributed here. Those trackers are detected via their service
+        // UUIDs (FE8D / FE8E) instead.
+
+        // Pentest / surveillance hardware (IDs verified in the SIG registry)
+        const val FLIPPER = 0x0E29 // Flipper Devices Inc.
+        const val XUNTONG = 0x09C8 // Flock Safety camera BLE radio supplier
 
         // Camera glasses (lens-in-the-room detection, signals from zuckoff.app)
         const val LUXOTTICA = 0x0D53 // Ray-Ban Meta, Oakley Meta
@@ -128,8 +138,8 @@ object ManufacturerDataParser {
             ManufacturerId.HTC to "HTC",
             ManufacturerId.TILE to "Tile",
             ManufacturerId.CHIPOLO to "Chipolo",
-            ManufacturerId.PEBBLEBEE to "Pebblebee",
-            ManufacturerId.CUBE to "Cube",
+            ManufacturerId.FLIPPER to "Flipper Devices",
+            ManufacturerId.XUNTONG to "Xuntong (Flock Safety)",
             ManufacturerId.LUXOTTICA to "Luxottica (Ray-Ban/Oakley Meta)",
             ManufacturerId.META_PLATFORMS to "Meta Platforms",
             ManufacturerId.META to "Meta Platforms",
@@ -206,6 +216,9 @@ object ManufacturerDataParser {
         SPEAKER,
         TRACKER, // AirTag, Tile, SmartTag, Chipolo, etc.
         CAMERA_GLASSES, // Ray-Ban Meta, Oakley Meta, Snap Spectacles
+        PENTEST_DEVICE, // Flipper Zero and similar wireless testing hardware
+        DRONE, // OpenDroneID / ASTM F3411 Remote ID broadcasts
+        SURVEILLANCE, // Flock ALPR cameras, Raven gunshot detectors, etc.
         BEACON,
         FITNESS_BAND,
         SMART_HOME,
@@ -362,8 +375,8 @@ object ManufacturerDataParser {
             ManufacturerId.SAMSUNG -> inferSamsungDevice(payload)
             ManufacturerId.TILE -> DeviceInference(DeviceType.TRACKER, "Tile", null, 0.95f)
             ManufacturerId.CHIPOLO -> DeviceInference(DeviceType.TRACKER, "Chipolo", null, 0.95f)
-            ManufacturerId.PEBBLEBEE -> DeviceInference(DeviceType.TRACKER, "Pebblebee", null, 0.95f)
-            ManufacturerId.CUBE -> DeviceInference(DeviceType.TRACKER, "Cube", null, 0.95f)
+            ManufacturerId.FLIPPER -> DeviceInference(DeviceType.PENTEST_DEVICE, "Flipper Zero", null, 0.95f)
+            ManufacturerId.XUNTONG -> DeviceInference(DeviceType.SURVEILLANCE, "Flock Safety camera (ALPR)", null, 0.85f)
             ManufacturerId.LUXOTTICA -> DeviceInference(DeviceType.CAMERA_GLASSES, "Ray-Ban Meta / Oakley Meta", null, 0.95f)
             ManufacturerId.META_PLATFORMS -> DeviceInference(DeviceType.CAMERA_GLASSES, "Meta camera wearable (glasses/Quest)", null, 0.90f)
             ManufacturerId.META -> DeviceInference(DeviceType.CAMERA_GLASSES, "Meta camera wearable (glasses/Quest)", null, 0.85f)
@@ -625,8 +638,6 @@ object ManufacturerDataParser {
             listOf(
                 ManufacturerId.TILE,
                 ManufacturerId.CHIPOLO,
-                ManufacturerId.PEBBLEBEE,
-                ManufacturerId.CUBE,
             )
         ) {
             return true
@@ -981,6 +992,10 @@ object ManufacturerDataParser {
         const val TILE = "0000FEED-0000-1000-8000-00805F9B34FB"
         const val TILE_SHORT = "FEED"
         const val TILE_FULL = "FEED0001-C497-4476-A7ED-727DE7648AB1"
+        // Tile's second SIG-assigned service UUID (both FEED and FEEC are
+        // officially assigned to Tile, Inc. by the Bluetooth SIG)
+        const val TILE_SECOND = "0000FEEC-0000-1000-8000-00805F9B34FB"
+        const val TILE_SECOND_SHORT = "FEEC"
 
         // Chipolo trackers
         const val CHIPOLO = "0000FE8C-0000-1000-8000-00805F9B34FB"
@@ -1007,6 +1022,19 @@ object ManufacturerDataParser {
         // Camera glasses (Ray-Ban Meta advertise the Oculus VR service)
         const val META_OCULUS = "0000FD5F-0000-1000-8000-00805F9B34FB"
         const val META_OCULUS_SHORT = "FD5F"
+
+        // Flipper Zero — advertises one of three fixed service UUIDs, one per
+        // case colour (per Flipper's own firmware)
+        const val FLIPPER_1 = "00003081-0000-1000-8000-00805F9B34FB"
+        const val FLIPPER_1_SHORT = "3081"
+        const val FLIPPER_2 = "00003082-0000-1000-8000-00805F9B34FB"
+        const val FLIPPER_2_SHORT = "3082"
+        const val FLIPPER_3 = "00003083-0000-1000-8000-00805F9B34FB"
+        const val FLIPPER_3_SHORT = "3083"
+
+        // OpenDroneID / ASTM F3411 Remote ID (drones)
+        const val OPEN_DRONE_ID = "0000FFFA-0000-1000-8000-00805F9B34FB"
+        const val OPEN_DRONE_ID_SHORT = "FFFA"
     }
 
     /**
@@ -1070,9 +1098,10 @@ object ManufacturerDataParser {
             return "ST:FD5A:$payloadHash"
         }
 
-        // Check for Tile
+        // Check for Tile (both SIG-assigned UUIDs)
         if (shortUuids.contains(TrackerServiceUuid.TILE_SHORT) ||
-            uuidStrings.any { it.contains("FEED") }
+            shortUuids.contains(TrackerServiceUuid.TILE_SECOND_SHORT) ||
+            uuidStrings.any { it.contains("FEED") || it.contains("FEEC") }
         ) {
             return "TL:FEED:$payloadHash"
         }
@@ -1133,12 +1162,26 @@ object ManufacturerDataParser {
             return "CG:FD5F:$payloadHash"
         }
 
+        // Check for Flipper Zero (three fixed service UUIDs, one per case colour)
+        if (shortUuids.contains(TrackerServiceUuid.FLIPPER_1_SHORT) ||
+            shortUuids.contains(TrackerServiceUuid.FLIPPER_2_SHORT) ||
+            shortUuids.contains(TrackerServiceUuid.FLIPPER_3_SHORT)
+        ) {
+            return "FP:308X:$payloadHash"
+        }
+
+        // Check for OpenDroneID / Remote ID broadcasts
+        if (shortUuids.contains(TrackerServiceUuid.OPEN_DRONE_ID_SHORT) ||
+            uuidStrings.any { it.contains("FFFA") }
+        ) {
+            return "OD:FFFA:$payloadHash"
+        }
+
         // Also check by manufacturer ID for known tracker manufacturers
         return when (manufacturerId) {
             ManufacturerId.TILE -> "TL:MFR:$payloadHash"
             ManufacturerId.CHIPOLO -> "CH:MFR:$payloadHash"
-            ManufacturerId.PEBBLEBEE -> "PB:MFR:$payloadHash"
-            ManufacturerId.CUBE -> "CB:MFR:$payloadHash"
+            ManufacturerId.FLIPPER -> "FP:MFR:$payloadHash"
             ManufacturerId.LUXOTTICA -> "CG:MFR:$payloadHash"
             ManufacturerId.META_PLATFORMS -> "CG:MFR:$payloadHash"
             ManufacturerId.META -> "CG:MFR:$payloadHash"

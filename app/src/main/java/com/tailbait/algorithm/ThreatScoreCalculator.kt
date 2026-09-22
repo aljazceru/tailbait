@@ -230,7 +230,9 @@ class ThreatScoreCalculator
                 when {
                     device.isTracker -> 1.0
                     device.deviceType?.uppercase() == "TRACKER" -> 1.0
-                    device.deviceType?.uppercase() in listOf("PHONE", "TABLET", "CAMERA_GLASSES") -> 0.8
+                    // Drones and pentest hardware following you means the operator
+                    // is following you — same bracket as a phone (or glasses)
+                    device.deviceType?.uppercase() in listOf("PHONE", "TABLET", "CAMERA_GLASSES", "PENTEST_DEVICE", "DRONE") -> 0.8
                     device.deviceType?.uppercase() == "WATCH" -> 0.6
                     device.deviceType?.uppercase() == "FITNESS_BAND" -> 0.4
                     else -> 0.3
@@ -487,14 +489,14 @@ class ThreatScoreCalculator
             // Score based on device type
             return when (device.deviceType?.uppercase()) {
                 "TRACKER" -> SCORE_TRACKER
-                "PHONE", "TABLET", "CAMERA_GLASSES" -> SCORE_PHONE_TABLET
+                "PHONE", "TABLET", "CAMERA_GLASSES", "PENTEST_DEVICE", "DRONE" -> SCORE_PHONE_TABLET
                 "WATCH" -> SCORE_WATCH
                 "FITNESS_BAND" -> SCORE_FITNESS_BAND
                 "EARBUDS" -> SCORE_EARBUDS
                 "HEADPHONES" -> SCORE_HEADPHONES
                 "SPEAKER" -> SCORE_SPEAKER
                 "BEACON" -> SCORE_BEACON
-                "COMPUTER", "SMART_HOME", "AUTOMOTIVE", "GAMING", "MEDICAL" -> SCORE_BEACON
+                "COMPUTER", "SMART_HOME", "AUTOMOTIVE", "GAMING", "MEDICAL", "SURVEILLANCE" -> SCORE_BEACON
                 else -> SCORE_OTHER
             }
         }

@@ -273,7 +273,7 @@ object TrackerAnalyzerFactory {
     /**
      * Analyzer for Tile trackers.
      *
-     * Tile devices advertise a custom service UUID and manufacturer ID 0x0099.
+     * Tile devices advertise a custom service UUID and manufacturer ID 0x067C (SIG registry; 0x0099 is i.Tech Dynamic).
      */
     private object TileAnalyzer : TrackerAnalyzer {
         override val manufacturerId = ManufacturerDataParser.ManufacturerId.TILE
@@ -415,44 +415,11 @@ object TrackerAnalyzerFactory {
     }
 
     // ============================================================================
-    // GENERIC TRACKER ANALYZER
+    // GENERIC TRACKER ANALYZER — removed.
+    // Its only users were the Pebblebee/Cube manufacturer-ID entries, which the
+    // SIG registry disproved (0x0636 and 0x05B8 belong to unrelated companies).
+    // Those trackers remain detectable via their FE8D/FE8E service UUIDs.
     // ============================================================================
-
-    /**
-     * Analyzer for other known tracker manufacturers (Pebblebee, Cube, etc.).
-     */
-    private class GenericTrackerAnalyzer(
-        override val manufacturerId: Int,
-        private val name: String,
-        private val trackerType: TrackerServiceDetector.TrackerType,
-    ) : TrackerAnalyzer {
-        override fun analyze(
-            manufacturerData: ByteArray?,
-            serviceUuids: List<ParcelUuid>?,
-            rssi: Int,
-            deviceName: String?,
-        ): TrackerAnalysis {
-            val signalStrength = SignalStrength.fromRssi(rssi)
-
-            val threatLevel =
-                when {
-                    signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                    signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
-                    else -> ThreatLevel.LOW
-                }
-
-            return TrackerAnalysis(
-                isTracker = true,
-                trackerType = trackerType,
-                manufacturerName = name,
-                deviceModel = deviceName ?: name,
-                confidence = 0.90f,
-                threatLevel = threatLevel,
-                signalStrength = signalStrength,
-                beaconType = null,
-            )
-        }
-    }
 
     // ============================================================================
     // FACTORY REGISTRY
@@ -468,18 +435,9 @@ object TrackerAnalyzerFactory {
             ManufacturerDataParser.ManufacturerId.TILE to TileAnalyzer,
             ManufacturerDataParser.ManufacturerId.CHIPOLO to ChipoloAnalyzer,
             ManufacturerDataParser.ManufacturerId.GOOGLE to GoogleAnalyzer,
-            ManufacturerDataParser.ManufacturerId.PEBBLEBEE to
-                GenericTrackerAnalyzer(
-                    ManufacturerDataParser.ManufacturerId.PEBBLEBEE,
-                    "Pebblebee",
-                    TrackerServiceDetector.TrackerType.PEBBLEBEE,
-                ),
-            ManufacturerDataParser.ManufacturerId.CUBE to
-                GenericTrackerAnalyzer(
-                    ManufacturerDataParser.ManufacturerId.CUBE,
-                    "Cube",
-                    TrackerServiceDetector.TrackerType.CUBE,
-                ),
+            // NOTE: Pebblebee/Cube removed from the manufacturer-ID registry —
+            // their former IDs (0x0636/0x05B8) belong to unrelated companies per
+            // the SIG registry. They remain detectable via FE8D/FE8E service UUIDs.
         )
 
     // ============================================================================

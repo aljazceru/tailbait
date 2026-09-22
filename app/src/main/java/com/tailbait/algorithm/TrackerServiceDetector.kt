@@ -82,6 +82,13 @@ object TrackerServiceDetector {
         UUID.fromString("0000FEED-0000-1000-8000-00805F9B34FB")
 
     /**
+     * Tile's second SIG-assigned service UUID (both FEED and FEEC are
+     * officially assigned to Tile, Inc.).
+     */
+    val TILE_SERVICE_FEEC: UUID =
+        UUID.fromString("0000FEEC-0000-1000-8000-00805F9B34FB")
+
+    /**
      * Chipolo tracker service UUID.
      * FE8C is the 16-bit UUID assigned to Chipolo.
      */
@@ -158,6 +165,7 @@ object TrackerServiceDetector {
             APPLE_FIND_MY_SERVICE to Pair(TrackerType.APPLE_FIND_MY_ACCESSORY, "Apple"),
             TILE_SERVICE to Pair(TrackerType.TILE, "Tile"),
             TILE_SERVICE_ALT to Pair(TrackerType.TILE, "Tile"),
+            TILE_SERVICE_FEEC to Pair(TrackerType.TILE, "Tile"),
             CHIPOLO_SERVICE to Pair(TrackerType.CHIPOLO, "Chipolo"),
             PEBBLEBEE_SERVICE to Pair(TrackerType.PEBBLEBEE, "Pebblebee"),
             CUBE_SERVICE to Pair(TrackerType.CUBE, "Cube"),
@@ -358,8 +366,6 @@ object TrackerServiceDetector {
                         ManufacturerDataParser.ManufacturerId.SAMSUNG -> TrackerType.SAMSUNG_SMARTTAG
                         ManufacturerDataParser.ManufacturerId.TILE -> TrackerType.TILE
                         ManufacturerDataParser.ManufacturerId.CHIPOLO -> TrackerType.CHIPOLO
-                        ManufacturerDataParser.ManufacturerId.PEBBLEBEE -> TrackerType.PEBBLEBEE
-                        ManufacturerDataParser.ManufacturerId.CUBE -> TrackerType.CUBE
                         else -> TrackerType.UNKNOWN_TRACKER
                     }
 
@@ -380,8 +386,6 @@ object TrackerServiceDetector {
                     listOf(
                         ManufacturerDataParser.ManufacturerId.TILE,
                         ManufacturerDataParser.ManufacturerId.CHIPOLO,
-                        ManufacturerDataParser.ManufacturerId.PEBBLEBEE,
-                        ManufacturerDataParser.ManufacturerId.CUBE,
                     )
 
             if (isTrackerManufacturer) {
@@ -389,8 +393,6 @@ object TrackerServiceDetector {
                     when (manufacturerId) {
                         ManufacturerDataParser.ManufacturerId.TILE -> TrackerType.TILE
                         ManufacturerDataParser.ManufacturerId.CHIPOLO -> TrackerType.CHIPOLO
-                        ManufacturerDataParser.ManufacturerId.PEBBLEBEE -> TrackerType.PEBBLEBEE
-                        ManufacturerDataParser.ManufacturerId.CUBE -> TrackerType.CUBE
                         else -> TrackerType.UNKNOWN_TRACKER
                     }
 

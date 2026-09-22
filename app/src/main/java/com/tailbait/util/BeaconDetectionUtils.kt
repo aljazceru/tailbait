@@ -34,8 +34,10 @@ object BeaconDetectionUtils {
         const val GOOGLE = 0x00E0
         const val NORDIC_SEMI = 0x0059
         const val SAMSUNG = 0x0075
-        const val TILE = 0x0099
-        const val CHIPOLO = 0x02E5
+        // Tile and Chipolo per the official SIG registry: 0x0099 is i.Tech
+        // Dynamic and 0x02E5 is Espressif — neither is a tracker company.
+        const val TILE = 0x067C
+        const val CHIPOLO = 0x08C3
     }
 
     // ============================================================================
