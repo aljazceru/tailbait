@@ -1,438 +1,275 @@
 package com.tailbait.ui.screens.whitelist
 
+import android.content.Context
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.lifecycle.viewModelScope
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.tailbait.data.database.TailBaitDatabase
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.database.entities.WhitelistEntry
 import com.tailbait.data.repository.WhitelistRepository
-import com.tailbait.ui.theme.BleTrackerTheme
+import com.tailbait.data.repository.WhitelistRepositoryImpl
+import com.tailbait.ui.theme.TailBaitTheme
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
 
-/**
- * UI tests for WhitelistScreen.
- *
- * Tests cover:
- * - Screen rendering with different states
- * - Category filtering
- * - Search functionality
- * - Add/Edit/Delete operations
- * - Dialog interactions
- */
+@RunWith(AndroidJUnit4::class)
 class WhitelistScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val testDevice1 =
+    private lateinit var database: TailBaitDatabase
+    private lateinit var whitelistRepository: WhitelistRepository
+    private var viewModel: WhitelistViewModel? = null
+
+    private val ownDevice =
         ScannedDevice(
             id = 1L,
             address = "AA:BB:CC:DD:EE:FF",
-            name = "Test Device 1",
+            name = "Test Phone",
             firstSeen = 1000L,
             lastSeen = 2000L,
         )
-
-    private val testDevice2 =
-        ScannedDevice(
+    private val partnerDevice =
+        ownDevice.copy(
             id = 2L,
             address = "11:22:33:44:55:66",
-            name = "Test Device 2",
-            firstSeen = 1500L,
-            lastSeen = 2500L,
+            name = "Test Watch",
         )
-
-    private val testEntry1 =
-        WhitelistRepository.WhitelistEntryWithDevice(
-            entry =
-                WhitelistEntry(
-                    id = 1L,
-                    deviceId = 1L,
-                    label = "My Phone",
-                    category = WhitelistRepository.Category.OWN,
-                    notes = "Personal device",
-                    addedViaLearnMode = false,
-                ),
-            device = testDevice1,
-        )
-
-    private val testEntry2 =
-        WhitelistRepository.WhitelistEntryWithDevice(
-            entry =
-                WhitelistEntry(
-                    id = 2L,
-                    deviceId = 2L,
-                    label = "Partner's Watch",
-                    category = WhitelistRepository.Category.PARTNER,
-                    notes = null,
-                    addedViaLearnMode = true,
-                ),
-            device = testDevice2,
+    private val trustedDevice =
+        ownDevice.copy(
+            id = 3L,
+            address = "AA:11:BB:22:CC:33",
+            name = null,
         )
 
     @Before
-    fun setup() {
-        // Setup code if needed
-    }
-
-    // ========== Content Display Tests ==========
-
-    @Test
-    fun whitelistEntryCard_displaysCorrectInformation() {
-        // Given
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                WhitelistEntryCard(
-                    entry = testEntry1,
-                    onClick = {},
-                    onDeleteClick = {},
-                )
-            }
+    fun setup() =
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            database = Room.inMemoryDatabaseBuilder(context, TailBaitDatabase::class.java).build()
+            whitelistRepository = WhitelistRepositoryImpl(database.whitelistEntryDao(), database.scannedDeviceDao())
+            database.scannedDeviceDao().insertAll(listOf(ownDevice, partnerDevice, trustedDevice))
+            whitelistRepository.addMultipleToWhitelist(
+                listOf(
+                    WhitelistEntry(
+                        deviceId = ownDevice.id,
+                        label = "My Phone",
+                        category = WhitelistRepository.Category.OWN,
+                        notes = "Personal device",
+                        createdAt = 3000L,
+                    ),
+                    WhitelistEntry(
+                        deviceId = partnerDevice.id,
+                        label = "Partner's Watch",
+                        category = WhitelistRepository.Category.PARTNER,
+                        addedViaLearnMode = true,
+                        createdAt = 3001L,
+                    ),
+                    WhitelistEntry(
+                        deviceId = trustedDevice.id,
+                        label = "Office Beacon",
+                        category = WhitelistRepository.Category.TRUSTED,
+                        createdAt = 3002L,
+                    ),
+                ),
+            )
+            Unit
         }
 
-        // Then
+    @After
+    fun tearDown() {
+        composeTestRule.runOnUiThread { viewModel?.viewModelScope?.cancel() }
+        database.close()
+    }
+
+    @Test
+    fun whitelistScreen_categoryAndSearchFiltersIntersectAndCanBeCleared() {
+        showScreen()
+        composeTestRule.onNodeWithText("My Devices (1)").performClick()
+        awaitEntries(ownDevice.id)
         composeTestRule.onNodeWithText("My Phone").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Test Device 1").assertIsDisplayed()
-        composeTestRule.onNodeWithText("AA:BB:CC:DD:EE:FF").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Personal device").assertIsDisplayed()
-        composeTestRule.onNodeWithText("OWN").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Partner's Watch").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Office Beacon").assertDoesNotExist()
+
+        composeTestRule.onNodeWithContentDescription("Search whitelist").performClick()
+        composeTestRule.onNode(hasSetTextAction()).performTextInput("wAtCh")
+        awaitEntries()
+        composeTestRule.onNodeWithText("My Phone").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Partner's Watch").assertDoesNotExist()
+
+        composeTestRule.onNodeWithText("All").performClick()
+        awaitEntries(partnerDevice.id)
+        composeTestRule.onNodeWithText("Partner's Watch").assertIsDisplayed()
+        composeTestRule.onNodeWithText("My Phone").assertDoesNotExist()
+
+        composeTestRule.onNodeWithContentDescription("Clear search").performClick()
+        awaitEntries(ownDevice.id, partnerDevice.id, trustedDevice.id)
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+        composeTestRule.onNode(hasSetTextAction()).assertDoesNotExist()
     }
 
     @Test
-    fun whitelistEntryCard_showsLearnModeIndicator() {
-        // Given
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                WhitelistEntryCard(
-                    entry = testEntry2,
-                    onClick = {},
-                    onDeleteClick = {},
-                )
-            }
-        }
+    fun whitelistScreen_editsUnnamedDeviceAndRejectsBlankLabel() {
+        showScreen()
+        composeTestRule.onNodeWithContentDescription("Search whitelist").performClick()
+        composeTestRule.onNode(hasSetTextAction()).performTextInput(trustedDevice.address)
+        awaitEntries(trustedDevice.id)
+        composeTestRule.onNodeWithText("Office Beacon").performClick()
 
-        // Then
-        composeTestRule.onNodeWithText("Added via Learn Mode").assertIsDisplayed()
+        val labelField = composeTestRule.onNode(hasSetTextAction() and hasText("Label"))
+        labelField.performTextClearance()
+        composeTestRule.onNodeWithText("Save").assertIsNotEnabled()
+        labelField.performTextInput("Shared Beacon")
+        composeTestRule.onNodeWithText("Partner's Devices").performScrollTo().performClick()
+        composeTestRule.onNode(hasSetTextAction() and hasText("Notes (Optional)"))
+            .performScrollTo().performTextInput("Shared with my partner")
+        composeTestRule.onNodeWithText("Save").performClick()
+        composeTestRule.waitUntil(5000) { !requireNotNull(viewModel).uiState.value.showEditDialog }
+
+        runBlocking {
+            val entry = requireNotNull(whitelistRepository.getEntryByDeviceId(trustedDevice.id))
+            assertEquals("Shared Beacon", entry.label)
+            assertEquals(WhitelistRepository.Category.PARTNER, entry.category)
+            assertEquals("Shared with my partner", entry.notes)
+            assertTrue(whitelistRepository.isDeviceWhitelisted(trustedDevice.id))
+            assertNull(database.scannedDeviceDao().getById(trustedDevice.id)?.name)
+        }
     }
 
     @Test
-    fun statisticsCard_displaysCorrectCounts() {
-        // Given
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                WhitelistStatisticsCard(
-                    totalCount = 10,
-                    ownCount = 4,
-                    partnerCount = 3,
-                    trustedCount = 3,
-                )
-            }
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("10").assertIsDisplayed()
-        composeTestRule.onNodeWithText("4").assertIsDisplayed()
-        composeTestRule.onNodeWithText("3").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Total").assertIsDisplayed()
-        composeTestRule.onNodeWithText("My Devices").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Partner").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Trusted").assertIsDisplayed()
-    }
-
-    @Test
-    fun categoryBadge_displaysCorrectBadge() {
-        // Given
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                CategoryBadge(category = WhitelistRepository.Category.OWN)
-            }
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("OWN").assertIsDisplayed()
-    }
-
-    // ========== Dialog Tests ==========
-
-    @Test
-    fun addToWhitelistDialog_displaysCorrectly() {
-        // Given
-        val devices = listOf(testDevice1, testDevice2)
-
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                AddToWhitelistDialog(
-                    devices = devices,
-                    onDismiss = {},
-                    onConfirm = { _, _, _, _ -> },
-                )
-            }
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("Add to Whitelist").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Select Device").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Test Device 1").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Test Device 2").assertIsDisplayed()
-    }
-
-    @Test
-    fun addToWhitelistDialog_showsEmptyStateWhenNoDevices() {
-        // Given
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                AddToWhitelistDialog(
-                    devices = emptyList(),
-                    onDismiss = {},
-                    onConfirm = { _, _, _, _ -> },
-                )
-            }
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("No devices available. Start tracking to discover devices.")
-            .assertIsDisplayed()
-    }
-
-    @Test
-    fun editWhitelistDialog_displaysCorrectly() {
-        // Given
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                EditWhitelistDialog(
-                    entry = testEntry1.entry,
-                    onDismiss = {},
-                    onConfirm = { _, _, _ -> },
-                )
-            }
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("Edit Whitelist Entry").assertIsDisplayed()
-        composeTestRule.onNodeWithText("My Phone").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Category").assertIsDisplayed()
-    }
-
-    @Test
-    fun deleteConfirmationDialog_displaysCorrectly() {
-        // Given
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                DeleteWhitelistConfirmationDialog(
-                    entry = testEntry1,
-                    onDismiss = {},
-                    onConfirm = {},
-                )
-            }
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("Remove from Whitelist?").assertIsDisplayed()
-        composeTestRule.onNodeWithText("My Phone").assertIsDisplayed()
-        composeTestRule.onNodeWithText("This device will be included in stalking detection again.")
-            .assertIsDisplayed()
-    }
-
-    // ========== Interaction Tests ==========
-
-    @Test
-    fun whitelistEntryCard_clickTriggersCallback() {
-        // Given
-        var clicked = false
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                WhitelistEntryCard(
-                    entry = testEntry1,
-                    onClick = { clicked = true },
-                    onDeleteClick = {},
-                )
-            }
-        }
-
-        // When
+    fun whitelistScreen_cancelEditPreservesTrustMetadata() {
+        showScreen()
+        composeTestRule.onNodeWithContentDescription("Search whitelist").performClick()
+        composeTestRule.onNode(hasSetTextAction()).performTextInput(ownDevice.address)
+        awaitEntries(ownDevice.id)
         composeTestRule.onNodeWithText("My Phone").performClick()
+        composeTestRule.onNode(hasSetTextAction() and hasText("Label"))
+            .performTextReplacement("Unsaved label")
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.waitUntil(5000) { !requireNotNull(viewModel).uiState.value.showEditDialog }
 
-        // Then
-        assert(clicked)
+        runBlocking {
+            val entry = requireNotNull(whitelistRepository.getEntryByDeviceId(ownDevice.id))
+            assertEquals("My Phone", entry.label)
+            assertEquals("Personal device", entry.notes)
+            assertTrue(whitelistRepository.isDeviceWhitelisted(ownDevice.id))
+        }
     }
 
     @Test
-    fun whitelistEntryCard_deleteButtonTriggersCallback() {
-        // Given
-        var deleteClicked = false
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                WhitelistEntryCard(
-                    entry = testEntry1,
-                    onClick = {},
-                    onDeleteClick = { deleteClicked = true },
-                )
-            }
-        }
-
-        // When
+    fun whitelistScreen_cancelThenConfirmRemovalOnlyRevokesSelectedTrust() {
+        showScreen()
+        composeTestRule.onNodeWithContentDescription("Search whitelist").performClick()
+        composeTestRule.onNode(hasSetTextAction()).performTextInput(ownDevice.address)
+        awaitEntries(ownDevice.id)
         composeTestRule.onNodeWithContentDescription("Remove from whitelist").performClick()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.waitUntil(5000) { !requireNotNull(viewModel).uiState.value.showDeleteConfirmation }
+        runBlocking { assertTrue(whitelistRepository.isDeviceWhitelisted(ownDevice.id)) }
 
-        // Then
-        assert(deleteClicked)
+        composeTestRule.onNodeWithContentDescription("Remove from whitelist").performClick()
+        composeTestRule.onNodeWithText("Remove").performClick()
+        awaitEntries()
+        composeTestRule.waitUntil(5000) { !requireNotNull(viewModel).uiState.value.showDeleteConfirmation }
+
+        runBlocking {
+            assertFalse(whitelistRepository.isDeviceWhitelisted(ownDevice.id))
+            assertTrue(whitelistRepository.isDeviceWhitelisted(partnerDevice.id))
+            assertTrue(whitelistRepository.isDeviceWhitelisted(trustedDevice.id))
+            assertNotNull(database.scannedDeviceDao().getById(ownDevice.id))
+        }
     }
 
     @Test
-    fun addToWhitelistDialog_cancelButtonDismissesDialog() {
-        // Given
-        var dismissed = false
+    fun addToWhitelistDialog_requiresSelectionAndNonblankLabelBeforeConfirm() {
+        var confirmedEntry: WhitelistEntry? = null
         composeTestRule.setContent {
-            BleTrackerTheme {
+            TailBaitTheme {
                 AddToWhitelistDialog(
-                    devices = listOf(testDevice1),
-                    onDismiss = { dismissed = true },
-                    onConfirm = { _, _, _, _ -> },
+                    devices = listOf(ownDevice, partnerDevice),
+                    onDismiss = {},
+                    onConfirm = { deviceId, label, category, notes ->
+                        confirmedEntry =
+                            WhitelistEntry(
+                                deviceId = deviceId,
+                                label = label,
+                                category = category,
+                                notes = notes,
+                            )
+                    },
                 )
             }
         }
 
-        // When
-        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onNodeWithText("Add").assertIsNotEnabled()
+        composeTestRule.onNodeWithText(ownDevice.address).performClick()
+        val labelField = composeTestRule.onNode(hasSetTextAction() and hasText("Label"))
+        labelField.performScrollTo().performTextClearance()
+        composeTestRule.onNodeWithText("Add").assertIsNotEnabled()
+        labelField.performTextInput("Travel Phone")
+        composeTestRule.onNodeWithText("Trusted Devices").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Add").performClick()
 
-        // Then
-        assert(dismissed)
+        composeTestRule.runOnIdle {
+            val entry = requireNotNull(confirmedEntry)
+            assertEquals(ownDevice.id, entry.deviceId)
+            assertEquals("Travel Phone", entry.label)
+            assertEquals(WhitelistRepository.Category.TRUSTED, entry.category)
+            assertNull(entry.notes)
+        }
     }
 
     @Test
-    fun editWhitelistDialog_cancelButtonDismissesDialog() {
-        // Given
+    fun addToWhitelistDialog_emptyDevicesCannotConfirmAndCanBeCancelled() {
         var dismissed = false
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                EditWhitelistDialog(
-                    entry = testEntry1.entry,
-                    onDismiss = { dismissed = true },
-                    onConfirm = { _, _, _ -> },
-                )
-            }
-        }
-
-        // When
-        composeTestRule.onNodeWithText("Cancel").performClick()
-
-        // Then
-        assert(dismissed)
-    }
-
-    @Test
-    fun deleteConfirmationDialog_removeButtonTriggersCallback() {
-        // Given
         var confirmed = false
         composeTestRule.setContent {
-            BleTrackerTheme {
-                DeleteWhitelistConfirmationDialog(
-                    entry = testEntry1,
-                    onDismiss = {},
-                    onConfirm = { confirmed = true },
+            TailBaitTheme {
+                AddToWhitelistDialog(
+                    devices = emptyList(),
+                    onDismiss = { dismissed = true },
+                    onConfirm = { _, _, _, _ -> confirmed = true },
                 )
             }
         }
 
-        // When
-        composeTestRule.onNodeWithText("Remove").performClick()
-
-        // Then
-        assert(confirmed)
+        composeTestRule.onNodeWithText("Add").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.runOnIdle {
+            assertTrue(dismissed)
+            assertFalse(confirmed)
+        }
     }
 
-    // ========== Filter Tests ==========
-
-    @Test
-    fun categoryFilterChips_displaysAllCategories() {
-        // Given
+    private fun showScreen() {
+        composeTestRule.runOnUiThread { viewModel = WhitelistViewModel(whitelistRepository) }
         composeTestRule.setContent {
-            BleTrackerTheme {
-                CategoryFilterChips(
-                    selectedCategory = null,
-                    onCategorySelected = {},
-                    ownCount = 3,
-                    partnerCount = 2,
-                    trustedCount = 4,
-                )
+            TailBaitTheme {
+                WhitelistScreen(onNavigateBack = {}, viewModel = requireNotNull(viewModel))
             }
         }
-
-        // Then
-        composeTestRule.onNodeWithText("All").assertIsDisplayed()
-        composeTestRule.onNodeWithText("My Devices (3)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Partner (2)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Trusted (4)").assertIsDisplayed()
+        awaitEntries(ownDevice.id, partnerDevice.id, trustedDevice.id)
     }
 
-    @Test
-    fun categoryFilterChips_clickTriggersSelection() {
-        // Given
-        var selectedCategory: String? = null
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                CategoryFilterChips(
-                    selectedCategory = selectedCategory,
-                    onCategorySelected = { selectedCategory = it },
-                    ownCount = 3,
-                    partnerCount = 2,
-                    trustedCount = 4,
-                )
-            }
+    private fun awaitEntries(vararg deviceIds: Long) {
+        val expectedIds = deviceIds.toSet()
+        composeTestRule.waitUntil(5000) {
+            val state = requireNotNull(viewModel).uiState.value
+            !state.isLoading && state.filteredEntries.map { it.device.id }.toSet() == expectedIds
         }
-
-        // When
-        composeTestRule.onNodeWithText("My Devices (3)").performClick()
-
-        // Then
-        assert(selectedCategory == WhitelistRepository.Category.OWN)
-    }
-
-    // ========== Edge Case Tests ==========
-
-    @Test
-    fun whitelistEntryCard_handlesNullDeviceName() {
-        // Given
-        val entryWithoutName =
-            testEntry1.copy(
-                device = testDevice1.copy(name = null),
-            )
-
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                WhitelistEntryCard(
-                    entry = entryWithoutName,
-                    onClick = {},
-                    onDeleteClick = {},
-                )
-            }
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("My Phone").assertIsDisplayed()
-        composeTestRule.onNodeWithText("AA:BB:CC:DD:EE:FF").assertIsDisplayed()
-    }
-
-    @Test
-    fun whitelistEntryCard_handlesNullNotes() {
-        // Given
-        val entryWithoutNotes =
-            testEntry1.copy(
-                entry = testEntry1.entry.copy(notes = null),
-            )
-
-        composeTestRule.setContent {
-            BleTrackerTheme {
-                WhitelistEntryCard(
-                    entry = entryWithoutNotes,
-                    onClick = {},
-                    onDeleteClick = {},
-                )
-            }
-        }
-
-        // Then
-        composeTestRule.onNodeWithText("My Phone").assertIsDisplayed()
-        // Notes should not be displayed
-        composeTestRule.onNodeWithText("Personal device").assertDoesNotExist()
     }
 }

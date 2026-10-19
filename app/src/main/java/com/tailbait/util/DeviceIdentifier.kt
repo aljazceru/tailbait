@@ -1,6 +1,7 @@
 package com.tailbait.util
 
 import android.os.ParcelUuid
+import com.tailbait.algorithm.TrackerServiceDetector
 import timber.log.Timber
 
 /**
@@ -15,7 +16,7 @@ import timber.log.Timber
  * ## Key Detection Capabilities
  * - Samsung SmartTag via Service UUID 0xFD5A
  * - Tile via Service UUID 0xFEED
- * - Google Fast Pair via Service UUID 0xFE2C
+ * - Find Hub via validated FEAA service-data frames (not FE2C Fast Pair)
  * - Standard BLE device types via Appearance values
  */
 object DeviceIdentifier {
@@ -26,15 +27,11 @@ object DeviceIdentifier {
     object ServiceUuid {
         // Tracker-specific Service UUIDs (CRITICAL for detection)
         const val SAMSUNG_SMARTTAG = "0000FD5A-0000-1000-8000-00805F9B34FB"
-        const val SAMSUNG_SMARTTAG_SHORT = "FD5A"
         const val TILE = "0000FEED-0000-1000-8000-00805F9B34FB"
-        const val TILE_SHORT = "FEED"
         const val TILE_SECOND = "0000FEEC-0000-1000-8000-00805F9B34FB"
-        const val TILE_SECOND_SHORT = "FEEC"
 
         // Google Fast Pair (for detecting Google-compatible devices)
         const val GOOGLE_FAST_PAIR = "0000FE2C-0000-1000-8000-00805F9B34FB"
-        const val GOOGLE_FAST_PAIR_SHORT = "FE2C"
 
         // Camera glasses: Oculus VR service, advertised by Ray-Ban Meta (zuckoff.app signal)
         const val META_OCULUS = "0000FD5F-0000-1000-8000-00805F9B34FB"
@@ -67,17 +64,6 @@ object DeviceIdentifier {
         // Audio
         const val AUDIO_STREAM = "0000184E-0000-1000-8000-00805F9B34FB"
     }
-
-    /**
-     * Known tracker service UUIDs for quick lookup.
-     */
-    private val trackerServiceUuids =
-        setOf(
-            ServiceUuid.SAMSUNG_SMARTTAG.lowercase(),
-            ServiceUuid.TILE.lowercase(),
-            // Tile's second SIG-assigned service UUID
-            ServiceUuid.TILE_SECOND.lowercase(),
-        )
 
     /**
      * BLE chipset/module manufacturer IDs that shouldn't be displayed to users.
@@ -119,16 +105,6 @@ object DeviceIdentifier {
     fun isChipsetManufacturer(manufacturerId: Int?): Boolean {
         return manufacturerId in chipsetManufacturerIds
     }
-
-    /**
-     * Short form of tracker service UUIDs (for matching 16-bit UUIDs).
-     */
-    private val trackerShortUuids =
-        setOf(
-            ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase(),
-            ServiceUuid.TILE_SHORT.lowercase(),
-            ServiceUuid.TILE_SECOND_SHORT.lowercase(),
-        )
 
     // ============================================================================
     // BLE APPEARANCE VALUES (Bluetooth SIG Standard)
@@ -276,27 +252,22 @@ object DeviceIdentifier {
      * @return True if device is identified as a tracker via service UUID
      */
     fun isTrackerByServiceUuid(serviceUuids: List<ParcelUuid>?): Boolean {
-        if (serviceUuids.isNullOrEmpty()) return false
-
-        return serviceUuids.any { uuid ->
-            val uuidString = uuid.uuid.toString().lowercase()
-            val shortUuid = extractShortUuid(uuidString)
-
-            // Check full UUID
-            if (uuidString in trackerServiceUuids) {
-                Timber.d("Tracker detected via service UUID: $uuidString")
-                return true
-            }
-
-            // Check short UUID
-            if (shortUuid != null && shortUuid in trackerShortUuids) {
-                Timber.d("Tracker detected via short service UUID: $shortUuid")
-                return true
-            }
-
-            false
-        }
+        return TrackerServiceDetector.isTracker(serviceUuids)
     }
+
+    private val serviceModels =
+        mapOf(
+            TrackerServiceDetector.SAMSUNG_SMARTTAG_SERVICE to "Samsung SmartTag",
+            TrackerServiceDetector.TILE_SERVICE to "Tile",
+            TrackerServiceDetector.TILE_SERVICE_ALT to "Tile",
+            TrackerServiceDetector.TILE_SERVICE_FEEC to "Tile",
+            TrackerServiceDetector.GOOGLE_FAST_PAIR_SERVICE to "Google Fast Pair Device",
+            java.util.UUID.fromString(ServiceUuid.META_OCULUS) to "Meta camera wearable (glasses/Quest)",
+            java.util.UUID.fromString(ServiceUuid.FLIPPER_1) to "Flipper Zero",
+            java.util.UUID.fromString(ServiceUuid.FLIPPER_2) to "Flipper Zero",
+            java.util.UUID.fromString(ServiceUuid.FLIPPER_3) to "Flipper Zero",
+            java.util.UUID.fromString(ServiceUuid.OPEN_DRONE_ID) to "Drone (Remote ID)",
+        )
 
     /**
      * Identify device model from service UUIDs.
@@ -307,31 +278,8 @@ object DeviceIdentifier {
     fun getDeviceModelFromServiceUuid(serviceUuids: List<ParcelUuid>?): String? {
         if (serviceUuids.isNullOrEmpty()) return null
 
-        val models =
-            mapOf(
-                ServiceUuid.SAMSUNG_SMARTTAG.lowercase() to "Samsung SmartTag",
-                ServiceUuid.TILE.lowercase() to "Tile",
-                ServiceUuid.TILE_SECOND.lowercase() to "Tile",
-                ServiceUuid.GOOGLE_FAST_PAIR.lowercase() to "Google Fast Pair Device",
-                ServiceUuid.META_OCULUS.lowercase() to "Meta camera wearable (glasses/Quest)",
-                ServiceUuid.FLIPPER_1.lowercase() to "Flipper Zero",
-                ServiceUuid.FLIPPER_2.lowercase() to "Flipper Zero",
-                ServiceUuid.FLIPPER_3.lowercase() to "Flipper Zero",
-                ServiceUuid.OPEN_DRONE_ID.lowercase() to "Drone (Remote ID)",
-            )
-        val shortModels =
-            mapOf(
-                ServiceUuid.SAMSUNG_SMARTTAG_SHORT.lowercase() to "Samsung SmartTag",
-                ServiceUuid.TILE_SHORT.lowercase() to "Tile",
-                ServiceUuid.TILE_SECOND_SHORT.lowercase() to "Tile",
-                ServiceUuid.GOOGLE_FAST_PAIR_SHORT.lowercase() to "Google Fast Pair Device",
-                ServiceUuid.META_OCULUS_SHORT.lowercase() to "Meta camera wearable (glasses/Quest)",
-            )
-
         for (uuid in serviceUuids) {
-            val uuidString = uuid.uuid.toString().lowercase()
-            models[uuidString]?.let { return it }
-            extractShortUuid(uuidString)?.let { shortModels[it] }?.let { return it }
+            serviceModels[uuid.uuid]?.let { return it }
         }
 
         return null
@@ -342,6 +290,7 @@ object DeviceIdentifier {
      */
     fun getDeviceTypeFromServiceUuids(serviceUuids: List<ParcelUuid>?): ManufacturerDataParser.DeviceType? {
         if (serviceUuids.isNullOrEmpty()) return null
+        if (isTrackerByServiceUuid(serviceUuids)) return ManufacturerDataParser.DeviceType.TRACKER
 
         for (uuid in serviceUuids) {
             val uuidString = uuid.uuid.toString().lowercase()
@@ -350,8 +299,6 @@ object DeviceIdentifier {
             // First-match-wins per UUID, in this order
             val type =
                 when {
-                    // Tracker UUIDs (SmartTag FD5A, Tile FEED/FEEC)
-                    isTrackerByServiceUuid(listOf(uuid)) -> ManufacturerDataParser.DeviceType.TRACKER
                     // Camera glasses (Ray-Ban Meta advertise the Oculus VR service)
                     shortUuid == ServiceUuid.META_OCULUS_SHORT.lowercase() ||
                         uuidString == ServiceUuid.META_OCULUS.lowercase() -> ManufacturerDataParser.DeviceType.CAMERA_GLASSES
@@ -382,7 +329,7 @@ object DeviceIdentifier {
      */
     private fun extractShortUuid(fullUuid: String): String? {
         // Check if it's a standard Bluetooth UUID
-        if (fullUuid.endsWith("-0000-1000-8000-00805f9b34fb")) {
+        if (fullUuid.startsWith("0000") && fullUuid.endsWith("-0000-1000-8000-00805f9b34fb")) {
             val shortPart = fullUuid.substring(4, 8)
             return shortPart.lowercase()
         }
@@ -430,7 +377,7 @@ object DeviceIdentifier {
      * Perform comprehensive device identification using all available signals.
      *
      * Priority order:
-     * 1. Service UUIDs (highest - most reliable for trackers)
+     * 1. Exact tracker service UUIDs and validated Find Hub service data
      * 2. Manufacturer data (Apple Continuity, known trackers)
      * 3. BLE Appearance (standard category)
      * 4. Device name patterns (lowest priority)
@@ -440,6 +387,7 @@ object DeviceIdentifier {
      * @param serviceUuids List of advertised service UUIDs
      * @param appearance BLE appearance value
      * @param deviceName Advertised device name
+     * @param serviceData Service payloads without the UUID or AD type/length bytes
      * @return Comprehensive identification result
      */
     @Suppress("CyclomaticComplexMethod")
@@ -449,6 +397,7 @@ object DeviceIdentifier {
         serviceUuids: List<ParcelUuid>?,
         appearance: Int?,
         deviceName: String?,
+        serviceData: Map<ParcelUuid, ByteArray> = emptyMap(),
     ): IdentificationResult {
         // Track the best identification
         var bestType = ManufacturerDataParser.DeviceType.UNKNOWN
@@ -477,42 +426,49 @@ object DeviceIdentifier {
         var confidence = 0.0f
         var method = "NONE"
 
-        // 1. SERVICE UUID ANALYSIS (highest priority for trackers)
-        if (!serviceUuids.isNullOrEmpty()) {
-            if (isTrackerByServiceUuid(serviceUuids)) {
-                isTracker = true
-                bestType = ManufacturerDataParser.DeviceType.TRACKER
-                bestModel = getDeviceModelFromServiceUuid(serviceUuids)
-                confidence = 0.95f
-                method = "SERVICE_UUID"
-
-                // Set manufacturer based on detected model (override if not already known)
-                when (bestModel) {
-                    "Samsung SmartTag" -> {
-                        if (resolvedManufacturerId == null) resolvedManufacturerId = ManufacturerDataParser.ManufacturerId.SAMSUNG
-                        if (manufacturerName == null) manufacturerName = "Samsung"
-                    }
-                    "Tile" -> {
-                        if (resolvedManufacturerId == null) resolvedManufacturerId = ManufacturerDataParser.ManufacturerId.TILE
-                        if (manufacturerName == null) manufacturerName = "Tile"
-                    }
+        // 1. VALIDATED SERVICE EVIDENCE (highest priority for trackers)
+        val serviceDetection = TrackerServiceDetector.detectTracker(serviceUuids, serviceData)
+        if (serviceDetection.isTracker) {
+            isTracker = true
+            bestType = ManufacturerDataParser.DeviceType.TRACKER
+            confidence = serviceDetection.confidence
+            manufacturerName = serviceDetection.manufacturerName
+            method =
+                if (serviceDetection.trackerType == TrackerServiceDetector.TrackerType.GOOGLE_FIND_MY_DEVICE) {
+                    "SERVICE_DATA"
+                } else {
+                    "SERVICE_UUID"
                 }
-            } else {
-                // Check for other device types via service UUID
-                getDeviceTypeFromServiceUuids(serviceUuids)?.let { type ->
-                    if (type != ManufacturerDataParser.DeviceType.UNKNOWN) {
-                        bestType = type
-                        confidence = 0.75f
-                        method = "SERVICE_UUID"
+            bestModel =
+                when (serviceDetection.trackerType) {
+                    TrackerServiceDetector.TrackerType.SAMSUNG_SMARTTAG -> "Samsung SmartTag"
+                    TrackerServiceDetector.TrackerType.TILE -> "Tile"
+                    TrackerServiceDetector.TrackerType.GOOGLE_FIND_MY_DEVICE -> "Find Hub Tracker"
+                    else -> null
+                }
+            if (resolvedManufacturerId == null) {
+                resolvedManufacturerId =
+                    when (serviceDetection.trackerType) {
+                        TrackerServiceDetector.TrackerType.SAMSUNG_SMARTTAG -> ManufacturerDataParser.ManufacturerId.SAMSUNG
+                        TrackerServiceDetector.TrackerType.TILE -> ManufacturerDataParser.ManufacturerId.TILE
+                        TrackerServiceDetector.TrackerType.GOOGLE_FIND_MY_DEVICE -> ManufacturerDataParser.ManufacturerId.GOOGLE
+                        else -> null
                     }
+            }
+        } else {
+            getDeviceTypeFromServiceUuids(serviceUuids)?.let { type ->
+                if (type != ManufacturerDataParser.DeviceType.UNKNOWN) {
+                    bestType = type
+                    confidence = 0.75f
+                    method = "SERVICE_UUID"
                 }
             }
         }
 
         // 2. MANUFACTURER DATA ANALYSIS
         // Use the overload that accepts manufacturer ID separately (from sparse array key)
-        if (resolvedManufacturerId != null) {
-            ManufacturerDataParser.parseManufacturerData(resolvedManufacturerId, manufacturerData)?.let { info ->
+        if (manufacturerId != null) {
+            ManufacturerDataParser.parseManufacturerData(manufacturerId, manufacturerData)?.let { info ->
                 // Update manufacturer name if we got a better one
                 if (manufacturerName == null && info.manufacturerName != null &&
                     !info.manufacturerName.startsWith("Unknown")
@@ -521,8 +477,8 @@ object DeviceIdentifier {
                 }
                 appleContinuityType = info.appleContinuityType
 
-                // Update if manufacturer data gives higher confidence
-                if (info.identificationConfidence > confidence) {
+                // Generic manufacturer classifications cannot replace validated service evidence.
+                if (!serviceDetection.isTracker && info.identificationConfidence > confidence) {
                     bestType = info.deviceType
                     bestModel = info.deviceModel
                     isTracker = isTracker || info.isTracker

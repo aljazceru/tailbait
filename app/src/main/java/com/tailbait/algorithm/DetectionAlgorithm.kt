@@ -1,5 +1,6 @@
 package com.tailbait.algorithm
 
+import com.tailbait.data.database.entities.DeviceLocationRecord
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.model.DetectionResult
@@ -107,20 +108,8 @@ class DetectionAlgorithm
             // Minimum threat score to generate an alert (0.5 = 50%)
             private const val MIN_THREAT_SCORE_FOR_ALERT = 0.5
 
-            // Weak link discount factor
-            // Weak links are based on circumstantial evidence (temporal correlation, RSSI similarity)
-            // and could be wrong in crowded areas. We discount the threat score by this amount
-            // for the proportion of weak links.
-            //
-            // Example: If 50% of linked devices are weak-linked, apply 15% discount (0.5 * 0.3)
-            private const val WEAK_LINK_DISCOUNT_FACTOR = 0.3
-
             // Only consider device records from the last N days for detection
             private const val DETECTION_WINDOW_DAYS = 3L
-
-            // Radius for clustering nearby locations into a single logical place.
-            // GPS points within this radius are considered the same area (e.g., home).
-            private const val CLUSTER_RADIUS_METERS = 100.0
 
             // Tag for logging
             private const val TAG = "DetectionAlgorithm"
@@ -184,40 +173,30 @@ class DetectionAlgorithm
                             !isWhitelisted
                         }
 
-                    if (nonWhitelistedDevices.isEmpty()) {
-                        val elapsedTime = System.currentTimeMillis() - startTime
-                        Timber.tag(TAG).i("Detection complete: 0 alerts (all devices whitelisted) in ${elapsedTime}ms")
-                        return@withContext emptyList()
-                    }
-
-                    // Step 5: Load user location history AND movement path for correlation
-                    // userLocations (Places) provides context, userPaths scoped to detection window
-                    val userLocations = locationRepository.getAllLocations().first()
-                    val userPaths = locationRepository.getUserPathSince(sinceTimestamp)
+                    // Scope context to the same observation window as device evidence.
+                    val userPaths =
+                        locationRepository.getUserPathSince(sinceTimestamp).filter { it.timestamp >= sinceTimestamp }
+                    val pathLocationIds = userPaths.map { it.locationId }.toSet()
+                    val userLocations =
+                        locationRepository.getAllLocations().first()
+                            .filter { it.timestamp >= sinceTimestamp || it.id in pathLocationIds }
                     Timber.tag(
                         TAG,
                     ).d(
                         "Loaded ${userLocations.size} user locations and ${userPaths.size} path points for correlation analysis",
                     )
 
-                    // Step 6: Batch load locations and device records for all devices concurrently
-                    // Then scope to the detection window — the candidate query uses sinceTimestamp,
-                    // but the location/record queries load all history which would inflate scores.
+                    // Batch-load only eligible observations, then resolve their place coordinates.
                     val deviceDataMap =
                         coroutineScope {
                             nonWhitelistedDevices.map { device ->
                                 async {
-                                    val allRecords =
+                                    val records =
                                         deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(
                                             device.id,
-                                        )
-                                    val windowRecords = allRecords.filter { it.timestamp >= sinceTimestamp }
-                                    val windowLocationIds = windowRecords.map { it.locationId }.toSet()
-
-                                    val allLocations = getLocationsForDevice(device.id)
-                                    val windowLocations = allLocations.filter { it.id in windowLocationIds }
-
-                                    device.id to Pair(windowLocations, windowRecords)
+                                            sinceTimestamp,
+                                        ).filter { it.timestamp >= sinceTimestamp && it.deviceId !in whitelistedDeviceIds }
+                                    device.id to Pair(getLocationsForDevice(device.id, records), records)
                                 }
                             }.awaitAll().toMap()
                         }
@@ -225,31 +204,21 @@ class DetectionAlgorithm
                     // Step 7: Analyze each potentially suspicious device with ENHANCED scoring
                     val results = mutableListOf<DetectionResult>()
 
-                    for (device in nonWhitelistedDevices) {
-                        val (rawLocations, deviceRecords) = deviceDataMap[device.id] ?: continue
-
-                        // Check if this is the user's own phone / companion device
-                        if (isCompanionDevice(rawLocations, userLocations, device)) {
-                            Timber.tag(TAG).d(
-                                "Skipping companion device ${device.address} " +
-                                    "(${device.name}, RSSI ${device.highestRssi}, " +
-                                    "at ${rawLocations.size}/${userLocations.size} user locations)",
-                            )
-                            continue
-                        }
+                    for (candidate in nonWhitelistedDevices) {
+                        val (rawLocations, deviceRecords) = deviceDataMap[candidate.id] ?: continue
 
                         // Cluster nearby locations to collapse GPS drift / duplicate location IDs
-                        val locations = clusterLocations(rawLocations)
+                        val locations = clusterLocations(rawLocations, settings.minDetectionDistanceMeters)
                         if (locations.size < rawLocations.size) {
                             Timber.tag(TAG).d(
-                                "Device ${device.address}: clustered ${rawLocations.size} locations → ${locations.size}",
+                                "Device ${candidate.address}: clustered ${rawLocations.size} locations → ${locations.size}",
                             )
                         }
 
                         // Verify location count after clustering
                         if (locations.size < settings.alertThresholdCount) {
                             Timber.tag(TAG).w(
-                                "Device ${device.address} has only ${locations.size} locations, " +
+                                "Device ${candidate.address} has only ${locations.size} locations, " +
                                     "expected ${settings.alertThresholdCount}+",
                             )
                             continue
@@ -263,38 +232,22 @@ class DetectionAlgorithm
 
                         if (!hasSignificantDistance) {
                             Timber.tag(TAG).v(
-                                "Device ${device.address} has no significant distances " +
+                                "Device ${candidate.address} has no significant distances " +
                                     "(all < ${settings.minDetectionDistanceMeters}m)",
                             )
                             continue
                         }
 
-                        // Calculate ENHANCED threat score with movement correlation
-                        // This is the key improvement: analyze if device moves when user moves
-                        var threatScore =
+                        val device = deviceForScoring(candidate, deviceRecords, sinceTimestamp)
+                        val threatScore =
                             threatScoreCalculator.calculateEnhanced(
                                 device = device,
                                 locations = locations,
                                 distances = distances,
                                 deviceRecords = deviceRecords,
-                                _userLocations = userLocations,
+                                userLocations = userLocations,
                                 userPaths = userPaths,
                             )
-
-                        // Apply weak link discount
-                        // If this device's detection relies on weak-linked devices (temporal correlation only),
-                        // reduce the threat score since there's higher uncertainty about device identity
-                        val linkedDevices = deviceRepository.getLinkedDevices(device.id)
-                        val weakLinkDiscount = calculateWeakLinkDiscount(linkedDevices)
-                        if (weakLinkDiscount > 0.0) {
-                            val originalScore = threatScore
-                            threatScore *= (1.0 - weakLinkDiscount)
-                            Timber.tag(TAG).d(
-                                "Applied weak link discount: ${linkedDevices.size} linked devices, " +
-                                    "${(weakLinkDiscount * 100).toInt()}% discount, " +
-                                    "score ${"%.2f".format(originalScore)} → ${"%.2f".format(threatScore)}",
-                            )
-                        }
 
                         // Enhanced logging with Find My separated status
                         val findMyStatus = if (device.findMySeparated) " [SEPARATED FROM OWNER!]" else ""
@@ -312,6 +265,7 @@ class DetectionAlgorithm
                                     locations,
                                     distances,
                                     deviceRecords,
+                                    userLocations,
                                     userPaths,
                                 )
                             val result =
@@ -349,6 +303,7 @@ class DetectionAlgorithm
                             shadowAnalyzer.findSuspiciousShadows(
                                 minLocationCount = settings.alertThresholdCount,
                                 whitelistedIds = whitelistedDeviceIds,
+                                sinceTimestamp = sinceTimestamp,
                             )
 
                         for (shadowResult in shadowResults) {
@@ -362,32 +317,21 @@ class DetectionAlgorithm
                                 continue
                             }
 
-                            // Get locations for this representative device
-                            val rawLocations = getLocationsForDevice(device.id)
-
-                            // Apply same filters as main path: companion check + clustering
-                            if (isCompanionDevice(rawLocations, userLocations, device)) {
-                                Timber.tag(TAG).d(
-                                    "Shadow: skipping companion device ${device.address}",
-                                )
-                                continue
-                            }
-
-                            val locations = clusterLocations(rawLocations)
+                            val locations = clusterLocations(shadowResult.locations, settings.minDetectionDistanceMeters)
                             if (locations.size < settings.alertThresholdCount) continue
 
                             val distances = calculateDistancesBetweenLocations(locations)
                             if (distances.none { it >= settings.minDetectionDistanceMeters }) continue
 
                             // Compute base threat score, then blend with shadow persistence score
-                            val deviceRecords = deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(device.id)
+                            val deviceRecords = shadowResult.records
                             val baseThreatScore =
                                 threatScoreCalculator.calculateEnhanced(
                                     device = device,
                                     locations = locations,
                                     distances = distances,
                                     deviceRecords = deviceRecords,
-                                    _userLocations = userLocations,
+                                    userLocations = userLocations,
                                     userPaths = userPaths,
                                 )
 
@@ -401,6 +345,7 @@ class DetectionAlgorithm
                                         locations,
                                         distances,
                                         deviceRecords,
+                                        userLocations,
                                         userPaths,
                                     )
                                 val result =
@@ -443,67 +388,44 @@ class DetectionAlgorithm
                 }
             }
 
-        /**
-         * Get all locations where a device was detected, INCLUDING linked devices.
-         *
-         * This is the fix for the correlation bug: we must fetch locations for
-         * the primary device AND any devices linked to it (e.g. via MAC rotation).
-         *
-         * @param deviceId Device ID
-         * @return List of locations where device was seen
-         */
-        private suspend fun getLocationsForDevice(deviceId: Long): List<Location> {
-            return locationRepository.getLocationsForDeviceWithLinked(deviceId)
+        private suspend fun getLocationsForDevice(
+            deviceId: Long,
+            records: List<DeviceLocationRecord>,
+        ): List<Location> {
+            val locationIds = records.map { it.locationId }.toSet()
+            return locationRepository.getLocationsForDeviceWithLinked(deviceId).filter { it.id in locationIds }
         }
 
-        /**
-         * Check if a device is likely the user's own phone or a constant companion device.
-         *
-         * A companion device is one that:
-         * - Is present at >= 80% of the user's known locations (goes everywhere the user goes)
-         * - Has been physically very close (highest RSSI >= -50, i.e., within 1-2m)
-         * - Has enough data to be confident (>= 5 user locations)
-         *
-         * Self-correcting: if user visits a new location without the device, coverage
-         * drops below 80% and it gets evaluated normally again.
-         *
-         * @param deviceLocations Locations where the device was seen
-         * @param userLocations All user locations
-         * @param device The device to check
-         * @return True if device appears to be the user's own/companion device
-         */
-        private fun isCompanionDevice(
-            deviceLocations: List<Location>,
-            userLocations: List<Location>,
+        private suspend fun deviceForScoring(
             device: ScannedDevice,
-        ): Boolean {
-            // Need enough user location data to be confident
-            if (userLocations.size < 5) return false
-
-            // Check signal strength - companion must have been very close
-            val highestRssi = device.highestRssi ?: return false
-            if (highestRssi < -50) return false
-
-            // Check location coverage - companion should be at most of user's locations
-            // Count how many user locations have a device location within 100m
-            val coveredCount =
-                userLocations.count { userLoc ->
-                    deviceLocations.any { devLoc ->
-                        DistanceCalculator.calculateDistance(userLoc, devLoc) <= CLUSTER_RADIUS_METERS
+            records: List<DeviceLocationRecord>,
+            sinceTimestamp: Long,
+        ): ScannedDevice {
+            val rootId = device.linkedDeviceId?.takeIf { device.linkStrength == LinkStrength.STRONG.name } ?: device.id
+            val recordDeviceIds = records.map { it.deviceId }.toSet()
+            val latestState =
+                (deviceRepository.getLinkedDevices(rootId).asSequence() + sequenceOf(device))
+                    .filter {
+                        it.id in recordDeviceIds &&
+                            (it.id == rootId || (it.linkedDeviceId == rootId && it.linkStrength == LinkStrength.STRONG.name)) &&
+                            it.findMyStatus != null && (it.findMyStatusTimestamp ?: Long.MIN_VALUE) >= sinceTimestamp
                     }
-                }
-            val coverage = coveredCount.toDouble() / userLocations.size
-
-            return coverage >= 0.8
+                    .maxByOrNull { it.findMyStatusTimestamp ?: Long.MIN_VALUE }
+            // Keep the canonical identity, but never score stale root state or lifetime signal peaks.
+            return device.copy(
+                findMyStatus = latestState?.findMyStatus,
+                findMyStatusTimestamp = latestState?.findMyStatusTimestamp,
+                findMySeparated = latestState?.findMySeparated ?: false,
+                highestRssi = records.maxOfOrNull { it.rssi },
+            )
         }
 
         /**
          * Cluster nearby locations into logical places.
          *
-         * Uses greedy clustering: iterate locations sorted by timestamp, assign each
-         * to the nearest existing cluster centroid within [radiusMeters], or create a
-         * new cluster. Returns one representative location per cluster (the first
-         * location assigned).
+         * Uses greedy clustering: iterate valid fixes sorted by timestamp and keep a
+         * new place only when its uncertainty circle is separated from every existing
+         * representative by at least [radiusMeters].
          *
          * This prevents GPS drift and location dedup failures from inflating the
          * location count for devices that are actually stationary.
@@ -514,28 +436,23 @@ class DetectionAlgorithm
          */
         private fun clusterLocations(
             locations: List<Location>,
-            radiusMeters: Double = CLUSTER_RADIUS_METERS,
+            radiusMeters: Double,
         ): List<Location> {
-            if (locations.size <= 1) return locations
+            val sorted = locations.filter { it.accuracy.isFinite() && it.accuracy > 0f }.sortedBy { it.timestamp }
+            val clusters = mutableListOf<Location>()
 
-            val sorted = locations.sortedBy { it.timestamp }
-            // Each cluster is represented by its first (centroid) location
-            val clusters = mutableListOf(sorted.first())
-
-            for (i in 1 until sorted.size) {
-                val loc = sorted[i]
-                val nearestCluster =
-                    clusters.minByOrNull {
-                        DistanceCalculator.calculateDistance(loc, it)
+            for (location in sorted) {
+                val overlapsExistingPlace =
+                    clusters.any {
+                        val separation =
+                            DistanceCalculator.minimumSeparationMeters(
+                                DistanceCalculator.calculateDistance(location, it),
+                                location.accuracy,
+                                it.accuracy,
+                            )
+                        separation <= 0.0 || separation < radiusMeters
                     }
-                val distanceToNearest =
-                    nearestCluster?.let {
-                        DistanceCalculator.calculateDistance(loc, it)
-                    } ?: Double.MAX_VALUE
-
-                if (distanceToNearest > radiusMeters) {
-                    clusters.add(loc)
-                }
+                if (!overlapsExistingPlace) clusters.add(location)
             }
 
             return clusters
@@ -544,9 +461,8 @@ class DetectionAlgorithm
         /**
          * Calculate distances between all pairs of locations.
          *
-         * Uses the Haversine formula (via DistanceCalculator) to compute great-circle
-         * distances between all location pairs. This generates a list of all pairwise
-         * distances, which is used for:
+         * Subtracts both fixes' accuracy radii from the great-circle distance.
+         * This generates conservative pairwise separation bounds, which are used for:
          * - Checking if locations are sufficiently far apart
          * - Finding maximum distance (for threat scoring)
          * - Computing average distance (for threat scoring)
@@ -563,11 +479,10 @@ class DetectionAlgorithm
             for (i in locations.indices) {
                 for (j in i + 1 until locations.size) {
                     val distance =
-                        DistanceCalculator.calculateDistance(
-                            locations[i].latitude,
-                            locations[i].longitude,
-                            locations[j].latitude,
-                            locations[j].longitude,
+                        DistanceCalculator.minimumSeparationMeters(
+                            DistanceCalculator.calculateDistance(locations[i], locations[j]),
+                            locations[i].accuracy,
+                            locations[j].accuracy,
                         )
                     distances.add(distance)
                 }
@@ -711,55 +626,6 @@ class DetectionAlgorithm
         }
 
         /**
-         * Calculate the discount factor to apply for weak-linked devices.
-         *
-         * When devices are linked via temporal correlation (weak links), there's a higher
-         * chance the links are incorrect, especially in crowded areas where multiple
-         * similar devices might exist. This method calculates a discount factor based
-         * on the proportion of weak links.
-         *
-         * ## Link Strength Categories
-         * - STRONG: Based on stable identifiers (fingerprint, device name match)
-         *   High confidence - no discount applied
-         * - WEAK: Based on circumstantial evidence (temporal proximity, RSSI similarity)
-         *   Lower confidence - discount applied
-         *
-         * ## Discount Calculation
-         * The discount is proportional to the ratio of weak-linked devices:
-         * discount = (weakCount / totalLinked) * WEAK_LINK_DISCOUNT_FACTOR
-         *
-         * Example with WEAK_LINK_DISCOUNT_FACTOR = 0.3:
-         * - 0 linked devices: no discount (0%)
-         * - 5 linked, all STRONG: no discount (0%)
-         * - 5 linked, 2 WEAK: 12% discount (2/5 * 0.3)
-         * - 5 linked, all WEAK: 30% discount (5/5 * 0.3)
-         *
-         * @param linkedDevices List of devices linked to the primary device
-         * @return Discount factor to apply (0.0 to WEAK_LINK_DISCOUNT_FACTOR)
-         */
-        private fun calculateWeakLinkDiscount(linkedDevices: List<ScannedDevice>): Double {
-            // Primary device (id matches, not linked) doesn't have linkStrength
-            // Only consider devices that are actually linked (have linkedDeviceId set)
-            val actuallyLinkedDevices = linkedDevices.filter { it.linkedDeviceId != null }
-
-            if (actuallyLinkedDevices.isEmpty()) {
-                return 0.0 // No linked devices, no discount
-            }
-
-            // Count weak links
-            val weakLinkCount =
-                actuallyLinkedDevices.count {
-                    it.linkStrength == LinkStrength.WEAK.name
-                }
-
-            // Calculate proportion of weak links
-            val weakProportion = weakLinkCount.toDouble() / actuallyLinkedDevices.size
-
-            // Apply discount factor
-            return weakProportion * WEAK_LINK_DISCOUNT_FACTOR
-        }
-
-        /**
          * Run detection for a specific device (for testing/debugging).
          *
          * This method allows running the detection algorithm on a single device
@@ -785,26 +651,19 @@ class DetectionAlgorithm
                         return@withContext null
                     }
 
-                    // Get device by ID directly (optimized - no need to load all devices)
-                    val device =
+                    val candidate =
                         deviceRepository.getDeviceById(deviceId)
                             ?: run {
                                 Timber.tag(TAG).w("Device $deviceId not found")
                                 return@withContext null
                             }
 
-                    // Get locations
-                    val rawLocations = getLocationsForDevice(deviceId)
-
-                    // Check if this is the user's own phone / companion device
-                    val userLocations = locationRepository.getAllLocations().first()
-                    if (isCompanionDevice(rawLocations, userLocations, device)) {
-                        Timber.tag(TAG).d("Device $deviceId is a companion device, skipping")
-                        return@withContext null
-                    }
-
-                    // Cluster nearby ones
-                    val locations = clusterLocations(rawLocations)
+                    val sinceTimestamp = System.currentTimeMillis() - (DETECTION_WINDOW_DAYS * 24 * 60 * 60 * 1000L)
+                    val deviceRecords =
+                        deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(deviceId, sinceTimestamp)
+                            .filter { it.timestamp >= sinceTimestamp && it.deviceId !in whitelistedDeviceIds }
+                    val rawLocations = getLocationsForDevice(deviceId, deviceRecords)
+                    val locations = clusterLocations(rawLocations, settings.minDetectionDistanceMeters)
                     if (locations.size < rawLocations.size) {
                         Timber.tag(TAG).d(
                             "Device $deviceId: clustered ${rawLocations.size} locations → ${locations.size}",
@@ -830,30 +689,22 @@ class DetectionAlgorithm
                         return@withContext null
                     }
 
-                    // Load data for enhanced scoring (userLocations already loaded above)
-                    val deviceRecords = deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(deviceId)
-                    val userPaths = locationRepository.getUserPathSince(0)
-
-                    // Calculate ENHANCED threat score with movement correlation
-                    var threatScore =
+                    val userPaths =
+                        locationRepository.getUserPathSince(sinceTimestamp).filter { it.timestamp >= sinceTimestamp }
+                    val pathLocationIds = userPaths.map { it.locationId }.toSet()
+                    val userLocations =
+                        locationRepository.getAllLocations().first()
+                            .filter { it.timestamp >= sinceTimestamp || it.id in pathLocationIds }
+                    val device = deviceForScoring(candidate, deviceRecords, sinceTimestamp)
+                    val threatScore =
                         threatScoreCalculator.calculateEnhanced(
                             device = device,
                             locations = locations,
                             distances = distances,
                             deviceRecords = deviceRecords,
-                            _userLocations = userLocations,
+                            userLocations = userLocations,
                             userPaths = userPaths,
                         )
-
-                    // Apply weak link discount (same logic as runDetection)
-                    val linkedDevices = deviceRepository.getLinkedDevices(deviceId)
-                    val weakLinkDiscount = calculateWeakLinkDiscount(linkedDevices)
-                    if (weakLinkDiscount > 0.0) {
-                        threatScore *= (1.0 - weakLinkDiscount)
-                        Timber.tag(TAG).d(
-                            "Applied weak link discount: ${(weakLinkDiscount * 100).toInt()}% discount",
-                        )
-                    }
 
                     if (threatScore < MIN_THREAT_SCORE_FOR_ALERT) {
                         Timber.tag(TAG).d("Device $deviceId threat score too low: $threatScore")
@@ -866,6 +717,7 @@ class DetectionAlgorithm
                             locations,
                             distances,
                             deviceRecords,
+                            userLocations,
                             userPaths,
                         )
                     DetectionResult(

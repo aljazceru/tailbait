@@ -10,17 +10,23 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,7 +34,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -49,11 +57,17 @@ import javax.inject.Singleton
  */
 @Singleton
 class CompanionLinkManager
-    @Inject
-    constructor(
-        @ApplicationContext private val context: Context,
+    internal constructor(
+        private val context: Context,
         private val companionRepository: com.tailbait.data.repository.CompanionDeviceRepository,
+        private val scope: CoroutineScope,
     ) {
+        @Inject
+        constructor(
+            @ApplicationContext context: Context,
+            companionRepository: com.tailbait.data.repository.CompanionDeviceRepository,
+        ) : this(context, companionRepository, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+
         sealed class State {
             data object Idle : State()
 
@@ -72,7 +86,6 @@ class CompanionLinkManager
             data class Error(val message: String) : State()
         }
 
-        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private var worker: Job? = null
 
         private val _state = MutableStateFlow<State>(State.Idle)
@@ -81,9 +94,24 @@ class CompanionLinkManager
         private val _records = MutableSharedFlow<CompanionProtocol.Record>(extraBufferCapacity = 4096)
         val records: SharedFlow<CompanionProtocol.Record> = _records.asSharedFlow()
 
-        private var adapter: BluetoothAdapter? = null
+        private val adapter: BluetoothAdapter? by lazy {
+            (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+        }
+
+        @Volatile
         private var gatt: BluetoothGatt? = null
+
+        @Volatile
         private var targetAddress: String? = null
+
+        private enum class Initialization { CONNECTING, DISCOVERY, MTU, DATA, STAT, READY }
+
+        private var initialization: Initialization? = null
+        private var pendingService: BluetoothGattService? = null
+        private var initializationTimeout: Job? = null
+        private var resyncScan: Pair<BluetoothLeScanner, ScanCallback>? = null
+        private var discoveryScan: Pair<BluetoothLeScanner, ScanCallback>? = null
+        private var discoveryTimeout: Job? = null
 
         @Volatile
         private var wantConnected = false
@@ -91,20 +119,30 @@ class CompanionLinkManager
         /** Periodic REQ_STATUS while connected (keeps mode/fw fresh). */
         private var statusTicker: Job? = null
 
+        @Synchronized
         fun start(address: String) {
+            if (targetAddress != address) {
+                stop()
+                failures = 0
+            }
             targetAddress = address
             wantConnected = true
             if (worker?.isActive == true) return
-            worker = scope.launch { runLoop() }
+            worker = scope.launch(start = CoroutineStart.LAZY) { runLoop() }
+            worker?.start()
         }
 
+        @Synchronized
         fun stop() {
             wantConnected = false
-            statusTicker?.cancel()
             worker?.cancel()
             worker = null
-            closeGatt()
+            val scan = resyncScan
+            resyncScan = null
+            scan?.let(::stopRadioScan)
+            stopScanningForCompanions()
             _state.value = State.Idle
+            closeGatt()
         }
 
         fun setMode(mode: Int) {
@@ -116,15 +154,23 @@ class CompanionLinkManager
         }
 
         // ------------------------------------------------------------------
+        @Volatile
         private var failures = 0
 
         private suspend fun runLoop() {
-            val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-            adapter = bm?.adapter
-            while (scope.isActive && wantConnected) {
-                val addr = targetAddress ?: return
-                if (adapter == null || adapter?.isEnabled != true) {
-                    _state.value = State.Error("Bluetooth off")
+            val owner = currentCoroutineContext().job
+            while (owner.isActive && wantConnected) {
+                val bluetoothEnabled =
+                    synchronized(this) {
+                        if (worker !== owner || !wantConnected || targetAddress == null) return
+                        (adapter?.isEnabled == true).also { enabled ->
+                            if (!enabled) {
+                                _state.value = State.Error("Bluetooth off")
+                                closeGatt()
+                            }
+                        }
+                    }
+                if (!bluetoothEnabled) {
                     delay(5000)
                     continue
                 }
@@ -139,9 +185,10 @@ class CompanionLinkManager
                         // (regenerated on reflash / NVS layout change). After
                         // repeated GATT failures re-resolve it by scanning for
                         // the companion service UUID and persist the new one.
-                        resyncAddress()
+                        resyncAddress(owner)
                     }
-                    connectDirect(addr)
+                    currentCoroutineContext().ensureActive()
+                    targetAddress?.let { connectDirect(it, owner) }
                     // GATT 133 storms: back off exponentially (concurrent BLE
                     // scanning on this radio makes immediate retries fail)
                     delay(minOf(30_000L, 1_000L shl minOf(failures, 5)))
@@ -152,26 +199,37 @@ class CompanionLinkManager
         }
 
         @SuppressLint("MissingPermission")
-        private fun connectDirect(address: String) {
-            val dev: BluetoothDevice? =
-                try {
-                    adapter?.getRemoteDevice(address)
-                } catch (_: IllegalArgumentException) {
-                    null
-                }
-            if (dev == null) {
-                _state.value = State.Error("Unknown companion $address")
-                return
-            }
+        @Synchronized
+        private fun connectDirect(
+            address: String,
+            owner: Job,
+        ) {
+            if (worker !== owner || !owner.isActive || !wantConnected || gatt != null) return
             _state.value = State.Connecting(address)
+            initialization = Initialization.CONNECTING
             try {
-                gatt = dev.connectGatt(context, false, gattCb, BluetoothDevice.TRANSPORT_LE)
-            } catch (e: SecurityException) {
-                _state.value = State.Error("No Bluetooth permission")
+                val device = adapter?.getRemoteDevice(address)
+                val connection = device?.connectGatt(context, false, gattCb, BluetoothDevice.TRANSPORT_LE)
+                if (connection == null) {
+                    failGatt("Could not connect to companion $address")
+                    return
+                }
+                gatt = connection
+                initializationTimeout =
+                    scope.launch(owner) {
+                        delay(INITIALIZATION_TIMEOUT_MS)
+                        synchronized(this@CompanionLinkManager) {
+                            if (gatt === connection && initialization != Initialization.READY) {
+                                failGatt("Companion initialization timed out")
+                            }
+                        }
+                    }
+            } catch (_: SecurityException) {
+                failGatt("No Bluetooth permission")
+            } catch (_: IllegalArgumentException) {
+                failGatt("Unknown companion $address")
             }
         }
-
-        private val resyncGate = Any()
 
         /**
          * Re-resolve the companion address by scanning for the service UUID.
@@ -179,54 +237,60 @@ class CompanionLinkManager
          * [targetAddress] and persists the new address to the registry.
          */
         @SuppressLint("MissingPermission")
-        private fun resyncAddress() {
-            synchronized(resyncGate) {
-                val scanner = adapter?.bluetoothLeScanner ?: return
-                val svc = UUID.fromString(CompanionProtocol.SERVICE_UUID)
-                // Written from the binder/main callback thread, polled here on IO
-                val found = java.util.concurrent.atomic.AtomicReference<String?>(null)
-                val cb =
-                    object : ScanCallback() {
-                        override fun onScanResult(
-                            cbType: Int,
-                            result: ScanResult,
-                        ) {
-                            found.set(result.device.address)
-                        }
+        private suspend fun resyncAddress(owner: Job) {
+            val scanner = adapter?.bluetoothLeScanner ?: return
+            val found = CompletableDeferred<String>()
+            val callback =
+                object : ScanCallback() {
+                    override fun onScanResult(
+                        callbackType: Int,
+                        result: ScanResult,
+                    ) {
+                        found.complete(result.device.address)
                     }
-                try {
+
+                    override fun onScanFailed(errorCode: Int) {
+                        found.completeExceptionally(IllegalStateException("Companion resync scan failed: $errorCode"))
+                    }
+                }
+            val scan = scanner to callback
+            try {
+                currentCoroutineContext().ensureActive()
+                synchronized(this) {
+                    if (worker !== owner || !owner.isActive || !wantConnected) return
+                    resyncScan = scan
                     scanner.startScan(
-                        listOf(ScanFilter.Builder().setServiceUuid(android.os.ParcelUuid(svc)).build()),
+                        listOf(ScanFilter.Builder().setServiceUuid(android.os.ParcelUuid(SERVICE_ID)).build()),
                         ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(),
-                        cb,
+                        callback,
                     )
-                } catch (_: SecurityException) {
+                }
+                val newAddress = withTimeoutOrNull(3_000) { found.await() }
+                if (newAddress == null) {
+                    Timber.w("companion resync scan found nothing")
                     return
                 }
-                val deadline = System.currentTimeMillis() + 3_000
-                while (found.get() == null && System.currentTimeMillis() < deadline) {
-                    Thread.sleep(200)
+                currentCoroutineContext().ensureActive()
+                val oldAddress =
+                    synchronized(this) {
+                        if (worker !== owner || !owner.isActive || !wantConnected) return
+                        targetAddress.also { targetAddress = newAddress }
+                    }
+                if (oldAddress != newAddress) {
+                    Timber.i("companion address changed: $oldAddress -> $newAddress (re-pairing)")
+                    companionRepository.pair(newAddress, "TailBait-Companion")
+                    currentCoroutineContext().ensureActive()
+                    if (oldAddress != null) companionRepository.forget(oldAddress)
                 }
-                try {
-                    scanner.stopScan(cb)
-                } catch (_: Exception) {
-                }
-                if (found.get() == null) Timber.w("companion resync scan found nothing")
-                found.get()?.let { newAddr ->
-                    if (newAddr != targetAddress) {
-                        Timber.i("companion address changed: $targetAddress -> $newAddr (re-pairing)")
-                        val old = targetAddress
-                        targetAddress = newAddr
-                        scope.launch {
-                            try {
-                                if (old != null) companionRepository.forget(old)
-                            } catch (_: Exception) {
-                            }
-                            try {
-                                companionRepository.pair(newAddr, "TailBait-Companion")
-                            } catch (_: Exception) {
-                            }
-                        }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "companion address resync failed")
+            } finally {
+                synchronized(this) {
+                    if (resyncScan === scan) {
+                        resyncScan = null
+                        stopRadioScan(scan)
                     }
                 }
             }
@@ -234,53 +298,82 @@ class CompanionLinkManager
 
         /** Scan for companions advertising our service — used by pairing UI. */
         @SuppressLint("MissingPermission")
+        @Synchronized
         fun scanForCompanions(
             timeoutSeconds: Int = 15,
             onFound: (ScanResult) -> Unit,
             onDone: () -> Unit,
         ) {
+            stopScanningForCompanions()
             val scanner = adapter?.bluetoothLeScanner
             if (scanner == null) {
                 onDone()
                 return
             }
-            val svc = UUID.fromString(CompanionProtocol.SERVICE_UUID)
-            val filters =
-                listOf(
-                    ScanFilter.Builder().setServiceUuid(android.os.ParcelUuid(svc)).build(),
-                )
-            val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-            val cb =
+            val callback =
                 object : ScanCallback() {
                     override fun onScanResult(
-                        cbType: Int,
+                        callbackType: Int,
                         result: ScanResult,
-                    ) = onFound(result)
+                    ) {
+                        synchronized(this@CompanionLinkManager) {
+                            if (discoveryScan?.second === this) onFound(result)
+                        }
+                    }
 
-                    override fun onScanFailed(code: Int) {
-                        Timber.w("companion scan failed: $code")
-                        onDone()
+                    override fun onScanFailed(errorCode: Int) {
+                        synchronized(this@CompanionLinkManager) {
+                            if (discoveryScan?.second !== this) return
+                            Timber.w("companion scan failed: $errorCode")
+                            stopScanningForCompanions()
+                            onDone()
+                        }
                     }
                 }
+            val scan = scanner to callback
+            discoveryScan = scan
             try {
-                scanner.startScan(filters, settings, cb)
+                scanner.startScan(
+                    listOf(ScanFilter.Builder().setServiceUuid(android.os.ParcelUuid(SERVICE_ID)).build()),
+                    ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(),
+                    callback,
+                )
             } catch (_: SecurityException) {
+                stopScanningForCompanions()
                 onDone()
                 return
             }
-            scope.launch {
-                delay(timeoutSeconds * 1000L)
-                try {
-                    scanner.stopScan(cb)
-                } catch (_: Exception) {
+            discoveryTimeout =
+                scope.launch {
+                    delay(timeoutSeconds * 1000L)
+                    synchronized(this@CompanionLinkManager) {
+                        if (discoveryScan === scan) {
+                            stopScanningForCompanions()
+                            onDone()
+                        }
+                    }
                 }
-                onDone()
+        }
+
+        @Synchronized
+        fun stopScanningForCompanions() {
+            discoveryTimeout?.cancel()
+            discoveryTimeout = null
+            val scan = discoveryScan
+            discoveryScan = null
+            scan?.let(::stopRadioScan)
+        }
+
+        @SuppressLint("MissingPermission")
+        private fun stopRadioScan(scan: Pair<BluetoothLeScanner, ScanCallback>) {
+            try {
+                scan.first.stopScan(scan.second)
+            } catch (e: Exception) {
+                Timber.w(e, "companion scan stop failed")
             }
         }
 
         // ------------------------------------------------------------------
-        private val cccdGate = Any()
-        private var statSubscribed = false
 
         private val gattCb =
             object : BluetoothGattCallback() {
@@ -289,23 +382,21 @@ class CompanionLinkManager
                     status: Int,
                     newState: Int,
                 ) {
-                    if (newState == BluetoothProfile.STATE_CONNECTED) {
-                        Timber.i("companion connected ($status)")
-                        failures = 0
-                        _state.value = State.Connected(g.device.address)
-                        scope.launch {
+                    synchronized(this@CompanionLinkManager) {
+                        if (!isCurrent(g)) return
+                        if (status != BluetoothGatt.GATT_SUCCESS || newState == BluetoothProfile.STATE_DISCONNECTED) {
+                            Timber.i("companion disconnected ($status)")
+                            failures++
+                            _state.value = State.Reconnecting(failures)
+                            closeGatt()
+                        } else if (newState == BluetoothProfile.STATE_CONNECTED && initialization == Initialization.CONNECTING) {
+                            initialization = Initialization.DISCOVERY
                             try {
-                                companionRepository.markConnected(g.device.address)
-                            } catch (_: Exception) {
+                                if (!g.discoverServices()) failGatt("Companion discovery rejected")
+                            } catch (_: SecurityException) {
+                                failGatt("No Bluetooth permission")
                             }
                         }
-                        g.discoverServices()
-                    } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                        Timber.i("companion disconnected ($status)")
-                        statSubscribed = false
-                        failures++
-                        closeGatt()
-                        if (wantConnected) _state.value = State.Reconnecting(failures)
                     }
                 }
 
@@ -313,66 +404,78 @@ class CompanionLinkManager
                     g: BluetoothGatt,
                     status: Int,
                 ) {
-                    val svc: BluetoothGattService =
-                        g.getService(UUID.fromString(CompanionProtocol.SERVICE_UUID))
-                            ?: run {
-                                Timber.w("companion service missing ($status)")
-                                g.disconnect()
-                                return
-                            }
-                    g.requestMtu(247)
-                    pendingSvc = svc
+                    synchronized(this@CompanionLinkManager) {
+                        if (!isCurrent(g) || initialization != Initialization.DISCOVERY) return
+                        if (status != BluetoothGatt.GATT_SUCCESS) {
+                            failGatt("Companion discovery failed ($status)")
+                            return
+                        }
+                        val service = g.getService(SERVICE_ID)
+                        if (service == null ||
+                            service.getCharacteristic(DATA_ID) == null ||
+                            service.getCharacteristic(STAT_ID) == null ||
+                            service.getCharacteristic(CTRL_ID) == null
+                        ) {
+                            failGatt("Companion service or required characteristic missing")
+                            return
+                        }
+                        pendingService = service
+                        initialization = Initialization.MTU
+                        try {
+                            if (!g.requestMtu(247)) failGatt("Companion MTU request rejected")
+                        } catch (_: SecurityException) {
+                            failGatt("No Bluetooth permission")
+                        }
+                    }
                 }
-
-                private var pendingSvc: BluetoothGattService? = null
 
                 override fun onMtuChanged(
                     g: BluetoothGatt,
                     mtu: Int,
                     status: Int,
                 ) {
-                    Timber.i("companion MTU=$mtu")
-                    val svc = pendingSvc ?: return
-                    val data = svc.getCharacteristic(UUID.fromString(CompanionProtocol.DATA_UUID)) ?: return
-                    try {
-                        g.setCharacteristicNotification(data, true)
-                        val d = data.getDescriptor(UUID.fromString(CompanionProtocol.CCCD_UUID))
-                        if (d != null) {
-                            d.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                            g.writeDescriptor(d)
+                    synchronized(this@CompanionLinkManager) {
+                        if (!isCurrent(g) || initialization != Initialization.MTU) return
+                        if (status != BluetoothGatt.GATT_SUCCESS || mtu < 23) {
+                            failGatt("Companion MTU negotiation failed ($status, $mtu)")
+                            return
                         }
-                    } catch (_: SecurityException) {
+                        Timber.i("companion MTU=$mtu")
+                        subscribe(g, DATA_ID, Initialization.DATA)
                     }
                 }
 
                 override fun onDescriptorWrite(
                     g: BluetoothGatt,
-                    d: BluetoothGattDescriptor,
+                    descriptor: BluetoothGattDescriptor,
                     status: Int,
                 ) {
-                    val chr = d.characteristic
-                    if (chr.uuid.toString() == CompanionProtocol.DATA_UUID && !statSubscribed) {
-                        // chain: subscribe STAT next (one GATT op at a time)
-                        val svc = pendingSvc ?: return
-                        val stat = svc.getCharacteristic(UUID.fromString(CompanionProtocol.STAT_UUID)) ?: return
-                        statSubscribed = true
-                        try {
-                            g.setCharacteristicNotification(stat, true)
-                            val sd = stat.getDescriptor(UUID.fromString(CompanionProtocol.CCCD_UUID))
-                            if (sd != null) {
-                                sd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                g.writeDescriptor(sd)
-                                return // SET_TIME is chained after THIS write completes
+                    synchronized(this@CompanionLinkManager) {
+                        if (!isCurrent(g) || descriptor.uuid != CCCD_ID) return
+                        val expected =
+                            when (initialization) {
+                                Initialization.DATA -> DATA_ID
+                                Initialization.STAT -> STAT_ID
+                                else -> return
                             }
-                        } catch (_: SecurityException) {
+                        if (descriptor.characteristic.uuid != expected) return
+                        if (status != BluetoothGatt.GATT_SUCCESS) {
+                            failGatt("Companion subscription failed ($status)")
+                            return
                         }
-                        writeControl(CompanionProtocol.setTimePayload(System.currentTimeMillis()))
-                        startStatusTicker()
-                    } else if (chr.uuid.toString() == CompanionProtocol.STAT_UUID) {
-                        // both subscriptions live: time-sync the companion so its
-                        // record timestamps become epoch-ms, then poll STATUS
-                        writeControl(CompanionProtocol.setTimePayload(System.currentTimeMillis()))
-                        startStatusTicker()
+                        if (initialization == Initialization.DATA) {
+                            subscribe(g, STAT_ID, Initialization.STAT)
+                        } else {
+                            initialization = Initialization.READY
+                            initializationTimeout?.cancel()
+                            initializationTimeout = null
+                            failures = 0
+                            val address = g.device.address
+                            _state.value = State.Connected(address)
+                            updateRegistry { companionRepository.markConnected(address) }
+                            writeControl(CompanionProtocol.setTimePayload(System.currentTimeMillis()))
+                            startStatusTicker()
+                        }
                     }
                 }
 
@@ -383,7 +486,7 @@ class CompanionLinkManager
                     characteristic: BluetoothGattCharacteristic,
                     value: ByteArray,
                 ) {
-                    onValueChanged(characteristic, value)
+                    onValueChanged(g, characteristic, value)
                 }
 
                 @Suppress("DEPRECATION")
@@ -391,51 +494,83 @@ class CompanionLinkManager
                     g: BluetoothGatt,
                     characteristic: BluetoothGattCharacteristic,
                 ) {
-                    onValueChanged(characteristic, characteristic.value ?: return)
+                    onValueChanged(g, characteristic, characteristic.value ?: return)
                 }
 
                 private fun onValueChanged(
+                    g: BluetoothGatt,
                     characteristic: BluetoothGattCharacteristic,
                     value: ByteArray,
                 ) {
-                    val uuidStr = characteristic.uuid.toString()
-                    if (uuidStr == CompanionProtocol.STAT_UUID) {
-                        CompanionProtocol.parseRecords(value).forEach { rec ->
-                            if (rec is CompanionProtocol.Record.Status) {
-                                _state.value =
-                                    State.Connected(
-                                        gatt?.device?.address ?: "?",
-                                        rec.firmware,
-                                        rec.mode,
-                                    )
-                                // keep the registry fresh for the settings UI
-                                scope.launch {
-                                    try {
+                    synchronized(this@CompanionLinkManager) {
+                        if (!isCurrent(g) || initialization != Initialization.READY) return
+                        if (characteristic.uuid == STAT_ID) {
+                            val address = g.device.address
+                            CompanionProtocol.parseRecords(value).forEach { record ->
+                                if (record is CompanionProtocol.Record.Status) {
+                                    _state.value = State.Connected(address, record.firmware, record.mode)
+                                    updateRegistry {
                                         companionRepository.updateLinkStats(
-                                            gatt?.device?.address ?: return@launch,
-                                            records = rec.bleCount + rec.wifiCount,
-                                            firmware = rec.firmware,
-                                            mode = if (rec.mode == CompanionProtocol.MODE_CARRY) "CARRY" else "SENTINEL",
+                                            address,
+                                            records = record.bleCount + record.wifiCount,
+                                            firmware = record.firmware,
+                                            mode = if (record.mode == CompanionProtocol.MODE_CARRY) "CARRY" else "SENTINEL",
                                             stats = null,
                                         )
-                                    } catch (_: Exception) {
                                     }
                                 }
+                                _records.tryEmit(record)
                             }
-                            _records.tryEmit(rec)
+                        } else if (characteristic.uuid == DATA_ID) {
+                            CompanionProtocol.parseRecords(value).forEach { _records.tryEmit(it) }
                         }
-                        return
-                    }
-                    if (uuidStr == CompanionProtocol.DATA_UUID) {
-                        CompanionProtocol.parseRecords(value).forEach { _records.tryEmit(it) }
                     }
                 }
             }
 
+        private fun isCurrent(connection: BluetoothGatt): Boolean = wantConnected && gatt === connection
+
+        @SuppressLint("MissingPermission")
+        private fun subscribe(
+            connection: BluetoothGatt,
+            characteristicId: UUID,
+            stage: Initialization,
+        ) {
+            val characteristic = pendingService?.getCharacteristic(characteristicId)
+            val descriptor = characteristic?.getDescriptor(CCCD_ID)
+            if (characteristic == null || descriptor == null) {
+                failGatt("Companion notification characteristic or CCCD missing")
+                return
+            }
+            initialization = stage
+            try {
+                if (!connection.setCharacteristicNotification(characteristic, true)) {
+                    failGatt("Companion notifications rejected")
+                    return
+                }
+                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                if (!connection.writeDescriptor(descriptor)) failGatt("Companion subscription write rejected")
+            } catch (_: SecurityException) {
+                failGatt("No Bluetooth permission")
+            }
+        }
+
+        private fun updateRegistry(update: suspend () -> Unit) {
+            scope.launch(worker ?: return) {
+                try {
+                    update()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(e, "companion registry update failed")
+                }
+            }
+        }
+
         private fun startStatusTicker() {
             statusTicker?.cancel()
             statusTicker =
-                scope.launch {
+                scope.launch(worker ?: return) {
                     while (isActive && wantConnected) {
                         delay(30_000)
                         writeControl(CompanionProtocol.reqStatusPayload())
@@ -444,10 +579,12 @@ class CompanionLinkManager
         }
 
         @SuppressLint("MissingPermission")
+        @Synchronized
         private fun writeControl(payload: ByteArray) {
+            if (initialization != Initialization.READY) return
             val g = gatt ?: return
-            val svc = g.getService(UUID.fromString(CompanionProtocol.SERVICE_UUID)) ?: return
-            val ctrl = svc.getCharacteristic(UUID.fromString(CompanionProtocol.CTRL_UUID)) ?: return
+            val svc = g.getService(SERVICE_ID) ?: return
+            val ctrl = svc.getCharacteristic(CTRL_ID) ?: return
             try {
                 ctrl.value = payload
                 ctrl.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
@@ -459,14 +596,41 @@ class CompanionLinkManager
             }
         }
 
+        private fun failGatt(message: String) {
+            Timber.w(message)
+            failures++
+            _state.value = State.Error(message)
+            closeGatt()
+        }
+
         private fun closeGatt() {
-            gatt?.let {
+            initializationTimeout?.cancel()
+            initializationTimeout = null
+            statusTicker?.cancel()
+            statusTicker = null
+            initialization = null
+            pendingService = null
+            val connection = gatt
+            gatt = null
+            try {
+                connection?.disconnect()
+            } catch (e: SecurityException) {
+                Timber.w(e, "companion disconnect: no permission")
+            } finally {
                 try {
-                    it.disconnect()
-                    it.close()
-                } catch (_: Exception) {
+                    connection?.close()
+                } catch (e: SecurityException) {
+                    Timber.w(e, "companion close: no permission")
                 }
             }
-            gatt = null
+        }
+
+        private companion object {
+            const val INITIALIZATION_TIMEOUT_MS = 20_000L
+            val SERVICE_ID: UUID = UUID.fromString(CompanionProtocol.SERVICE_UUID)
+            val DATA_ID: UUID = UUID.fromString(CompanionProtocol.DATA_UUID)
+            val STAT_ID: UUID = UUID.fromString(CompanionProtocol.STAT_UUID)
+            val CTRL_ID: UUID = UUID.fromString(CompanionProtocol.CTRL_UUID)
+            val CCCD_ID: UUID = UUID.fromString(CompanionProtocol.CCCD_UUID)
         }
     }

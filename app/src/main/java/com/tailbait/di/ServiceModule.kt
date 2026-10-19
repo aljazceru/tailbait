@@ -2,8 +2,6 @@ package com.tailbait.di
 
 import android.content.Context
 import androidx.work.WorkManager
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,7 +15,6 @@ import javax.inject.Singleton
  * This module configures and provides dependencies for:
  * - Foreground Services (BLE scanning, location tracking)
  * - Background Workers (periodic detection, data cleanup)
- * - Location Services (Google Play Services integration)
  * - Work Management (WorkManager for reliable background execution)
  *
  * Service Layer Architecture:
@@ -45,7 +42,7 @@ import javax.inject.Singleton
  *
  * 2. **Location Services** (Phase 2)
  *    - LocationTracker: Manages GPS location updates
- *    - Requires: FusedLocationProviderClient (provided here)
+ *    - Uses Android framework location providers
  *
  * 3. **Background Workers** (Phase 4)
  *    - DetectionWorker: Runs stalking detection algorithm periodically
@@ -85,30 +82,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object ServiceModule {
-    /**
-     * Provides FusedLocationProviderClient for location tracking.
-     *
-     * The Fused Location Provider is Google Play Services' recommended API
-     * for location tracking. It provides:
-     * - Automatic selection of best location source (GPS, Network, etc.)
-     * - Battery-efficient location updates
-     * - High accuracy when needed, low power when not
-     *
-     * Used by:
-     * - LocationTracker: For continuous location updates
-     * - Repositories: For one-time location queries
-     *
-     * @param context Application context
-     * @return Singleton FusedLocationProviderClient instance
-     */
-    @Provides
-    @Singleton
-    fun provideFusedLocationProviderClient(
-        @ApplicationContext context: Context,
-    ): FusedLocationProviderClient {
-        return LocationServices.getFusedLocationProviderClient(context)
-    }
-
     /**
      * Provides WorkManager for reliable background task execution.
      *

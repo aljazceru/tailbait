@@ -6,25 +6,13 @@ import timber.log.Timber
 import java.util.UUID
 
 /**
- * Service UUID-based tracker detection.
+ * Tracker detection from exact service UUIDs and validated service data.
  *
- * Learned from Nordic nRF-Toolbox's ServiceManagerFactory pattern which maps
- * service UUIDs to device handlers. This approach complements manufacturer data
- * parsing by detecting trackers via their advertised service UUIDs.
+ * SmartTag FD5A and Tile FEED/FEEC/custom-128 UUIDs identify supported trackers.
+ * Find Hub shares FEAA with Eddystone and requires a valid 0x40/0x41 frame;
+ * FE2C Fast Pair and FD6F Exposure Notification are not tracker evidence.
  *
- * ## Why Service UUIDs Matter
- * Many trackers advertise specific service UUIDs that uniquely identify them:
- * - Samsung SmartTag: 0xFD5A (much more reliable than manufacturer data alone)
- * - Tile: Custom service UUID for Tile protocol
- * - Chipolo: Custom service UUID
- * - Google Find My Device Network: 0xFE2C
- *
- * This detection method is often MORE RELIABLE than manufacturer data parsing
- * because service UUIDs are standardized and less likely to change.
- *
- * ## References
- * - Bluetooth SIG 16-bit UUIDs: https://www.bluetooth.com/specifications/assigned-numbers/
- * - Samsung SmartTag analysis: https://arxiv.org/pdf/2210.14702
+ * @see <a href="https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn#advertised-frames">Find Hub advertised frames</a>
  */
 object TrackerServiceDetector {
     // ============================================================================
@@ -40,14 +28,6 @@ object TrackerServiceDetector {
         UUID.fromString("0000FD5A-0000-1000-8000-00805F9B34FB")
 
     /**
-     * Apple Find My Network service UUID.
-     * FD6F is used for Find My Network nearby interaction.
-     * Indicates device participates in Apple's Find My network (AirTag, etc.)
-     */
-    val APPLE_FIND_MY_SERVICE: UUID =
-        UUID.fromString("0000FD6F-0000-1000-8000-00805F9B34FB")
-
-    /**
      * Apple Continuity service UUID.
      * Used by various Apple devices for Continuity features.
      */
@@ -55,15 +35,15 @@ object TrackerServiceDetector {
         UUID.fromString("0000FD6A-0000-1000-8000-00805F9B34FB")
 
     /**
-     * Google Find My Device Network service UUID (FMDN).
-     * FE2C is used by Google's Find My Device network.
+     * Google Find Hub advertising service UUID, shared with Eddystone.
+     * A validated Find Hub frame is required; the UUID alone is insufficient.
      */
     val GOOGLE_FIND_MY_SERVICE: UUID =
-        UUID.fromString("0000FE2C-0000-1000-8000-00805F9B34FB")
+        UUID.fromString("0000FEAA-0000-1000-8000-00805F9B34FB")
 
     /**
      * Google Fast Pair service UUID.
-     * FE2C is also used for Fast Pair, need to distinguish by manufacturer data.
+     * FE2C identifies Fast Pair, not Find Hub advertising frames.
      */
     val GOOGLE_FAST_PAIR_SERVICE: UUID =
         UUID.fromString("0000FE2C-0000-1000-8000-00805F9B34FB")
@@ -87,37 +67,6 @@ object TrackerServiceDetector {
      */
     val TILE_SERVICE_FEEC: UUID =
         UUID.fromString("0000FEEC-0000-1000-8000-00805F9B34FB")
-
-    /**
-     * Chipolo tracker service UUID.
-     * FE8C is the 16-bit UUID assigned to Chipolo.
-     */
-    val CHIPOLO_SERVICE: UUID =
-        UUID.fromString("0000FE8C-0000-1000-8000-00805F9B34FB")
-
-    /**
-     * Pebblebee tracker service UUID.
-     */
-    val PEBBLEBEE_SERVICE: UUID =
-        UUID.fromString("0000FE8D-0000-1000-8000-00805F9B34FB")
-
-    /**
-     * Cube tracker service UUID.
-     */
-    val CUBE_SERVICE: UUID =
-        UUID.fromString("0000FE8E-0000-1000-8000-00805F9B34FB")
-
-    /**
-     * eufy Security tracker service UUID.
-     */
-    val EUFY_SERVICE: UUID =
-        UUID.fromString("0000FE9F-0000-1000-8000-00805F9B34FB")
-
-    /**
-     * Jio Tag service UUID (Reliance JioTag).
-     */
-    val JIO_TAG_SERVICE: UUID =
-        UUID.fromString("0000FEA0-0000-1000-8000-00805F9B34FB")
 
     // ============================================================================
     // TRACKER DETECTION RESULT
@@ -162,16 +111,9 @@ object TrackerServiceDetector {
     private val trackerServiceMap =
         mapOf(
             SAMSUNG_SMARTTAG_SERVICE to Pair(TrackerType.SAMSUNG_SMARTTAG, "Samsung"),
-            APPLE_FIND_MY_SERVICE to Pair(TrackerType.APPLE_FIND_MY_ACCESSORY, "Apple"),
             TILE_SERVICE to Pair(TrackerType.TILE, "Tile"),
             TILE_SERVICE_ALT to Pair(TrackerType.TILE, "Tile"),
             TILE_SERVICE_FEEC to Pair(TrackerType.TILE, "Tile"),
-            CHIPOLO_SERVICE to Pair(TrackerType.CHIPOLO, "Chipolo"),
-            PEBBLEBEE_SERVICE to Pair(TrackerType.PEBBLEBEE, "Pebblebee"),
-            CUBE_SERVICE to Pair(TrackerType.CUBE, "Cube"),
-            EUFY_SERVICE to Pair(TrackerType.EUFY, "eufy"),
-            JIO_TAG_SERVICE to Pair(TrackerType.JIO_TAG, "Jio"),
-            GOOGLE_FIND_MY_SERVICE to Pair(TrackerType.GOOGLE_FIND_MY_DEVICE, "Google"),
         )
 
     /**
@@ -180,41 +122,40 @@ object TrackerServiceDetector {
     private val trackerServiceUuids = trackerServiceMap.keys
 
     /**
-     * Detect if a device is a tracker based on its advertised service UUIDs.
+     * Detect supported trackers from exact UUIDs or validated Find Hub service data.
      *
      * @param serviceUuids List of service UUIDs from BLE advertisement
+     * @param serviceData Service payloads without the UUID or AD type/length bytes
      * @return TrackerDetectionResult with detection details
      */
-    fun detectTracker(serviceUuids: List<ParcelUuid>?): TrackerDetectionResult {
-        if (serviceUuids.isNullOrEmpty()) {
+    fun detectTracker(
+        serviceUuids: List<ParcelUuid>?,
+        serviceData: Map<ParcelUuid, ByteArray> = emptyMap(),
+    ): TrackerDetectionResult {
+        val trackerService =
+            serviceUuids?.firstOrNull { it.uuid in trackerServiceUuids }
+                ?: serviceData.keys.firstOrNull { it.uuid in trackerServiceUuids }
+        if (trackerService != null) {
+            val (trackerType, manufacturerName) = trackerServiceMap.getValue(trackerService.uuid)
+            Timber.d("Detected tracker via service UUID: $trackerType (${trackerService.uuid})")
             return TrackerDetectionResult(
-                isTracker = false,
-                trackerType = TrackerType.NOT_A_TRACKER,
-                confidence = 0.0f,
-                detectedServiceUuid = null,
-                manufacturerName = null,
+                isTracker = true,
+                trackerType = trackerType,
+                confidence = 0.95f,
+                detectedServiceUuid = trackerService.uuid,
+                manufacturerName = manufacturerName,
             )
         }
 
-        // Check each service UUID against known tracker UUIDs
-        for (parcelUuid in serviceUuids) {
-            val uuid = parcelUuid.uuid
-            val trackerInfo = trackerServiceMap[uuid]
-
-            if (trackerInfo != null) {
-                val (trackerType, manufacturerName) = trackerInfo
-
-                Timber.d("Detected tracker via service UUID: $trackerType ($uuid)")
-
-                return TrackerDetectionResult(
-                    isTracker = true,
-                    trackerType = trackerType,
-                    // High confidence - service UUIDs are very reliable
-                    confidence = 0.95f,
-                    detectedServiceUuid = uuid,
-                    manufacturerName = manufacturerName,
-                )
-            }
+        val findHubData = serviceData[findHubServiceUuid]
+        if (findHubData != null && findHubEidLength(findHubData) != 0) {
+            return TrackerDetectionResult(
+                isTracker = true,
+                trackerType = TrackerType.GOOGLE_FIND_MY_DEVICE,
+                confidence = 0.95f,
+                detectedServiceUuid = GOOGLE_FIND_MY_SERVICE,
+                manufacturerName = "Google",
+            )
         }
 
         return TrackerDetectionResult(
@@ -224,6 +165,42 @@ object TrackerServiceDetector {
             detectedServiceUuid = null,
             manufacturerName = null,
         )
+    }
+
+    private val findHubServiceUuid = ParcelUuid(GOOGLE_FIND_MY_SERVICE)
+    private const val HEX_DIGITS = "0123456789ABCDEF"
+
+    /**
+     * Full advertised Find Hub EID, excluding the frame type and hashed status byte.
+     * This is a rotating advertised identity, not a permanent device identifier.
+     */
+    fun findHubFingerprint(serviceData: Map<ParcelUuid, ByteArray>): String? {
+        val data = serviceData[findHubServiceUuid] ?: return null
+        val eidLength = findHubEidLength(data)
+        if (eidLength == 0) return null
+        return buildString(4 + eidLength * 2) {
+            append("FHN:")
+            for (index in 1..eidLength) {
+                val value = data[index].toInt() and 0xFF
+                append(HEX_DIGITS[value ushr 4])
+                append(HEX_DIGITS[value and 0x0F])
+            }
+        }
+    }
+
+    private fun findHubEidLength(data: ByteArray): Int {
+        val eidLength =
+            when (data.size) {
+                21, 22 -> 20
+                33, 34 -> 32
+                else -> return 0
+            }
+        return when (data[0].toInt() and 0xFF) {
+            0x40 -> eidLength
+            // Hashed flags may be omitted only outside unwanted tracking protection mode.
+            0x41 -> if (data.size == eidLength + 2) eidLength else 0
+            else -> 0
+        }
     }
 
     /**
@@ -274,28 +251,6 @@ object TrackerServiceDetector {
     }
 
     /**
-     * Detect Apple Find My network device.
-     *
-     * @param serviceUuids List of service UUIDs from BLE advertisement
-     * @return true if Apple Find My service UUID is present
-     */
-    fun isAppleFindMy(serviceUuids: List<ParcelUuid>?): Boolean {
-        if (serviceUuids.isNullOrEmpty()) return false
-        return serviceUuids.any { it.uuid == APPLE_FIND_MY_SERVICE }
-    }
-
-    /**
-     * Detect Google Find My Device network participant.
-     *
-     * @param serviceUuids List of service UUIDs from BLE advertisement
-     * @return true if Google Find My service UUID is present
-     */
-    fun isGoogleFindMy(serviceUuids: List<ParcelUuid>?): Boolean {
-        if (serviceUuids.isNullOrEmpty()) return false
-        return serviceUuids.any { it.uuid == GOOGLE_FIND_MY_SERVICE }
-    }
-
-    /**
      * Detect Tile tracker.
      *
      * @param serviceUuids List of service UUIDs from BLE advertisement
@@ -303,18 +258,7 @@ object TrackerServiceDetector {
      */
     fun isTile(serviceUuids: List<ParcelUuid>?): Boolean {
         if (serviceUuids.isNullOrEmpty()) return false
-        return serviceUuids.any { it.uuid == TILE_SERVICE || it.uuid == TILE_SERVICE_ALT }
-    }
-
-    /**
-     * Detect Chipolo tracker.
-     *
-     * @param serviceUuids List of service UUIDs from BLE advertisement
-     * @return true if Chipolo service UUID is present
-     */
-    fun isChipolo(serviceUuids: List<ParcelUuid>?): Boolean {
-        if (serviceUuids.isNullOrEmpty()) return false
-        return serviceUuids.any { it.uuid == CHIPOLO_SERVICE }
+        return serviceUuids.any { it.uuid == TILE_SERVICE || it.uuid == TILE_SERVICE_ALT || it.uuid == TILE_SERVICE_FEEC }
     }
 
     // ============================================================================
@@ -337,9 +281,10 @@ object TrackerServiceDetector {
         serviceUuids: List<ParcelUuid>?,
         manufacturerId: Int?,
         manufacturerData: ByteArray?,
+        serviceData: Map<ParcelUuid, ByteArray> = emptyMap(),
     ): TrackerDetectionResult {
         // Priority 1: Service UUID detection (most reliable)
-        val serviceResult = detectTracker(serviceUuids)
+        val serviceResult = detectTracker(serviceUuids, serviceData)
         if (serviceResult.isTracker) {
             return serviceResult
         }

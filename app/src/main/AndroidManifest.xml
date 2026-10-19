@@ -8,7 +8,6 @@
 
     <!-- Android 12+ BLE Permissions -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
@@ -64,12 +63,12 @@
             </intent-filter>
         </activity>
 
-        <!-- TailBait Foreground Service (exported for adb-driven e2e:
-             am start-foreground-service -a com.tailbait.action.START_TRACKING) -->
+        <!-- Allow privileged adb control without exposing tracking controls to other apps. -->
         <service
             android:name=".service.TailBaitService"
             android:enabled="true"
             android:exported="true"
+            android:permission="android.permission.DUMP"
             android:foregroundServiceType="location"
             tools:targetApi="29" />
 

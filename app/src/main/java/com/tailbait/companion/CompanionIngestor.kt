@@ -7,10 +7,11 @@ import com.tailbait.data.repository.LocationRepository
 import com.tailbait.util.Constants
 import com.tailbait.util.DeviceIdentifier
 import com.tailbait.util.ManufacturerDataParser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -41,7 +42,7 @@ class CompanionIngestor
         private val locationRepository: LocationRepository,
         private val companionRepository: CompanionDeviceRepository,
     ) {
-        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private var collector: Job? = null
 
         private var cachedLocationId: Long? = null
         private var cachedLocationAt: Long = 0
@@ -59,21 +60,37 @@ class CompanionIngestor
             val status = java.util.concurrent.atomic.AtomicLong()
         }
 
-        /** Attach to a link manager; collects records until [shutdown]. */
-        fun attach(link: CompanionLinkManager) {
-            scope.launch {
-                link.records.collect { record ->
-                    try {
-                        ingest(record)
-                    } catch (e: Exception) {
-                        Timber.e(e, "companion ingest failed: ${record::class.simpleName}")
+        /** One collector owned by the tracking service's lifecycle. */
+        @Synchronized
+        fun attach(
+            link: CompanionLinkManager,
+            scope: CoroutineScope,
+        ) {
+            if (collector?.isCompleted == false) return
+            collector =
+                scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    link.records.collect { record ->
+                        try {
+                            ingest(record)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Timber.e(e, "companion ingest failed: ${record::class.simpleName}")
+                        }
                     }
                 }
-            }
         }
 
-        fun shutdown() {
-            scope.cancel()
+        suspend fun detach() {
+            val job = synchronized(this) { collector } ?: return
+            job.cancelAndJoin()
+            synchronized(this) {
+                if (collector === job) {
+                    collector = null
+                    cachedLocationId = null
+                    cachedLocationAt = 0
+                }
+            }
         }
 
         private suspend fun ingest(record: CompanionProtocol.Record) {
@@ -130,6 +147,7 @@ class CompanionIngestor
                     serviceUuids = serviceUuids,
                     appearance = parsed.appearance,
                     deviceName = parsed.name,
+                    serviceData = parsed.serviceData,
                 )
 
             val manufacturerInfo =
@@ -145,6 +163,7 @@ class CompanionIngestor
                         parsed.manufacturerId,
                         parsed.manufacturerData,
                         serviceUuids,
+                        serviceData = parsed.serviceData,
                     )
 
             val timestamp = saneTimestamp(record.timestamp)
@@ -248,6 +267,8 @@ class CompanionIngestor
                     distanceFromLast = null,
                     scanTriggerType = Constants.SCAN_TRIGGER_COMPANION,
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "companion location record failed")
             }

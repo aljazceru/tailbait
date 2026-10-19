@@ -445,6 +445,7 @@ class ThreatScoreCalculatorTest {
                 deviceRecords = any(),
                 userPaths = any(),
                 deviceLocations = any(),
+                userLocations = any(),
             )
         } returns 0.0
 
@@ -455,6 +456,82 @@ class ThreatScoreCalculatorTest {
         // Consistency factor: avg gap ~1 day → 0.33 × 0.10 = 0.033
         // Plus location, distance, device type factors
         assertTrue("Score should be positive with spread record timestamps", score > 0.1)
+    }
+
+    @Test
+    fun `calculateEnhanced and breakdown - use user places omitted by device clustering`() {
+        val realCalculator = ThreatScoreCalculator(MovementCorrelationCalculator())
+        val device = createTestDevice("TRACKER").copy(firstSeen = 1000L, lastSeen = 3000L)
+        val userLocations =
+            (1L..3L).map { id ->
+                createLocation(40.0 + id * 0.001, -74.0, id * 1000L).copy(id = id, createdAt = 0L)
+            }
+        val clusteredLocations = userLocations.take(1)
+        val userPaths =
+            userLocations.map {
+                UserPath(
+                    locationId = it.id,
+                    timestamp = it.timestamp,
+                    accuracy = it.accuracy,
+                    createdAt = 0L,
+                )
+            }
+        val records =
+            userLocations.map {
+                DeviceLocationRecord(
+                    deviceId = device.id,
+                    locationId = it.id,
+                    timestamp = it.timestamp,
+                    rssi = -50,
+                    scanTriggerType = "PERIODIC",
+                    createdAt = 0L,
+                )
+            }
+
+        val score =
+            realCalculator.calculateEnhanced(
+                device,
+                clusteredLocations,
+                emptyList(),
+                records,
+                userLocations,
+                userPaths,
+            )
+        val breakdown =
+            realCalculator.computeBreakdown(
+                device,
+                clusteredLocations,
+                emptyList(),
+                records,
+                userLocations,
+                userPaths,
+            )
+        val scoreWithoutCoordinates =
+            realCalculator.calculateEnhanced(
+                device,
+                clusteredLocations,
+                emptyList(),
+                records,
+                emptyList(),
+                userPaths,
+            )
+        val breakdownWithoutCoordinates =
+            realCalculator.computeBreakdown(
+                device,
+                clusteredLocations,
+                emptyList(),
+                records,
+                emptyList(),
+                userPaths,
+            )
+
+        assertEquals(1.0, breakdown.getValue("movementCorrelation"), 0.0001)
+        assertEquals(0.3, breakdownWithoutCoordinates.getValue("movementCorrelation"), 0.0001)
+        assertEquals(
+            0.25 * (breakdown.getValue("movementCorrelation") - breakdownWithoutCoordinates.getValue("movementCorrelation")),
+            score - scoreWithoutCoordinates,
+            0.0001,
+        )
     }
 
     // ==================== Helper Methods ====================

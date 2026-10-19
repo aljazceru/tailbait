@@ -1,14 +1,17 @@
 package com.tailbait.service
 
+import android.Manifest
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.tailbait.MainActivity
 import com.tailbait.R
 import com.tailbait.TailBaitApplication
@@ -17,6 +20,7 @@ import com.tailbait.data.repository.AlertRepository
 import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.util.Constants
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import javax.inject.Inject
@@ -79,6 +83,11 @@ class NotificationHelper
             }
 
             try {
+                if (!hasNotificationPermission()) {
+                    Timber.w("Cannot show notification for alert ${alert.id}: permission not granted")
+                    return
+                }
+
                 val notification = buildAlertNotification(alert, settings)
                 val notificationId = getNotificationId(alert)
 
@@ -90,6 +99,8 @@ class NotificationHelper
                 showSummaryNotificationIfNeeded()
             } catch (e: SecurityException) {
                 Timber.e(e, "SecurityException: Notification permission not granted")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Error showing notification for alert ${alert.id}")
             }
@@ -274,6 +285,11 @@ class NotificationHelper
                     return
                 }
 
+                if (!hasNotificationPermission()) {
+                    Timber.w("Cannot show summary notification: permission not granted")
+                    return
+                }
+
                 val summaryText =
                     when {
                         activeAlerts.size == 2 -> "2 active alerts"
@@ -311,6 +327,10 @@ class NotificationHelper
 
                 notificationManager.notify(Constants.ALERT_NOTIFICATION_SUMMARY_ID, summaryNotification)
                 Timber.d("Summary notification shown for ${activeAlerts.size} alerts")
+            } catch (e: SecurityException) {
+                Timber.e(e, "SecurityException: Summary notification permission not granted")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Error showing summary notification")
             }
@@ -333,6 +353,8 @@ class NotificationHelper
 
                 // Update summary notification
                 updateSummaryNotification()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Error dismissing notification for alert $alertId")
             }
@@ -357,6 +379,8 @@ class NotificationHelper
                     notificationManager.cancel(Constants.ALERT_NOTIFICATION_SUMMARY_ID)
                     Timber.d("Summary notification cancelled - only 1 active alert")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Error updating summary notification")
             }
@@ -520,7 +544,9 @@ class NotificationHelper
          */
         fun hasNotificationPermission(): Boolean {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                notificationManager.areNotificationsEnabled()
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED &&
+                    notificationManager.areNotificationsEnabled()
             } else {
                 true // Permission not required on older versions
             }

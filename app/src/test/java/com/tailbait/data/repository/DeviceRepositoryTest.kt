@@ -1,10 +1,12 @@
 package com.tailbait.data.repository
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
+import androidx.room.Room
 import androidx.room.withTransaction
 import com.tailbait.data.database.TailBaitDatabase
 import com.tailbait.data.database.dao.DeviceLocationRecordDao
 import com.tailbait.data.database.dao.ScannedDeviceDao
+import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +19,10 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 
 /**
  * Unit tests for DeviceRepository and DeviceRepositoryImpl.
@@ -543,186 +549,292 @@ class DeviceRepositoryTest {
                 )
             }
         }
+}
 
-    // ==================== FM Fingerprint Stale Link Tests ====================
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
+class DeviceRepositoryIdentityTest {
+    private lateinit var database: TailBaitDatabase
+    private lateinit var repository: DeviceRepository
+    private val fullIdentities = listOf("FM:" + "AB".repeat(22), "FHN:" + "CD".repeat(20), "FHN:" + "EF".repeat(32))
+
+    @Before
+    fun setup() {
+        database =
+            Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), TailBaitDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        repository = DeviceRepositoryImpl(database, database.scannedDeviceDao(), database.deviceLocationRecordDao())
+    }
+
+    @After
+    fun tearDown() {
+        database.close()
+    }
 
     @Test
-    fun `FM fingerprint match over 20 min old produces WEAK link`() =
+    fun `co-present devices with identical names class and RSSI remain distinct`() =
         runTest {
-            val fmFingerprint = "FM:AABBCCDD1122"
-            val now = System.currentTimeMillis()
-            val thirtyMinutesAgo = now - 30 * 60 * 1000L
+            val firstId = observe(address(1), 1_000)
+            val secondId = observe(address(2), 1_000)
+            val secondAgain = observe(address(2), 2_000)
 
-            // Existing device was last seen 30 minutes ago (beyond the 20-min stale threshold)
-            val existingDevice =
-                testDevice.copy(
-                    id = 10L,
-                    payloadFingerprint = fmFingerprint,
-                    lastSeen = thirtyMinutesAgo,
-                    isTracker = true,
+            assertNotEquals(firstId, secondId)
+            assertEquals(secondId, secondAgain)
+            val first = repository.getDeviceById(firstId)!!
+            val second = repository.getDeviceById(secondId)!!
+            assertNull(first.linkedDeviceId)
+            assertNull(second.linkedDeviceId)
+            assertEquals(first.shadowKey, second.shadowKey)
+            assertEquals(1_000L, first.firstSeen)
+            assertEquals(1_000L, first.lastSeen)
+            assertEquals(1, first.detectionCount)
+            assertEquals(2, second.detectionCount)
+        }
+
+    @Test
+    fun `full identities return child IDs consistently and link through a fresh child to the canonical root`() =
+        runTest {
+            for ((index, fingerprint) in fullIdentities.withIndex()) {
+                val rootId = observe(address(index * 3 + 10), 1_000_000, fingerprint)
+                val rootBefore = repository.getDeviceById(rootId)!!
+                val childAddress = address(index * 3 + 11)
+                val childId = observe(childAddress, 1_900_000, fingerprint)
+                record(childId, 1_900_000)
+                val secondChildId = observe(childAddress, 1_960_000, fingerprint)
+                record(secondChildId, 1_960_000)
+                val thirdId = observe(address(index * 3 + 12), 2_800_000, fingerprint)
+
+                assertNotEquals(rootId, childId)
+                assertEquals(childId, secondChildId)
+                assertNotEquals(childId, thirdId)
+                assertEquals(rootBefore, repository.getDeviceById(rootId))
+                val child = repository.getDeviceById(childId)!!
+                assertEquals(rootId, child.linkedDeviceId)
+                assertEquals("STRONG", child.linkStrength)
+                assertEquals("fingerprint_match:$fingerprint", child.linkReason)
+                assertEquals(1_900_000L, child.firstSeen)
+                assertEquals(1_960_000L, child.lastSeen)
+                assertEquals(rootId, repository.getDeviceById(thirdId)!!.linkedDeviceId)
+                assertEquals(
+                    listOf(1_900_000L, 1_960_000L),
+                    repository.getDeviceLocationRecordsForDevice(childId).map { it.timestamp }.sorted(),
                 )
-
-            // New MAC address not in database
-            coEvery { scannedDeviceDao.getByAddress("BB:CC:DD:EE:FF:01") } returns null
-            // Fingerprint match finds the old device
-            coEvery { scannedDeviceDao.getByFingerprint(fmFingerprint) } returns existingDevice
-            coEvery { scannedDeviceDao.insert(any()) } returns 20L
-            coEvery { scannedDeviceDao.getById(10L) } returns existingDevice
-
-            // Execute
-            repository.upsertDeviceWithFingerprint(
-                address = "BB:CC:DD:EE:FF:01",
-                name = null,
-                advertisedName = null,
-                lastSeen = now,
-                manufacturerData = null,
-                manufacturerId = 0x004C,
-                manufacturerName = "Apple",
-                deviceType = "TRACKER",
-                deviceModel = "AirTag",
-                isTracker = true,
-                serviceUuids = null,
-                appearance = null,
-                txPowerLevel = null,
-                advertisingFlags = null,
-                appleContinuityType = 0x12,
-                identificationConfidence = 0.65f,
-                identificationMethod = "APPLE_PAYLOAD",
-                payloadFingerprint = fmFingerprint,
-                findMyStatus = null,
-                findMySeparated = false,
-                highestRssi = -55,
-                signalStrength = "STRONG",
-                beaconType = "FIND_MY",
-                threatLevel = null,
-            )
-
-            // Verify the inserted device has WEAK link strength and :stale suffix
-            coVerify {
-                scannedDeviceDao.insert(
-                    match {
-                        it.linkStrength == "WEAK" &&
-                            it.linkReason?.endsWith(":stale") == true
-                    },
-                )
+                assertEquals(2, repository.getDeviceLocationRecordsForDeviceWithLinked(rootId).size)
+                assertEquals(1, repository.getDeviceLocationRecordsForDeviceWithLinked(childId, 1_950_000).size)
             }
         }
 
     @Test
-    fun `FM fingerprint match within 15 min produces STRONG link`() =
+    fun `stale full identities in either packet order never create weak links`() =
         runTest {
-            val fmFingerprint = "FM:AABBCCDD1122"
-            val now = System.currentTimeMillis()
-            val tenMinutesAgo = now - 10 * 60 * 1000L
+            for ((index, fingerprint) in fullIdentities.withIndex()) {
+                val rootId = observe(address(index * 3 + 30), 5_000_000, fingerprint)
+                val newerId = observe(address(index * 3 + 31), 6_200_001, fingerprint)
+                val olderId = observe(address(index * 3 + 32), 3_799_999, fingerprint)
 
-            // Existing device was last seen 10 minutes ago (within the 20-min threshold)
-            val existingDevice =
-                testDevice.copy(
-                    id = 10L,
-                    payloadFingerprint = fmFingerprint,
-                    lastSeen = tenMinutesAgo,
-                    isTracker = true,
-                )
-
-            coEvery { scannedDeviceDao.getByAddress("BB:CC:DD:EE:FF:02") } returns null
-            coEvery { scannedDeviceDao.getByFingerprint(fmFingerprint) } returns existingDevice
-            coEvery { scannedDeviceDao.insert(any()) } returns 21L
-            coEvery { scannedDeviceDao.getById(10L) } returns existingDevice
-
-            repository.upsertDeviceWithFingerprint(
-                address = "BB:CC:DD:EE:FF:02",
-                name = null,
-                advertisedName = null,
-                lastSeen = now,
-                manufacturerData = null,
-                manufacturerId = 0x004C,
-                manufacturerName = "Apple",
-                deviceType = "TRACKER",
-                deviceModel = "AirTag",
-                isTracker = true,
-                serviceUuids = null,
-                appearance = null,
-                txPowerLevel = null,
-                advertisingFlags = null,
-                appleContinuityType = 0x12,
-                identificationConfidence = 0.65f,
-                identificationMethod = "APPLE_PAYLOAD",
-                payloadFingerprint = fmFingerprint,
-                findMyStatus = null,
-                findMySeparated = false,
-                highestRssi = -55,
-                signalStrength = "STRONG",
-                beaconType = "FIND_MY",
-                threatLevel = null,
-            )
-
-            // Verify the inserted device has STRONG link strength (fresh FM match)
-            coVerify {
-                scannedDeviceDao.insert(
-                    match {
-                        it.linkStrength == "STRONG" &&
-                            it.linkReason == "fingerprint_match:$fmFingerprint"
-                    },
-                )
+                for (id in listOf(newerId, olderId)) {
+                    assertNotEquals(rootId, id)
+                    val device = repository.getDeviceById(id)!!
+                    assertNull(device.linkedDeviceId)
+                    assertNull(device.linkStrength)
+                    assertNull(device.linkReason)
+                    assertEquals(fingerprint, device.payloadFingerprint)
+                }
+                assertEquals(5_000_000L, repository.getDeviceById(rootId)!!.lastSeen)
             }
         }
 
     @Test
-    fun `PP fingerprint match over 20 min still produces STRONG link`() =
+    fun `class composite short lowercase and malformed keys cannot establish identity`() =
         runTest {
-            // PP (Proximity Pairing) fingerprints are hardware-stable, not time-dependent
-            val ppFingerprint = "PP:0E200050AA"
-            val now = System.currentTimeMillis()
-            val thirtyMinutesAgo = now - 30 * 60 * 1000L
-
-            val existingDevice =
-                testDevice.copy(
-                    id = 10L,
-                    payloadFingerprint = ppFingerprint,
-                    lastSeen = thirtyMinutesAgo,
-                    isTracker = false,
+            val invalidKeys =
+                listOf(
+                    "PP:0E200050AA",
+                    "COMP:123456ABCDEF",
+                    "ST:FD5A",
+                    "GF:FEAA",
+                    "FM:AABBCCDD1122",
+                    "FM:" + "AB".repeat(21),
+                    "FM:" + "AB".repeat(23),
+                    "FM:" + "ab".repeat(22),
+                    "FM:" + "AB".repeat(21) + "G0",
+                    "FHN:" + "CD".repeat(8),
+                    "FHN:" + "CD".repeat(21),
+                    "FHN:" + "EF".repeat(32) + "00",
                 )
-
-            coEvery { scannedDeviceDao.getByAddress("BB:CC:DD:EE:FF:03") } returns null
-            coEvery { scannedDeviceDao.getByFingerprint(ppFingerprint) } returns existingDevice
-            coEvery { scannedDeviceDao.insert(any()) } returns 22L
-            coEvery { scannedDeviceDao.getById(10L) } returns existingDevice
-
-            repository.upsertDeviceWithFingerprint(
-                address = "BB:CC:DD:EE:FF:03",
-                name = null,
-                advertisedName = null,
-                lastSeen = now,
-                manufacturerData = null,
-                manufacturerId = 0x004C,
-                manufacturerName = "Apple",
-                deviceType = "EARBUDS",
-                deviceModel = "AirPods Pro",
-                isTracker = false,
-                serviceUuids = null,
-                appearance = null,
-                txPowerLevel = null,
-                advertisingFlags = null,
-                appleContinuityType = 0x07,
-                identificationConfidence = 0.95f,
-                identificationMethod = "APPLE_PAYLOAD",
-                payloadFingerprint = ppFingerprint,
-                findMyStatus = null,
-                findMySeparated = false,
-                highestRssi = -40,
-                signalStrength = "VERY_STRONG",
-                beaconType = null,
-                threatLevel = null,
-            )
-
-            // PP fingerprints are time-stable, so even stale matches stay STRONG
-            coVerify {
-                scannedDeviceDao.insert(
-                    match {
-                        it.linkStrength == "STRONG" &&
-                            it.linkReason == "fingerprint_match:$ppFingerprint"
-                    },
-                )
+            for ((index, fingerprint) in invalidKeys.withIndex()) {
+                val legacyId =
+                    database.scannedDeviceDao().insert(
+                        ScannedDevice(
+                            address = address(index * 2 + 50),
+                            name = "Shared name",
+                            firstSeen = 1_000,
+                            lastSeen = 1_000,
+                            payloadFingerprint = fingerprint,
+                        ),
+                    )
+                val observedId = observe(address(index * 2 + 51), 2_000, fingerprint)
+                val observed = repository.getDeviceById(observedId)!!
+                assertNotEquals(legacyId, observedId)
+                assertNull(fingerprint, observed.payloadFingerprint)
+                assertNull(fingerprint, observed.linkedDeviceId)
+                assertNull(fingerprint, observed.linkStrength)
             }
         }
+
+    @Test
+    fun `weak or orphan fingerprint matches do not attach a new observation to a false root`() =
+        runTest {
+            for ((index, strength) in listOf("WEAK", "STRONG").withIndex()) {
+                database.scannedDeviceDao().insert(
+                    ScannedDevice(
+                        address = address(90 + index * 2),
+                        name = null,
+                        firstSeen = 1_000,
+                        lastSeen = 1_000,
+                        payloadFingerprint = fullIdentities[index],
+                        linkedDeviceId = 999,
+                        linkStrength = strength,
+                    ),
+                )
+                val observedId = observe(address(91 + index * 2), 2_000, fullIdentities[index])
+                assertNull(repository.getDeviceById(observedId)!!.linkedDeviceId)
+                assertEquals(1, repository.getDeviceById(observedId)!!.detectionCount)
+            }
+        }
+
+    @Test
+    fun `latest valid Find My status replaces true with false and older packets cannot regress it`() =
+        runTest {
+            val deviceId = observe(address(100), 1_000, status = 0, separated = true)
+            assertTrue(repository.getDeviceById(deviceId)!!.findMySeparated)
+            observe(address(100), 2_000, status = 4, separated = false)
+            observe(address(100), 1_500, status = 0, separated = true)
+            observe(address(100), 3_000, status = null, separated = true)
+            observe(address(100), 4_000, status = 256, separated = true)
+
+            val device = repository.getDeviceById(deviceId)!!
+            assertEquals(4, device.findMyStatus)
+            assertEquals(2_000L, device.findMyStatusTimestamp)
+            assertFalse(device.findMySeparated)
+            assertFalse(device.shadowKey!!.contains("SEP:1"))
+            assertEquals(1_000L, device.firstSeen)
+            assertEquals(4_000L, device.lastSeen)
+            assertEquals(5, device.detectionCount)
+        }
+
+    @Test
+    fun `newer observations without status do not discard a delayed latest valid status`() =
+        runTest {
+            val deviceId = observe(address(101), 1_000, status = 0, separated = true)
+            observe(address(101), 3_000)
+            observe(address(101), 2_000, status = 4, separated = false)
+            observe(address(101), 1_500, status = 0, separated = true)
+
+            val device = repository.getDeviceById(deviceId)!!
+            assertEquals(4, device.findMyStatus)
+            assertEquals(2_000L, device.findMyStatusTimestamp)
+            assertFalse(device.findMySeparated)
+            assertEquals(3_000L, device.lastSeen)
+            assertEquals(4, device.detectionCount)
+        }
+
+    @Test
+    fun `equal confidence corrected classification refreshes same sized shadow key`() =
+        runTest {
+            val id = observe(address(102), 1_000, type = "PHONE")
+            val previousKey = repository.getDeviceById(id)!!.shadowKey!!
+            observe(address(102), 2_000, type = "WATCH")
+
+            val updated = repository.getDeviceById(id)!!
+            val updatedKey = updated.shadowKey!!
+            assertEquals("WATCH", updated.deviceType)
+            assertTrue(updatedKey.contains("T:WATCH"))
+            assertFalse(updatedKey.contains("T:PHONE"))
+            assertEquals(previousKey.split("|").size, updatedKey.split("|").size)
+            assertNotEquals(previousKey, updatedKey)
+        }
+
+    @Test
+    fun `validated service tracker overrides stronger generic classification and survives generic packets`() =
+        runTest {
+            val id = observe(address(103), 1_000, confidence = 1.0f)
+            observe(address(103), 2_000, type = "TRACKER", tracker = true, method = "SERVICE_DATA")
+            observe(address(103), 3_000, confidence = 1.0f)
+
+            val updated = repository.getDeviceById(id)!!
+            assertTrue(updated.isTracker)
+            assertEquals("TRACKER", updated.deviceType)
+            assertEquals("SERVICE_DATA", updated.identificationMethod)
+            assertEquals(0.95f, updated.identificationConfidence, 0.0f)
+            assertTrue(updated.shadowKey!!.contains("TR:1"))
+        }
+
+    @Test
+    fun `shadow repository APIs return only evidence and members inside the requested observation window`() =
+        runTest {
+            val oldId = observe(address(104), 1_000)
+            val currentId = observe(address(105), 2_000)
+            record(oldId, 1_000)
+            record(currentId, 2_000)
+            val shadowKey = repository.getDeviceById(currentId)!!.shadowKey!!
+
+            assertEquals(listOf(shadowKey), repository.getSuspiciousShadowKeys(1, 1_500))
+            assertTrue(repository.getSuspiciousShadowKeys(2, 1_500).isEmpty())
+            assertEquals(listOf(currentId), repository.getDevicesByShadowKey(shadowKey, 1_500).map { it.id })
+            assertEquals(1, repository.getShadowLocationDeviceCounts(shadowKey, 1_500).size)
+            assertEquals(listOf(currentId), repository.getDeviceLocationRecordsForShadow(shadowKey, 1_500).map { it.deviceId })
+            assertTrue(repository.getDeviceLocationRecordsForShadow(shadowKey, 2_500).isEmpty())
+            assertTrue(repository.getDeviceLocationRecordsForDeviceWithLinked(oldId, 1_500).isEmpty())
+            assertEquals(1, repository.getDeviceLocationRecordsForDeviceWithLinked(oldId).size)
+        }
+
+    private fun address(index: Int): String = "02:00:00:00:00:%02X".format(index)
+
+    private suspend fun observe(
+        address: String,
+        at: Long,
+        fingerprint: String? = null,
+        status: Int? = null,
+        separated: Boolean = false,
+        type: String = "PHONE",
+        confidence: Float = 0.95f,
+        tracker: Boolean = false,
+        method: String = "MANUFACTURER_DATA",
+    ): Long =
+        repository.upsertDeviceWithFingerprint(
+            address = address,
+            name = "Shared name",
+            advertisedName = "Shared name",
+            lastSeen = at,
+            manufacturerData = null,
+            manufacturerId = 0x004C,
+            manufacturerName = "Apple",
+            deviceType = type,
+            deviceModel = type,
+            isTracker = tracker,
+            serviceUuids = null,
+            appearance = 0x0200,
+            txPowerLevel = -7,
+            advertisingFlags = null,
+            appleContinuityType = if (status != null) 0x12 else null,
+            identificationConfidence = confidence,
+            identificationMethod = method,
+            payloadFingerprint = fingerprint,
+            findMyStatus = status,
+            findMySeparated = separated,
+            highestRssi = -55,
+        )
+
+    private suspend fun record(
+        deviceId: Long,
+        at: Long,
+    ) {
+        val locationId =
+            database.locationDao().insert(
+                Location(latitude = 1.0, longitude = 2.0, accuracy = 5f, timestamp = at, provider = "GPS"),
+            )
+        repository.insertDeviceLocationRecord(deviceId, locationId, -55, at, false, null, "CONTINUOUS")
+    }
 }

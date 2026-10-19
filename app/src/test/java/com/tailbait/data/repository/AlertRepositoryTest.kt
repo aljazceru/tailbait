@@ -1,15 +1,25 @@
 package com.tailbait.data.repository
 
+import androidx.room.Room
 import app.cash.turbine.test
+import com.tailbait.data.database.TailBaitDatabase
 import com.tailbait.data.database.dao.AlertHistoryDao
 import com.tailbait.data.database.entities.AlertHistory
 import com.tailbait.data.database.entities.AlertStatistic
+import com.tailbait.data.model.ThreatLevel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -17,6 +27,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 
 /**
  * Comprehensive unit tests for AlertRepository.
@@ -765,5 +779,146 @@ class AlertRepositoryTest {
         assertEquals("MEDIUM", AlertLevel.MEDIUM)
         assertEquals("HIGH", AlertLevel.HIGH)
         assertEquals("CRITICAL", AlertLevel.CRITICAL)
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
+class AlertRepositoryThrottlingTest {
+    private lateinit var database: TailBaitDatabase
+    private lateinit var repository: AlertRepository
+    private val timestamp = 1_700_000_000_000L
+    private val hour = 60 * 60 * 1000L
+
+    @Before
+    fun setup() {
+        database =
+            Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), TailBaitDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        repository = AlertRepositoryImpl(database.alertHistoryDao())
+    }
+
+    @After
+    fun tearDown() {
+        database.close()
+    }
+
+    @Test
+    fun `critical escalation bypasses final cooldown but repeats and fluctuations do not`() =
+        runTest {
+            assertNotNull(repository.insertAlertWithThrottling(alert(0.51), hour))
+            val critical = alert(0.99, timestamp + hour / 2)
+
+            assertNotNull(repository.insertAlertWithThrottling(critical, hour))
+            assertNull(repository.insertAlertWithThrottling(critical.copy(timestamp = critical.timestamp + 1), hour))
+            assertNull(repository.insertAlertWithThrottling(critical.copy(threatScore = 1.0), hour))
+            assertNull(repository.insertAlertWithThrottling(critical.copy(threatScore = 0.98), hour))
+            assertEquals(2, database.alertHistoryDao().getAllAlerts().first().size)
+        }
+
+    @Test
+    fun `each higher severity bypasses final cooldown without a large score increase`() =
+        runTest {
+            listOf(0.59 to 0.60, 0.74 to 0.75, 0.89 to 0.90).forEachIndexed { index, (previous, current) ->
+                val deviceAddresses = "[\"AA:BB:CC:DD:EE:0$index\"]"
+                val initial = alert(previous).copy(deviceAddresses = deviceAddresses)
+                assertNotNull(repository.insertAlertWithThrottling(initial, hour))
+                assertNotNull(
+                    repository.insertAlertWithThrottling(
+                        initial.copy(threatScore = current, alertLevel = ThreatLevel.fromScore(current).name),
+                        hour,
+                    ),
+                )
+                assertNull(
+                    repository.insertAlertWithThrottling(
+                        initial.copy(threatScore = current + 0.01, alertLevel = ThreatLevel.fromScore(current).name),
+                        hour,
+                    ),
+                )
+            }
+            assertEquals(6, database.alertHistoryDao().getAllAlerts().first().size)
+        }
+
+    @Test
+    fun `score delta threshold still permits escalation within the same severity`() =
+        runTest {
+            assertNotNull(repository.insertAlertWithThrottling(alert(0.40), hour))
+            assertNotNull(repository.insertAlertWithThrottling(alert(0.55, timestamp + 1), hour))
+            assertNull(repository.insertAlertWithThrottling(alert(0.56, timestamp + 2), hour))
+            assertEquals(2, database.alertHistoryDao().getAllAlerts().first().size)
+        }
+
+    @Test
+    fun `unchanged threat remains throttled until the final cooldown expires`() =
+        runTest {
+            assertNotNull(repository.insertAlertWithThrottling(alert(0.80), hour))
+            assertNull(repository.insertAlertWithThrottling(alert(0.81, timestamp + hour), hour))
+            assertNotNull(repository.insertAlertWithThrottling(alert(0.81, timestamp + hour + 1), hour))
+            assertEquals(2, database.alertHistoryDao().getAllAlerts().first().size)
+        }
+
+    @Test
+    fun `concurrent equal escalations create one durable alert across repository instances`() =
+        runTest {
+            repository.insertAlert(alert(0.51))
+            val escalation = alert(0.99, timestamp + 2 * hour)
+            val start = CompletableDeferred<Unit>()
+            val attempts =
+                List(2) {
+                    val concurrentRepository = AlertRepositoryImpl(database.alertHistoryDao())
+                    async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+                        start.await()
+                        concurrentRepository.insertAlertWithThrottling(escalation, hour)
+                    }
+                }
+            start.complete(Unit)
+            val alertIds = attempts.awaitAll().filterNotNull()
+
+            assertEquals(1, alertIds.size)
+            val stored = database.alertHistoryDao().getAllAlerts().first()
+            assertEquals(2, stored.size)
+            assertEquals(alertIds.single(), stored.single { it.threatScore == 0.99 }.id)
+        }
+
+    @Test
+    fun `camera presence keeps its own cooldown and never hides tracking escalation`() =
+        runTest {
+            val presenceWindow = 15 * 60 * 1000L
+            val presence =
+                alert(0.0).copy(
+                    alertLevel = AlertLevel.MEDIUM,
+                    detectionDetails = """{"type":"camera_glasses_presence"}""",
+                )
+            assertNotNull(repository.insertAlertWithThrottling(presence, presenceWindow))
+            assertNotNull(repository.insertAlertWithThrottling(alert(0.51, timestamp + 1), hour))
+            assertNull(repository.insertAlertWithThrottling(presence.copy(timestamp = timestamp + 2), presenceWindow))
+            assertNotNull(
+                repository.insertAlertWithThrottling(
+                    presence.copy(timestamp = timestamp + presenceWindow + 2),
+                    presenceWindow,
+                ),
+            )
+            assertNotNull(repository.insertAlertWithThrottling(alert(0.99, timestamp + presenceWindow + 3), hour))
+
+            val stored = database.alertHistoryDao().getAllAlerts().first()
+            assertEquals(4, stored.size)
+            assertEquals(2, stored.count { it.isCameraGlassesPresence })
+        }
+
+    private fun alert(
+        score: Double,
+        at: Long = timestamp,
+    ): AlertHistory {
+        return AlertHistory(
+            alertLevel = ThreatLevel.fromScore(score).name,
+            title = "Tracking alert",
+            message = "Device followed multiple locations",
+            timestamp = at,
+            deviceAddresses = "[\"AA:BB:CC:DD:EE:FF\"]",
+            locationIds = "[1,2,3]",
+            threatScore = score,
+            detectionDetails = "{}",
+        )
     }
 }

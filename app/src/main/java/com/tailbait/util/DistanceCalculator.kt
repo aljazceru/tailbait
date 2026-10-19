@@ -63,6 +63,22 @@ object DistanceCalculator {
         )
     }
 
+    /** Minimum separation after allowing for both fixes' uncertainty; invalid fixes prove none. */
+    fun minimumSeparationMeters(
+        distanceMeters: Double,
+        firstAccuracyMeters: Float,
+        secondAccuracyMeters: Float,
+    ): Double {
+        if (
+            !distanceMeters.isFinite() || distanceMeters < 0.0 ||
+            !firstAccuracyMeters.isFinite() || firstAccuracyMeters <= 0f ||
+            !secondAccuracyMeters.isFinite() || secondAccuracyMeters <= 0f
+        ) {
+            return 0.0
+        }
+        return (distanceMeters - firstAccuracyMeters - secondAccuracyMeters).coerceAtLeast(0.0)
+    }
+
     /**
      * Check if two locations are within a specified distance threshold.
      *

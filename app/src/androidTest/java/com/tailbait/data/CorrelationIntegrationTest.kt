@@ -19,10 +19,13 @@ import com.tailbait.util.DistanceCalculator
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import kotlin.test.*
 
 /**
  * Integration tests for device-location correlation functionality.
@@ -67,8 +70,8 @@ class CorrelationIntegrationTest {
         scannedDeviceDao = database.scannedDeviceDao()
         deviceLocationRecordDao = database.deviceLocationRecordDao()
 
-        locationRepository = LocationRepositoryImpl(context, locationDao)
-        deviceRepository = DeviceRepositoryImpl(scannedDeviceDao, deviceLocationRecordDao)
+        locationRepository = LocationRepositoryImpl(context, locationDao, database.userPathDao())
+        deviceRepository = DeviceRepositoryImpl(database, scannedDeviceDao, deviceLocationRecordDao)
     }
 
     @After
@@ -91,7 +94,7 @@ class CorrelationIntegrationTest {
                     timestamp = System.currentTimeMillis(),
                     provider = "GPS",
                 )
-            val locationId = locationDao.insert(location)
+            val locationId = locationRepository.insertLocation(location)
 
             // When - Insert a device and correlate with location
             val deviceId =
@@ -114,10 +117,9 @@ class CorrelationIntegrationTest {
                 )
 
             // Then - Verify record was created
-            assertTrue(recordId > 0, "Record ID should be positive")
+            assertTrue("Record ID should be positive", recordId > 0)
 
-            val record = deviceLocationRecordDao.getById(recordId)
-            assertNotNull(record, "Record should exist in database")
+            val record = requireNotNull(deviceLocationRecordDao.getById(recordId))
             assertEquals(deviceId, record.deviceId)
             assertEquals(locationId, record.locationId)
             assertEquals(-60, record.rssi)
@@ -151,13 +153,12 @@ class CorrelationIntegrationTest {
                 )
 
             // Then - Should be same device ID
-            assertEquals(deviceId1, deviceId2, "Device ID should remain the same")
+            assertEquals("Device ID should remain the same", deviceId1, deviceId2)
 
-            val device = scannedDeviceDao.getByAddress("AA:BB:CC:DD:EE:FF")
-            assertNotNull(device)
+            val device = requireNotNull(scannedDeviceDao.getByAddress("AA:BB:CC:DD:EE:FF"))
             assertEquals("Device v2", device.name)
             assertEquals(timestamp2, device.lastSeen)
-            assertEquals(2, device.detectionCount, "Detection count should increment")
+            assertEquals("Detection count should increment", 2, device.detectionCount)
         }
 
     /**
@@ -241,10 +242,10 @@ class CorrelationIntegrationTest {
 
             // Then - Verify device was seen at 3 distinct locations
             val locationCount = deviceLocationRecordDao.getDistinctLocationCountForDevice(deviceId).first()
-            assertEquals(3, locationCount, "Device should be seen at 3 distinct locations")
+            assertEquals("Device should be seen at 3 distinct locations", 3, locationCount)
 
             val records = deviceLocationRecordDao.getRecordsForDevice(deviceId).first()
-            assertEquals(3, records.size, "Should have 3 correlation records")
+            assertEquals("Should have 3 correlation records", 3, records.size)
         }
 
     /**
@@ -283,13 +284,13 @@ class CorrelationIntegrationTest {
 
             // Then - Distance should be small (< 50m threshold)
             assertTrue(
-                distance < Constants.DEFAULT_LOCATION_CHANGE_THRESHOLD_METERS,
                 "Distance should be less than threshold: $distance meters",
+                distance < Constants.DEFAULT_LOCATION_CHANGE_THRESHOLD_METERS,
             )
 
             // Verify location change would not be detected for this small movement
             val locationChanged = distance > Constants.DEFAULT_LOCATION_CHANGE_THRESHOLD_METERS
-            assertFalse(locationChanged, "Location should not be marked as changed")
+            assertFalse("Location should not be marked as changed", locationChanged)
         }
 
     /**
@@ -328,12 +329,12 @@ class CorrelationIntegrationTest {
 
             // Then - Distance should be significant (> 50m threshold)
             assertTrue(
-                distance > Constants.DEFAULT_LOCATION_CHANGE_THRESHOLD_METERS,
                 "Distance should exceed threshold: $distance meters",
+                distance > Constants.DEFAULT_LOCATION_CHANGE_THRESHOLD_METERS,
             )
 
             val locationChanged = distance > Constants.DEFAULT_LOCATION_CHANGE_THRESHOLD_METERS
-            assertTrue(locationChanged, "Location should be marked as changed")
+            assertTrue("Location should be marked as changed", locationChanged)
         }
 
     /**
@@ -381,11 +382,11 @@ class CorrelationIntegrationTest {
             val recordIds = deviceLocationRecordDao.insertAll(records)
 
             // Then - All records should be inserted
-            assertEquals(10, recordIds.size, "Should insert 10 records")
-            assertTrue(recordIds.all { it > 0 }, "All record IDs should be positive")
+            assertEquals("Should insert 10 records", 10, recordIds.size)
+            assertTrue("All record IDs should be positive", recordIds.all { it > 0 })
 
             val deviceCount = deviceLocationRecordDao.getDeviceCountAtLocation(locationId).first()
-            assertEquals(10, deviceCount, "Should have 10 devices at this location")
+            assertEquals("Should have 10 devices at this location", 10, deviceCount)
         }
 
     /**
@@ -451,7 +452,7 @@ class CorrelationIntegrationTest {
                     timeWindowEnd,
                 ).first()
 
-            assertEquals(2, recordsInWindow.size, "Should find both records in time window")
+            assertEquals("Should find both records in time window", 2, recordsInWindow.size)
             assertTrue(recordsInWindow.any { it.id == record1Id })
             assertTrue(recordsInWindow.any { it.id == record2Id })
         }
@@ -511,14 +512,14 @@ class CorrelationIntegrationTest {
             // Then - Both records should exist (they have different timestamps)
             // In production, the scanner deduplicates within scan window
             // But database allows multiple records for analysis
-            assertNotEquals(record1Id, record2Id, "Records should have different IDs")
+            assertNotEquals("Records should have different IDs", record1Id, record2Id)
 
             val records =
                 deviceLocationRecordDao.getRecordsForDeviceAtLocation(
                     deviceId,
                     locationId,
                 ).first()
-            assertEquals(2, records.size, "Should have 2 records")
+            assertEquals("Should have 2 records", 2, records.size)
         }
 
     /**
@@ -582,8 +583,7 @@ class CorrelationIntegrationTest {
             )
 
             // Then - Verify average RSSI calculation
-            val avgRssi = deviceLocationRecordDao.getAverageRssiForDevice(deviceId)
-            assertNotNull(avgRssi)
+            val avgRssi = requireNotNull(deviceLocationRecordDao.getAverageRssiForDevice(deviceId))
             // Average of -55 and -85
             assertEquals(-70.0, avgRssi, 0.5)
         }
@@ -778,7 +778,7 @@ class CorrelationIntegrationTest {
             val location2Records = deviceLocationRecordDao.getRecordsAtLocation(location2Id).first()
 
             // Then - Verify correct filtering
-            assertEquals(3, location1Records.size, "Location 1 should have 3 records")
-            assertEquals(2, location2Records.size, "Location 2 should have 2 records")
+            assertEquals("Location 1 should have 3 records", 3, location1Records.size)
+            assertEquals("Location 2 should have 2 records", 2, location2Records.size)
         }
 }

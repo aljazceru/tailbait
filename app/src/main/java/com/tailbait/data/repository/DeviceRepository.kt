@@ -8,6 +8,7 @@ import com.tailbait.data.database.dao.ScannedDeviceDao
 import com.tailbait.data.database.dao.ShadowLocationCount
 import com.tailbait.data.database.entities.DeviceLocationRecord
 import com.tailbait.data.database.entities.ScannedDevice
+import com.tailbait.util.DeviceFingerprinter
 import com.tailbait.util.DeviceIdentifier
 import com.tailbait.util.ManufacturerDataParser
 import kotlinx.coroutines.flow.Flow
@@ -24,24 +25,13 @@ import javax.inject.Singleton
  */
 enum class LinkStrength {
     /**
-     * Strong link based on stable identifiers:
-     * - Payload fingerprint match (AirTag, Find My, etc.)
-     * - Device name match ("John's iPhone")
-     * - Service UUID + manufacturer data pattern
-     *
-     * These links have HIGH confidence of being the same physical device.
+     * Strong link based on matching full, validated Find My or Find Hub identity.
      */
     STRONG,
 
     /**
-     * Weak link based on circumstantial evidence:
-     * - Temporal correlation (old MAC disappeared, new one appeared)
-     * - Same manufacturer + device type
-     * - Similar RSSI (proximity)
-     *
-     * These links COULD be wrong in crowded areas where multiple
-     * similar devices exist. Detection algorithm should weight
-     * weak-linked locations at reduced value.
+     * Legacy or manual circumstantial link; it does not establish physical identity
+     * and must not propagate explicit trust.
      */
     WEAK,
 }
@@ -208,15 +198,16 @@ interface DeviceRepository {
     suspend fun getDeviceLocationRecordsForDevice(deviceId: Long): List<DeviceLocationRecord>
 
     /**
-     * Get device-location records for a device AND its linked child devices.
+     * Get eligible records for a confirmed family (root plus direct STRONG children).
      *
-     * Historical records created before MAC linking are stored under child device IDs.
-     * This method aggregates them all for complete detection scoring.
-     *
-     * @param deviceId Primary device ID
-     * @return List of device-location records for primary + linked devices
+     * @param deviceId Device or canonical root ID
+     * @param sinceTimestamp Observation cutoff; zero intentionally includes all history
+     * @return Records within the cutoff, excluding explicitly trusted families
      */
-    suspend fun getDeviceLocationRecordsForDeviceWithLinked(deviceId: Long): List<DeviceLocationRecord>
+    suspend fun getDeviceLocationRecordsForDeviceWithLinked(
+        deviceId: Long,
+        sinceTimestamp: Long = 0,
+    ): List<DeviceLocationRecord>
 
     // ============================================================================
     // FINGERPRINT-BASED DEVICE CORRELATION (AirTag MAC rotation handling)
@@ -273,19 +264,6 @@ interface DeviceRepository {
     suspend fun getStrongLinkedDevices(primaryDeviceId: Long): List<ScannedDevice>
 
     /**
-     * Update Find My status for a device.
-     *
-     * @param deviceId Device ID
-     * @param findMyStatus Raw status byte
-     * @param findMySeparated Whether device is separated from owner
-     */
-    suspend fun updateFindMyStatus(
-        deviceId: Long,
-        findMyStatus: Int,
-        findMySeparated: Boolean,
-    )
-
-    /**
      * Get suspicious devices, accounting for MAC rotation via fingerprint linking.
      * This considers all locations across all linked devices as one physical device.
      * Only considers device_location_records with timestamps >= sinceTimestamp.
@@ -301,9 +279,9 @@ interface DeviceRepository {
 
     /**
      * Insert or update a device with fingerprint-based correlation.
-     * If a device with the same fingerprint exists, links the new MAC to it.
+     * Only a fresh, validated full identity key can link a new MAC to a canonical root.
      *
-     * @return Device ID (either existing primary or new device)
+     * @return The observed MAC's own row ID, on both first and subsequent observations
      */
     @Suppress("LongParameterList")
     suspend fun upsertDeviceWithFingerprint(
@@ -365,25 +343,43 @@ interface DeviceRepository {
      * Get shadow keys that appear at a minimum number of distinct locations.
      *
      * @param minLocationCount Minimum distinct locations required
+     * @param sinceTimestamp Only consider eligible observations at or after this cutoff
      * @return List of suspicious shadow key strings
      */
-    suspend fun getSuspiciousShadowKeys(minLocationCount: Int): List<String>
+    suspend fun getSuspiciousShadowKeys(
+        minLocationCount: Int,
+        sinceTimestamp: Long,
+    ): List<String>
 
     /**
      * Get all devices matching a specific shadow key.
      *
      * @param shadowKey The shadow key to query
+     * @param sinceTimestamp Only include devices observed at or after this cutoff
      * @return List of devices with this shadow profile
      */
-    suspend fun getDevicesByShadowKey(shadowKey: String): List<ScannedDevice>
+    suspend fun getDevicesByShadowKey(
+        shadowKey: String,
+        sinceTimestamp: Long,
+    ): List<ScannedDevice>
 
     /**
      * Get per-location device counts for a shadow key.
      *
      * @param shadowKey The shadow key to analyze
+     * @param sinceTimestamp Only count eligible observations at or after this cutoff
      * @return List of (locationId, deviceCount, maxRssi) per location
      */
-    suspend fun getShadowLocationDeviceCounts(shadowKey: String): List<ShadowLocationCount>
+    suspend fun getShadowLocationDeviceCounts(
+        shadowKey: String,
+        sinceTimestamp: Long,
+    ): List<ShadowLocationCount>
+
+    /** Eligible shadow observations using the same cutoff and trust scope as shadow counts. */
+    suspend fun getDeviceLocationRecordsForShadow(
+        shadowKey: String,
+        sinceTimestamp: Long,
+    ): List<DeviceLocationRecord>
 
     // ============================================================================
     // TEMPORAL CLUSTERING (For devices without fingerprints)
@@ -655,8 +651,11 @@ class DeviceRepositoryImpl
             return deviceLocationRecordDao.getRecordsForDevice(deviceId).first()
         }
 
-        override suspend fun getDeviceLocationRecordsForDeviceWithLinked(deviceId: Long): List<DeviceLocationRecord> {
-            return deviceLocationRecordDao.getRecordsForDeviceWithLinked(deviceId)
+        override suspend fun getDeviceLocationRecordsForDeviceWithLinked(
+            deviceId: Long,
+            sinceTimestamp: Long,
+        ): List<DeviceLocationRecord> {
+            return deviceLocationRecordDao.getRecordsForDeviceWithLinked(deviceId, sinceTimestamp)
         }
 
         // ============================================================================
@@ -692,14 +691,6 @@ class DeviceRepositoryImpl
 
         override suspend fun getStrongLinkedDevices(primaryDeviceId: Long): List<ScannedDevice> {
             return scannedDeviceDao.getStrongLinkedDevices(primaryDeviceId)
-        }
-
-        override suspend fun updateFindMyStatus(
-            deviceId: Long,
-            findMyStatus: Int,
-            findMySeparated: Boolean,
-        ) {
-            scannedDeviceDao.updateFindMyStatus(deviceId, findMyStatus, findMySeparated)
         }
 
         override fun getSuspiciousDevicesWithLinked(
@@ -741,6 +732,8 @@ class DeviceRepositoryImpl
                 // Check if device already exists by MAC address
                 val existingDevice = scannedDeviceDao.getByAddress(address)
                 val hexManufacturerData = manufacturerData?.let { bytesToHexString(it) }
+                val identityFingerprint = payloadFingerprint?.takeIf(DeviceFingerprinter::isHighConfidenceFingerprint)
+                val validFindMyStatus = findMyStatus?.takeIf { it in 0..255 }
 
                 // If device exists by MAC, update it
                 if (existingDevice != null) {
@@ -758,24 +751,34 @@ class DeviceRepositoryImpl
                             existingDevice.highestRssi == null -> highestRssi
                             else -> maxOf(highestRssi, existingDevice.highestRssi)
                         }
+                    val isLatestObservation = lastSeen >= existingDevice.lastSeen
+                    val serviceTrackerEvidence =
+                        isTracker && (identificationMethod == "SERVICE_UUID" || identificationMethod == "SERVICE_DATA")
+                    val updateClassification =
+                        isLatestObservation &&
+                            (isTracker || !existingDevice.isTracker) &&
+                            (serviceTrackerEvidence || identificationConfidence >= existingDevice.identificationConfidence)
+                    val updateFindMyState =
+                        validFindMyStatus != null && lastSeen >= (existingDevice.findMyStatusTimestamp ?: Long.MIN_VALUE)
 
                     val updatedDevice =
                         existingDevice.copy(
                             name = name ?: existingDevice.name,
                             advertisedName = advertisedName ?: existingDevice.advertisedName,
-                            lastSeen = lastSeen,
+                            firstSeen = minOf(lastSeen, existingDevice.firstSeen),
+                            lastSeen = maxOf(lastSeen, existingDevice.lastSeen),
                             detectionCount = existingDevice.detectionCount + 1,
                             manufacturerData = hexManufacturerData ?: existingDevice.manufacturerData,
                             manufacturerId = manufacturerId ?: existingDevice.manufacturerId,
                             manufacturerName = finalManufacturerName,
                             deviceType =
-                                if (identificationConfidence > existingDevice.identificationConfidence) {
+                                if (updateClassification) {
                                     deviceType
                                 } else {
                                     existingDevice.deviceType
                                 },
                             deviceModel =
-                                if (identificationConfidence > existingDevice.identificationConfidence) {
+                                if (updateClassification) {
                                     deviceModel
                                 } else {
                                     existingDevice.deviceModel
@@ -787,385 +790,89 @@ class DeviceRepositoryImpl
                             advertisingFlags = advertisingFlags ?: existingDevice.advertisingFlags,
                             appleContinuityType = appleContinuityType ?: existingDevice.appleContinuityType,
                             identificationConfidence =
-                                maxOf(
-                                    identificationConfidence,
-                                    existingDevice.identificationConfidence,
-                                ),
+                                if (updateClassification) identificationConfidence else existingDevice.identificationConfidence,
                             identificationMethod =
-                                if (identificationConfidence > existingDevice.identificationConfidence) {
+                                if (updateClassification) {
                                     identificationMethod
                                 } else {
                                     existingDevice.identificationMethod
                                 },
                             // Find My fingerprinting fields
-                            payloadFingerprint = payloadFingerprint ?: existingDevice.payloadFingerprint,
-                            findMyStatus = findMyStatus ?: existingDevice.findMyStatus,
-                            findMySeparated = findMySeparated || existingDevice.findMySeparated,
+                            payloadFingerprint =
+                                if (isLatestObservation && identityFingerprint != null) {
+                                    identityFingerprint
+                                } else {
+                                    existingDevice.payloadFingerprint?.takeIf(DeviceFingerprinter::isHighConfidenceFingerprint)
+                                },
+                            findMyStatus = if (updateFindMyState) validFindMyStatus else existingDevice.findMyStatus,
+                            findMySeparated = if (updateFindMyState) findMySeparated else existingDevice.findMySeparated,
+                            findMyStatusTimestamp =
+                                if (updateFindMyState) lastSeen else existingDevice.findMyStatusTimestamp,
                             // Enhanced fields from Nordic patterns (v7)
                             highestRssi = newHighestRssi,
                             signalStrength = signalStrength ?: existingDevice.signalStrength,
                             beaconType = beaconType ?: existingDevice.beaconType,
                             threatLevel = threatLevel ?: existingDevice.threatLevel,
                         )
-                    // Compute shadow key if not set or if new data yields a more specific key
                     val deviceWithShadow = computeShadowKey(updatedDevice)
                     scannedDeviceDao.update(deviceWithShadow)
-                    existingDevice.id // Return ID (Implicit return from lambda)
+                    existingDevice.id
                 } else {
-                    // New MAC address - check if we have a matching fingerprint
-                    // Use a 'run' block to allow early exit structures via 'return@run' if Kotlin allowed labeled returns from run
-                    // but here we just restructure as if-else-if
-
-                    var resultId: Long? = null
-
-                    if (payloadFingerprint != null) {
-                        val existingByFingerprint = scannedDeviceDao.getByFingerprint(payloadFingerprint)
-
-                        if (existingByFingerprint != null) {
-                            // FOUND MATCHING FINGERPRINT
-                            // FM fingerprints use the rotating public key prefix (bytes 2-7)
-                            // which changes every ~15 min with the MAC. If the matched device
-                            // was last seen >20 min ago (rotation period + 5 min buffer), the
-                            // fingerprint has likely rotated and this match is unreliable.
-                            val timeSinceLastSeen = lastSeen - existingByFingerprint.lastSeen
-                            val fmStaleThresholdMs = 20 * 60 * 1000L // 20 minutes
-                            val isStaleFmMatch =
-                                payloadFingerprint.startsWith("FM:") &&
-                                    timeSinceLastSeen > fmStaleThresholdMs
-
-                            val resolvedLinkStrength =
-                                if (isStaleFmMatch) {
-                                    LinkStrength.WEAK
-                                } else {
-                                    LinkStrength.STRONG
-                                }
-                            val linkReason =
-                                if (isStaleFmMatch) {
-                                    "fingerprint_match:$payloadFingerprint:stale"
-                                } else {
-                                    "fingerprint_match:$payloadFingerprint"
-                                }
-
-                            val newDevice =
-                                ScannedDevice(
-                                    address = address,
-                                    name = name,
-                                    advertisedName = advertisedName,
-                                    firstSeen = lastSeen,
-                                    lastSeen = lastSeen,
-                                    detectionCount = 1,
-                                    manufacturerData = hexManufacturerData,
-                                    manufacturerId = manufacturerId,
-                                    manufacturerName = manufacturerName,
-                                    deviceType = deviceType,
-                                    deviceModel = deviceModel,
-                                    isTracker = isTracker,
-                                    serviceUuids = serviceUuids,
-                                    appearance = appearance,
-                                    txPowerLevel = txPowerLevel,
-                                    advertisingFlags = advertisingFlags,
-                                    appleContinuityType = appleContinuityType,
-                                    identificationConfidence = identificationConfidence,
-                                    identificationMethod = identificationMethod,
-                                    payloadFingerprint = payloadFingerprint,
-                                    findMyStatus = findMyStatus,
-                                    findMySeparated = findMySeparated,
-                                    linkedDeviceId = existingByFingerprint.linkedDeviceId ?: existingByFingerprint.id,
-                                    lastMacRotation = System.currentTimeMillis(),
-                                    linkStrength = resolvedLinkStrength.name,
-                                    linkReason = linkReason,
-                                    highestRssi = highestRssi,
-                                    signalStrength = signalStrength,
-                                    beaconType = beaconType,
-                                    threatLevel = threatLevel,
-                                )
-
-                            scannedDeviceDao.insert(computeShadowKey(newDevice))
-
-                            val primaryId = existingByFingerprint.linkedDeviceId ?: existingByFingerprint.id
-                            val primary = scannedDeviceDao.getById(primaryId)
-                            if (primary != null) {
-                                val newHighestRssi =
-                                    when {
-                                        highestRssi == null -> primary.highestRssi
-                                        primary.highestRssi == null -> highestRssi
-                                        else -> maxOf(highestRssi, primary.highestRssi)
-                                    }
-                                scannedDeviceDao.update(
-                                    primary.copy(
-                                        lastSeen = lastSeen,
-                                        detectionCount = primary.detectionCount + 1,
-                                        findMyStatus = findMyStatus ?: primary.findMyStatus,
-                                        findMySeparated = findMySeparated || primary.findMySeparated,
-                                        highestRssi = newHighestRssi,
-                                        signalStrength = signalStrength ?: primary.signalStrength,
-                                        threatLevel = threatLevel ?: primary.threatLevel,
-                                    ),
-                                )
-                            }
-                            resultId = primaryId
-                        }
-                    }
-
-                    if (resultId == null) {
-                        // Try Temporal Correlation
-                        // We must execute this only if fingerprint match failed
-                        if (manufacturerId != null && deviceType != null) {
-                            val temporalMatchResult =
-                                findTemporalCorrelationMatch(
-                                    manufacturerId = manufacturerId,
-                                    deviceType = deviceType,
-                                    currentRssi = highestRssi ?: -70,
-                                    currentTime = lastSeen,
-                                    excludeAddress = address,
-                                    deviceName = name ?: advertisedName,
-                                    appearance = appearance,
-                                    txPowerLevel = txPowerLevel,
-                                )
-
-                            if (temporalMatchResult != null) {
-                                val temporalMatch = temporalMatchResult.device
-                                val linkStrength = if (temporalMatchResult.isStrongMatch) LinkStrength.STRONG else LinkStrength.WEAK
-
-                                timber.log.Timber.d(
-                                    "Temporal correlation: linking $address to ${temporalMatch.address} " +
-                                        "(${linkStrength.name} link, reason=${temporalMatchResult.linkReason})",
-                                )
-
-                                val newDevice =
-                                    ScannedDevice(
-                                        address = address,
-                                        name = name,
-                                        advertisedName = advertisedName,
-                                        firstSeen = lastSeen,
-                                        lastSeen = lastSeen,
-                                        detectionCount = 1,
-                                        manufacturerData = hexManufacturerData,
-                                        manufacturerId = manufacturerId,
-                                        manufacturerName = manufacturerName,
-                                        deviceType = deviceType,
-                                        deviceModel = deviceModel,
-                                        isTracker = isTracker,
-                                        serviceUuids = serviceUuids,
-                                        appearance = appearance,
-                                        txPowerLevel = txPowerLevel,
-                                        advertisingFlags = advertisingFlags,
-                                        appleContinuityType = appleContinuityType,
-                                        identificationConfidence = identificationConfidence,
-                                        identificationMethod = identificationMethod,
-                                        payloadFingerprint = payloadFingerprint,
-                                        findMyStatus = findMyStatus,
-                                        findMySeparated = findMySeparated,
-                                        linkedDeviceId = temporalMatch.linkedDeviceId ?: temporalMatch.id,
-                                        lastMacRotation = System.currentTimeMillis(),
-                                        linkStrength = linkStrength.name,
-                                        linkReason = temporalMatchResult.linkReason,
-                                        highestRssi = highestRssi,
-                                        signalStrength = signalStrength,
-                                        beaconType = beaconType,
-                                        threatLevel = threatLevel,
-                                    )
-
-                                scannedDeviceDao.insert(computeShadowKey(newDevice))
-
-                                val primaryId = temporalMatch.linkedDeviceId ?: temporalMatch.id
-                                val primary = scannedDeviceDao.getById(primaryId)
-                                if (primary != null) {
-                                    val newHighestRssi =
-                                        when {
-                                            highestRssi == null -> primary.highestRssi
-                                            primary.highestRssi == null -> highestRssi
-                                            else -> maxOf(highestRssi, primary.highestRssi)
-                                        }
-                                    scannedDeviceDao.update(
-                                        primary.copy(
-                                            lastSeen = lastSeen,
-                                            detectionCount = primary.detectionCount + 1,
-                                            highestRssi = newHighestRssi,
-                                        ),
-                                    )
-                                }
-                                resultId = primaryId
+                    val matchingDevice =
+                        identityFingerprint?.let { fingerprint ->
+                            scannedDeviceDao.getByFingerprint(fingerprint)?.takeIf {
+                                // Both protocols rotate identity keys; stale matches are not identity evidence.
+                                val gap = lastSeen - it.lastSeen
+                                it.radio == "BLE" && gap in -20 * 60 * 1000L..20 * 60 * 1000L
                             }
                         }
-                    }
-
-                    if (resultId == null) {
-                        // Fallback: Create completely new device
-                        val newDevice =
-                            ScannedDevice(
-                                address = address,
-                                name = name,
-                                advertisedName = advertisedName,
-                                firstSeen = lastSeen,
-                                lastSeen = lastSeen,
-                                detectionCount = 1,
-                                manufacturerData = hexManufacturerData,
-                                manufacturerId = manufacturerId,
-                                manufacturerName = manufacturerName,
-                                deviceType = deviceType,
-                                deviceModel = deviceModel,
-                                isTracker = isTracker,
-                                serviceUuids = serviceUuids,
-                                appearance = appearance,
-                                txPowerLevel = txPowerLevel,
-                                advertisingFlags = advertisingFlags,
-                                appleContinuityType = appleContinuityType,
-                                identificationConfidence = identificationConfidence,
-                                identificationMethod = identificationMethod,
-                                payloadFingerprint = payloadFingerprint,
-                                findMyStatus = findMyStatus,
-                                findMySeparated = findMySeparated,
-                                highestRssi = highestRssi,
-                                signalStrength = signalStrength,
-                                beaconType = beaconType,
-                                threatLevel = threatLevel,
-                            )
-                        val deviceWithShadow = computeShadowKey(newDevice)
-                        resultId = scannedDeviceDao.insert(deviceWithShadow)
-                    }
-
-                    resultId!! // Should never be null here
-                }
-            }
-        }
-
-        /**
-         * Result of temporal correlation matching.
-         *
-         * @property device The matched device
-         * @property isStrongMatch True if the match is based on strong signals (name match)
-         * @property linkReason Explanation of why devices were linked
-         */
-        private data class TemporalMatchResult(
-            val device: ScannedDevice,
-            val isStrongMatch: Boolean,
-            val linkReason: String,
-        )
-
-        /**
-         * Find a device that likely rotated its MAC address based on temporal patterns.
-         *
-         * When a phone rotates its MAC:
-         * 1. Old MAC stops being advertised (last_seen becomes stale)
-         * 2. New MAC appears with same manufacturer/type/similar RSSI
-         * 3. They're never seen simultaneously
-         *
-         * @return A TemporalMatchResult with device and link strength info, or null
-         */
-        private suspend fun findTemporalCorrelationMatch(
-            manufacturerId: Int,
-            deviceType: String,
-            currentRssi: Int,
-            currentTime: Long,
-            excludeAddress: String,
-            deviceName: String? = null,
-            appearance: Int? = null,
-            txPowerLevel: Int? = null,
-        ): TemporalMatchResult? {
-            // Look for devices that disappeared in the last 5 minutes
-            // MAC rotation typically happens every 15 minutes, so 5 min is conservative
-            val timeWindowMs = 5 * 60 * 1000L
-
-            val candidates =
-                scannedDeviceDao.findDevicesDisappearedNear(
-                    newDeviceFirstSeen = currentTime,
-                    manufacturerId = manufacturerId,
-                    deviceType = deviceType,
-                    timeWindowMs = timeWindowMs,
-                    excludeAddress = excludeAddress,
-                )
-
-            if (candidates.isEmpty()) return null
-
-            // Score each candidate based on multiple correlation signals
-            data class ScoredCandidate(
-                val device: ScannedDevice,
-                val score: Double,
-                val hasNameMatch: Boolean,
-                val matchedName: String?,
-            )
-
-            val scoredCandidates =
-                candidates.mapNotNull { candidate ->
-                    var score = 0.0
-                    var hasNameMatch = false
-                    var matchedName: String? = null
-
-                    // 1. RSSI similarity (max 30 points)
-                    val rssiDiff = kotlin.math.abs((candidate.highestRssi ?: -70) - currentRssi)
-                    if (rssiDiff > 20) return@mapNotNull null // Too different, skip
-                    score += (20 - rssiDiff) * 1.5 // 0-30 points
-
-                    // 2. Recency (max 25 points) - more recent = better match
-                    val timeSinceDisappeared = currentTime - candidate.lastSeen
-                    val recencyScore = ((timeWindowMs - timeSinceDisappeared).toDouble() / timeWindowMs) * 25
-                    score += recencyScore.coerceAtLeast(0.0)
-
-                    // 3. Device name match (max 30 points) - STRONG signal if names match
-                    if (!deviceName.isNullOrBlank() && !candidate.name.isNullOrBlank()) {
-                        if (normalizeDeviceName(deviceName) == normalizeDeviceName(candidate.name)) {
-                            score += 30 // Strong correlation signal
-                            hasNameMatch = true
-                            matchedName = candidate.name
-                            timber.log.Timber.d("Name match found: '$deviceName' == '${candidate.name}'")
+                    val primaryDevice =
+                        when {
+                            matchingDevice == null -> null
+                            matchingDevice.linkedDeviceId == null -> matchingDevice
+                            matchingDevice.linkStrength == LinkStrength.STRONG.name ->
+                                scannedDeviceDao.getById(matchingDevice.linkedDeviceId)?.takeIf {
+                                    it.linkedDeviceId == null && it.radio == "BLE"
+                                }
+                            else -> null
                         }
-                    }
-
-                    // 4. Appearance match (max 10 points)
-                    if (appearance != null && candidate.appearance != null && appearance == candidate.appearance) {
-                        score += 10
-                    }
-
-                    // 5. TX Power match (max 5 points)
-                    if (txPowerLevel != null && candidate.txPowerLevel != null) {
-                        val txDiff = kotlin.math.abs(txPowerLevel - candidate.txPowerLevel)
-                        if (txDiff <= 3) score += 5
-                    }
-
-                    ScoredCandidate(candidate, score, hasNameMatch, matchedName)
+                    val newDevice =
+                        ScannedDevice(
+                            address = address,
+                            name = name,
+                            advertisedName = advertisedName,
+                            firstSeen = lastSeen,
+                            lastSeen = lastSeen,
+                            detectionCount = 1,
+                            manufacturerData = hexManufacturerData,
+                            manufacturerId = manufacturerId,
+                            manufacturerName = manufacturerName,
+                            deviceType = deviceType,
+                            deviceModel = deviceModel,
+                            isTracker = isTracker,
+                            serviceUuids = serviceUuids,
+                            appearance = appearance,
+                            txPowerLevel = txPowerLevel,
+                            advertisingFlags = advertisingFlags,
+                            appleContinuityType = appleContinuityType,
+                            identificationConfidence = identificationConfidence,
+                            identificationMethod = identificationMethod,
+                            payloadFingerprint = identityFingerprint,
+                            findMyStatus = validFindMyStatus,
+                            findMySeparated = validFindMyStatus != null && findMySeparated,
+                            findMyStatusTimestamp = if (validFindMyStatus != null) lastSeen else null,
+                            linkedDeviceId = primaryDevice?.id,
+                            lastMacRotation = if (primaryDevice != null) lastSeen else null,
+                            linkStrength = if (primaryDevice != null) LinkStrength.STRONG.name else null,
+                            linkReason = if (primaryDevice != null) "fingerprint_match:$identityFingerprint" else null,
+                            highestRssi = highestRssi,
+                            signalStrength = signalStrength,
+                            beaconType = beaconType,
+                            threatLevel = threatLevel,
+                        )
+                    scannedDeviceDao.insert(computeShadowKey(newDevice))
                 }
-
-            if (scoredCandidates.isEmpty()) return null
-
-            // Return the highest scoring candidate, but only if score is reasonable
-            val bestMatch = scoredCandidates.maxByOrNull { it.score }
-            return if (bestMatch != null && bestMatch.score >= 20) {
-                val timeSinceDisappeared = (currentTime - bestMatch.device.lastSeen) / 1000
-
-                // Build link reason
-                val linkReason =
-                    if (bestMatch.hasNameMatch) {
-                        "name_match:${bestMatch.matchedName}"
-                    } else {
-                        "temporal:rssi=$currentRssi,disappeared=${timeSinceDisappeared}s"
-                    }
-
-                timber.log.Timber.d(
-                    "Temporal match: ${bestMatch.device.address} with score ${bestMatch.score.toInt()}, " +
-                        "strong=${bestMatch.hasNameMatch}, reason=$linkReason",
-                )
-
-                TemporalMatchResult(
-                    device = bestMatch.device,
-                    isStrongMatch = bestMatch.hasNameMatch,
-                    linkReason = linkReason,
-                )
-            } else {
-                null
             }
-        }
-
-        /**
-         * Normalize device name for comparison.
-         * Removes variable parts like possessive apostrophes and numbers.
-         */
-        private fun normalizeDeviceName(name: String): String {
-            return name
-                .lowercase()
-                .replace(Regex("['']s\\s+"), " ") // "John's iPhone" -> "John iPhone"
-                .replace(Regex("\\s+"), " ")
-                .trim()
         }
 
         /**
@@ -1175,19 +882,9 @@ class DeviceRepositoryImpl
             return bytes.joinToString("") { "%02x".format(it) }
         }
 
-        /**
-         * Compute and set shadow key on a device if not already set
-         * or if the new key is more specific (more components).
-         */
         private fun computeShadowKey(device: ScannedDevice): ScannedDevice {
-            val newKey = ShadowKeyGenerator.generate(device) ?: return device
-            val existingKey = device.shadowKey
-            if (existingKey != null) {
-                val existingSpecificity = ShadowKeyGenerator.specificityScore(existingKey)
-                val newSpecificity = ShadowKeyGenerator.specificityScore(newKey)
-                if (newSpecificity <= existingSpecificity) return device
-            }
-            return device.copy(shadowKey = newKey)
+            val newKey = ShadowKeyGenerator.generate(device)
+            return if (newKey == device.shadowKey) device else device.copy(shadowKey = newKey)
         }
 
         override suspend fun upsertCompanionObservation(
@@ -1241,16 +938,32 @@ class DeviceRepositoryImpl
         // SHADOW-BASED DETECTION IMPLEMENTATION
         // ============================================================================
 
-        override suspend fun getSuspiciousShadowKeys(minLocationCount: Int): List<String> {
-            return scannedDeviceDao.getSuspiciousShadowKeys(minLocationCount)
+        override suspend fun getSuspiciousShadowKeys(
+            minLocationCount: Int,
+            sinceTimestamp: Long,
+        ): List<String> {
+            return scannedDeviceDao.getSuspiciousShadowKeys(minLocationCount, sinceTimestamp)
         }
 
-        override suspend fun getDevicesByShadowKey(shadowKey: String): List<ScannedDevice> {
-            return scannedDeviceDao.getDevicesByShadowKey(shadowKey)
+        override suspend fun getDevicesByShadowKey(
+            shadowKey: String,
+            sinceTimestamp: Long,
+        ): List<ScannedDevice> {
+            return scannedDeviceDao.getDevicesByShadowKey(shadowKey, sinceTimestamp)
         }
 
-        override suspend fun getShadowLocationDeviceCounts(shadowKey: String): List<ShadowLocationCount> {
-            return scannedDeviceDao.getShadowLocationDeviceCounts(shadowKey)
+        override suspend fun getShadowLocationDeviceCounts(
+            shadowKey: String,
+            sinceTimestamp: Long,
+        ): List<ShadowLocationCount> {
+            return scannedDeviceDao.getShadowLocationDeviceCounts(shadowKey, sinceTimestamp)
+        }
+
+        override suspend fun getDeviceLocationRecordsForShadow(
+            shadowKey: String,
+            sinceTimestamp: Long,
+        ): List<DeviceLocationRecord> {
+            return deviceLocationRecordDao.getRecordsForShadow(shadowKey, sinceTimestamp)
         }
 
         // ============================================================================

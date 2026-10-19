@@ -1,21 +1,27 @@
 package com.tailbait.service
 
+import androidx.room.Room
+import com.tailbait.data.database.TailBaitDatabase
 import com.tailbait.data.database.entities.AlertHistory
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.model.DetectionResult
 import com.tailbait.data.repository.AlertRepository
+import com.tailbait.data.repository.AlertRepositoryImpl
 import com.tailbait.util.Constants
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
@@ -34,6 +40,7 @@ class AlertGeneratorTest {
     private lateinit var alertRepository: AlertRepository
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var alertGenerator: AlertGenerator
+    private lateinit var database: TailBaitDatabase
 
     @Before
     fun setup() {
@@ -44,6 +51,11 @@ class AlertGeneratorTest {
         coEvery { alertRepository.getLatestAlertForDevice(any()) } returns null
 
         alertGenerator = AlertGenerator(alertRepository, notificationHelper)
+    }
+
+    @After
+    fun tearDown() {
+        if (::database.isInitialized) database.close()
     }
 
     @Test
@@ -323,10 +335,6 @@ class AlertGeneratorTest {
             // Given
             val detectionResult = createTestDetectionResult(0.75)
 
-            coEvery {
-                alertRepository.hasSimilarRecentAlert(any(), any())
-            } returns false
-
             // When
             val shouldGenerate =
                 alertGenerator.shouldGenerateAlert(
@@ -358,22 +366,11 @@ class AlertGeneratorTest {
     @Test
     fun `shouldGenerateAlert returns false when similar recent alert exists`() =
         runTest {
-            // Given
+            useRealRepository()
             val detectionResult = createTestDetectionResult(0.75)
+            assertNotNull(alertGenerator.generateAlert(detectionResult))
 
-            coEvery {
-                alertRepository.hasSimilarRecentAlert(any(), any())
-            } returns true
-
-            // When
-            val shouldGenerate =
-                alertGenerator.shouldGenerateAlert(
-                    detectionResult,
-                    minThreatScore = 0.5,
-                )
-
-            // Then
-            assertFalse(shouldGenerate)
+            assertFalse(alertGenerator.shouldGenerateAlert(detectionResult, minThreatScore = 0.5))
         }
 
     @Test
@@ -564,7 +561,75 @@ class AlertGeneratorTest {
             assertNotNull("Should allow first alert for new device", alertId)
         }
 
+    @Test
+    fun `low to critical after two hours stores and notifies one escalation`() =
+        runTest {
+            useRealRepository()
+            val low = createTestDetectionResult(0.51).copy(timestamp = 1_700_000_000_000L)
+            assertNotNull(alertGenerator.generateAlert(low))
+            val critical = low.copy(threatScore = 0.99, timestamp = low.timestamp + 2 * 60 * 60 * 1000L)
+
+            assertTrue(alertGenerator.shouldGenerateAlert(critical))
+            val criticalId = alertGenerator.generateAlert(critical)
+            assertNotNull(criticalId)
+            assertNull(alertGenerator.generateAlert(critical.copy(timestamp = critical.timestamp + 60_000L)))
+
+            val alerts = database.alertHistoryDao().getAllAlerts().first()
+            assertEquals(2, alerts.size)
+            assertEquals(listOf(0.51, 0.99), alerts.map { it.threatScore }.sorted())
+            coVerify(exactly = 1) {
+                notificationHelper.showAlertNotification(
+                    match { it.id == criticalId && it.alertLevel == Constants.ALERT_LEVEL_CRITICAL },
+                )
+            }
+            coVerify(exactly = 2) { notificationHelper.showAlertNotification(any()) }
+        }
+
+    @Test
+    fun `higher severity bypasses both cooldowns even below score delta threshold`() =
+        runTest {
+            useRealRepository()
+            val high = createTestDetectionResult(0.89).copy(timestamp = 1_700_000_000_000L)
+            assertNotNull(alertGenerator.generateAlert(high))
+            val critical = high.copy(threatScore = 0.90, timestamp = high.timestamp + 30 * 60 * 1000L)
+
+            assertTrue(alertGenerator.shouldGenerateAlert(critical))
+            assertNotNull(alertGenerator.generateAlert(critical))
+            assertFalse(alertGenerator.shouldGenerateAlert(critical.copy(threatScore = 0.91)))
+            assertNull(alertGenerator.generateAlert(critical.copy(threatScore = 0.91)))
+            assertEquals(2, database.alertHistoryDao().getAllAlerts().first().size)
+            coVerify(exactly = 2) { notificationHelper.showAlertNotification(any()) }
+        }
+
+    @Test
+    fun `same level fluctuations stay suppressed until the periodic reminder`() =
+        runTest {
+            useRealRepository()
+            val hour = 60 * 60 * 1000L
+            val initial = createTestDetectionResult(0.80).copy(timestamp = 1_700_000_000_000L)
+            assertNotNull(alertGenerator.generateAlert(initial))
+
+            for (hours in listOf(2, 6, 71)) {
+                assertNull(
+                    alertGenerator.generateAlert(initial.copy(threatScore = 0.81, timestamp = initial.timestamp + hours * hour)),
+                )
+            }
+            assertNotNull(alertGenerator.generateAlert(initial.copy(threatScore = 0.81, timestamp = initial.timestamp + 72 * hour)))
+            assertNull(alertGenerator.generateAlert(initial.copy(threatScore = 0.82, timestamp = initial.timestamp + 73 * hour)))
+            assertEquals(2, database.alertHistoryDao().getAllAlerts().first().size)
+            coVerify(exactly = 2) { notificationHelper.showAlertNotification(any()) }
+        }
+
     // Helper functions
+
+    private fun useRealRepository() {
+        database =
+            Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), TailBaitDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        alertRepository = AlertRepositoryImpl(database.alertHistoryDao())
+        alertGenerator = AlertGenerator(alertRepository, notificationHelper)
+    }
 
     private fun createTestDevice(
         address: String,

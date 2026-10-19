@@ -4,10 +4,12 @@ import com.tailbait.data.database.entities.AppSettings
 import com.tailbait.data.database.entities.DeviceLocationRecord
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
+import com.tailbait.data.database.entities.UserPath
 import com.tailbait.data.repository.DeviceRepository
 import com.tailbait.data.repository.LocationRepository
 import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.data.repository.WhitelistRepository
+import com.tailbait.util.DistanceCalculator
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -72,9 +74,10 @@ class DetectionAlgorithmTest {
         // Default mock for getLinkedDevices (called during weak link discount calculation)
         coEvery { deviceRepository.getLinkedDevices(any()) } returns emptyList()
 
+        every { locationRepository.getAllLocations() } returns flowOf(emptyList())
         // Default mock for computeBreakdown (called when building DetectionResult)
         every {
-            threatScoreCalculator.computeBreakdown(any(), any(), any(), any(), any())
+            threatScoreCalculator.computeBreakdown(any(), any(), any(), any(), any(), any())
         } returns
             mapOf(
                 "locationScore" to 0.5,
@@ -86,7 +89,7 @@ class DetectionAlgorithmTest {
 
         // Create algorithm instance with mock shadowAnalyzer
         val shadowAnalyzer = mockk<ShadowAnalyzer>(relaxed = true)
-        coEvery { shadowAnalyzer.findSuspiciousShadows(any(), any()) } returns emptyList()
+        coEvery { shadowAnalyzer.findSuspiciousShadows(any(), any(), any()) } returns emptyList()
 
         detectionAlgorithm =
             DetectionAlgorithm(
@@ -138,7 +141,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
             coEvery {
                 threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any())
             } returns 0.75
@@ -188,7 +191,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
 
             // Act
             val results = detectionAlgorithm.runDetection()
@@ -221,7 +224,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
 
             // Act
             val results = detectionAlgorithm.runDetection()
@@ -245,7 +248,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
             coEvery {
                 threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any())
             } returns 0.3 // Below 0.5 threshold
@@ -280,8 +283,8 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(2) } returns locations2
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords1
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(2) } returns deviceRecords2
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords1
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(2, any()) } returns deviceRecords2
             coEvery {
                 threatScoreCalculator.calculateEnhanced(
                     device1, locations1, any(), deviceRecords1, userLocations, any(),
@@ -325,9 +328,9 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(3) } returns locations3
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords1
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(2) } returns deviceRecords2
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(3) } returns deviceRecords3
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords1
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(2, any()) } returns deviceRecords2
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(3, any()) } returns deviceRecords3
             coEvery {
                 threatScoreCalculator.calculateEnhanced(
                     device1, locations1, any(), deviceRecords1, userLocations, any(),
@@ -377,7 +380,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
             coEvery {
                 threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any())
             } returns 0.75
@@ -411,7 +414,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
             coEvery {
                 threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any())
             } returns 0.75
@@ -475,7 +478,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
             coEvery {
                 threatScoreCalculator.calculateEnhanced(device, locations, any(), deviceRecords, userLocations, any())
             } returns 0.75
@@ -525,7 +528,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
 
             // Act
             val results = detectionAlgorithm.runDetection()
@@ -559,7 +562,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
             coEvery { threatScoreCalculator.calculateEnhanced(any(), any(), any(), any(), any(), any()) } returns 0.75
 
             // Act
@@ -569,49 +572,46 @@ class DetectionAlgorithmTest {
             assertEquals("Distant locations should survive clustering", 1, results.size)
         }
 
-    // ==================== Companion Device Detection Tests ====================
+    // ==================== Explicit Trust Regression Tests ====================
 
     @Test
-    fun `runDetection - own phone at all user locations with strong RSSI should be skipped`() =
+    fun `five-place close unknown follower remains detectable until explicitly trusted`() =
         runTest {
-            // Arrange: device seen at 10 of 10 user locations (100% coverage) with RSSI -30
-            // This is the user's own phone - should be detected as companion and skipped
+            val locations = createTestLocations(5, 40.0, -74.0)
+            val device = createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Unknown", null).copy(highestRssi = -30)
+            val records = recordsAtLocations(device.id, locations)
+            configureRealDetection(listOf(device), locations, mapOf(device.id to records))
+
+            val detected = detectionAlgorithm.runDetection().single()
+            assertEquals(device.id, detected.device.id)
+            assertEquals(5, detected.locations.size)
+            assertTrue(detected.threatScore >= 0.5)
+            assertNotNull(detectionAlgorithm.runDetectionForDevice(device.id))
+
+            every { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(listOf(device.id))
+            assertTrue(detectionAlgorithm.runDetection().isEmpty())
+            assertNull(detectionAlgorithm.runDetectionForDevice(device.id))
+        }
+
+    @Test
+    fun `five-place close separated tracker is not treated as an owned companion`() =
+        runTest {
+            val locations = createTestLocations(5, 40.0, -74.0)
             val device =
-                createTestDevice(1, "49:C5:A3:00:00:00", "My iPhone", "PHONE").copy(
+                createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Separated tracker", "TRACKER").copy(
                     highestRssi = -30,
+                    isTracker = true,
+                    findMyStatus = 0,
+                    findMyStatusTimestamp = locations.last().timestamp,
+                    findMySeparated = true,
                 )
-            val baseTime = System.currentTimeMillis()
-            // 10 user locations spread far apart (home, office, gym, etc.)
-            val userLocations =
-                List(10) { i ->
-                    createLocation(
-                        id = (i + 100).toLong(),
-                        // ~5km apart
-                        latitude = 40.0 + (i * 0.05),
-                        longitude = -74.0 + (i * 0.05),
-                        timestamp = baseTime + (i * 3600000L),
-                    )
-                }
-            // Device was at ALL of those locations
-            val deviceLocations =
-                userLocations.mapIndexed { i, loc ->
-                    createLocation(i.toLong() + 1, loc.latitude, loc.longitude, loc.timestamp)
-                }
-            val deviceRecords = createDeviceLocationRecords(1, 10)
+            configureRealDetection(listOf(device), locations, mapOf(device.id to recordsAtLocations(device.id, locations)))
 
-            coEvery { settingsRepository.getSettings() } returns flowOf(defaultSettings)
-            coEvery { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
-            coEvery { deviceRepository.getSuspiciousDevicesWithLinked(eq(3), any()) } returns flowOf(listOf(device))
-            coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns deviceLocations
-            coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
-            coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
-
-            // Act
-            val results = detectionAlgorithm.runDetection()
-
-            // Assert - should be identified as companion device and skipped
-            assertTrue("Own phone should be detected as companion device", results.isEmpty())
+            val result = detectionAlgorithm.runDetection().single()
+            assertEquals(5, result.locations.size)
+            assertTrue(result.device.findMySeparated)
+            assertTrue(result.detectionReason.contains("SEPARATED"))
+            assertNotNull(detectionAlgorithm.runDetectionForDevice(device.id))
         }
 
     @Test
@@ -648,7 +648,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns deviceLocations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
             coEvery { threatScoreCalculator.calculateEnhanced(any(), any(), any(), any(), any(), any()) } returns 0.75
 
             // Act
@@ -702,13 +702,15 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceById(device.id) } returns device
 
             // Act
             val results = detectionAlgorithm.runDetection()
 
             // Assert - only 2 recent locations, below threshold of 3
             assertTrue("Stale locations outside detection window should be excluded", results.isEmpty())
+            assertNull(detectionAlgorithm.runDetectionForDevice(device.id))
         }
 
     // ==================== Settings Integration Tests ====================
@@ -729,7 +731,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
             coEvery { threatScoreCalculator.calculateEnhanced(any(), any(), any(), any(), any(), any()) } returns 0.75
 
             // Act
@@ -764,7 +766,7 @@ class DetectionAlgorithmTest {
             coEvery { locationRepository.getLocationsForDeviceWithLinked(1) } returns locations
             coEvery { locationRepository.getAllLocations() } returns flowOf(userLocations)
             coEvery { locationRepository.getUserPathSince(any()) } returns emptyList()
-            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1) } returns deviceRecords
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(1, any()) } returns deviceRecords
 
             // Act
             val results = detectionAlgorithm.runDetection()
@@ -772,6 +774,224 @@ class DetectionAlgorithmTest {
             // Assert
             assertTrue("Should exclude device with distances below threshold", results.isEmpty())
         }
+
+    @Test
+    fun `unlinked rotating shadow uses all MAC observations with no ordinary candidates`() =
+        runTest {
+            assertUnlinkedShadowDetected(includeOrdinaryCandidate = false)
+        }
+
+    @Test
+    fun `unlinked rotating shadow survives an unrelated ordinary candidate`() =
+        runTest {
+            assertUnlinkedShadowDetected(includeOrdinaryCandidate = true)
+        }
+
+    private suspend fun assertUnlinkedShadowDetected(includeOrdinaryCandidate: Boolean) {
+        val locations = createTestLocations(3, 40.0, -74.0)
+        val shadowKey = "B:FIND_MY|C:12|M:004C|T:TRACKER|TR:1"
+        val shadowDevices =
+            locations.map { location ->
+                createTestDevice(location.id, "AA:BB:CC:DD:EE:0${location.id}", "Rotating tracker", "TRACKER").copy(
+                    shadowKey = shadowKey,
+                    isTracker = true,
+                    findMyStatus = 0,
+                    findMyStatusTimestamp = location.timestamp,
+                    findMySeparated = true,
+                    highestRssi = -30,
+                )
+            }
+        val shadowRecords =
+            locations.mapIndexed { index, location ->
+                recordsAtLocations(shadowDevices[index].id, listOf(location)).single()
+            }
+        val ordinary = createTestDevice(9, "99:BB:CC:DD:EE:FF", "Unrelated", "PHONE").copy(highestRssi = -30)
+        val ordinaryDevices = if (includeOrdinaryCandidate) listOf(ordinary) else emptyList()
+        val ordinaryRecords = if (includeOrdinaryCandidate) mapOf(ordinary.id to recordsAtLocations(ordinary.id, locations)) else emptyMap()
+        configureRealDetection(ordinaryDevices, locations, ordinaryRecords)
+        coEvery { deviceRepository.getSuspiciousShadowKeys(3, any()) } returns listOf(shadowKey)
+        coEvery { deviceRepository.getDevicesByShadowKey(shadowKey, any()) } returns shadowDevices
+        coEvery { deviceRepository.getDeviceLocationRecordsForShadow(shadowKey, any()) } returns shadowRecords
+
+        val results = detectionAlgorithm.runDetection()
+        assertEquals(if (includeOrdinaryCandidate) 2 else 1, results.size)
+        val shadow = results.single { it.detectionReason.contains("Shadow detection") }
+        assertEquals(locations, shadow.locations)
+        assertEquals(shadowRecords.last().timestamp - shadowRecords.first().timestamp, shadow.timeSpanMs)
+        assertTrue(shadow.threatScore >= 0.5)
+        coVerify(exactly = 0) { locationRepository.getLocationsForDeviceWithLinked(match { it in 1L..3L }) }
+    }
+
+    @Test
+    fun `latest eligible linked state replaces stale canonical root status`() =
+        runTest {
+            for (separated in listOf(false, true)) {
+                val locations = createTestLocations(5, 40.0, -74.0)
+                val root =
+                    createTestDevice(1, "AA:BB:CC:DD:EE:01", "Root tracker", "TRACKER").copy(
+                        lastSeen = locations.last().timestamp + 1000,
+                        isTracker = true,
+                        findMyStatus = if (separated) 4 else 0,
+                        findMyStatusTimestamp = locations.first().timestamp - 24 * 60 * 60 * 1000L,
+                        findMySeparated = !separated,
+                    )
+                val latest =
+                    createTestDevice(2, "AA:BB:CC:DD:EE:02", "Rotated tracker", "TRACKER").copy(
+                        lastSeen = locations.last().timestamp,
+                        linkedDeviceId = root.id,
+                        linkStrength = "STRONG",
+                        isTracker = true,
+                        findMyStatus = if (separated) 0 else 4,
+                        findMyStatusTimestamp = locations.last().timestamp,
+                        findMySeparated = separated,
+                    )
+                val records =
+                    recordsAtLocations(root.id, locations.take(2)) +
+                        recordsAtLocations(latest.id, locations.drop(2))
+                configureRealDetection(listOf(root), locations, mapOf(root.id to records))
+                coEvery { deviceRepository.getLinkedDevices(root.id) } returns listOf(root, latest)
+
+                val result = detectionAlgorithm.runDetection().single()
+                assertEquals(root.id, result.device.id)
+                assertEquals(latest.findMyStatus, result.device.findMyStatus)
+                assertEquals(separated, result.device.findMySeparated)
+                assertEquals(separated, result.detectionReason.contains("SEPARATED"))
+                assertEquals(separated, detectionAlgorithm.runDetectionForDevice(root.id)!!.device.findMySeparated)
+            }
+        }
+
+    @Test
+    fun `stale records and user paths cannot inflate current detection score`() =
+        runTest {
+            val locations = createTestLocations(5, 40.0, -74.0)
+            val device = createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Follower", null).copy(highestRssi = -1)
+            val currentRecords = recordsAtLocations(device.id, locations)
+            configureRealDetection(listOf(device), locations, mapOf(device.id to currentRecords))
+            val baseline = detectionAlgorithm.runDetection().single()
+
+            val staleTime = System.currentTimeMillis() - 4 * 24 * 60 * 60 * 1000L
+            val staleLocation = createLocation(99, 42.0, -72.0, staleTime)
+            val staleRecord = recordsAtLocations(device.id, listOf(staleLocation)).single().copy(rssi = -1)
+            every { locationRepository.getAllLocations() } returns flowOf(locations + staleLocation)
+            coEvery { locationRepository.getLocationsForDeviceWithLinked(device.id) } returns locations + staleLocation
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(device.id, any()) } returns
+                currentRecords + staleRecord
+            coEvery { locationRepository.getUserPathSince(any()) } returns
+                (locations + staleLocation).map { UserPath(locationId = it.id, timestamp = it.timestamp, accuracy = it.accuracy) }
+
+            val result = detectionAlgorithm.runDetection().single()
+            assertEquals(baseline.locations, result.locations)
+            assertEquals(baseline.threatScore, result.threatScore, 0.0)
+            assertEquals(baseline.timeSpanMs, result.timeSpanMs)
+            assertEquals(-30, result.device.highestRssi)
+            assertEquals(baseline.threatScore, detectionAlgorithm.runDetectionForDevice(device.id)!!.threatScore, 0.0)
+        }
+
+    @Test
+    fun `overlapping 200m uncertainty fixes do not prove three places`() =
+        runTest {
+            val now = System.currentTimeMillis()
+            val locations =
+                listOf(-0.0012, 0.0, 0.0012).mapIndexed { index, latitudeOffset ->
+                    createLocation(index + 1L, 40.0 + latitudeOffset, -74.0, now + index * 1000L)
+                        .copy(accuracy = 200f)
+                }
+            val device = createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Nearby", "TRACKER")
+            configureRealDetection(listOf(device), locations, mapOf(device.id to recordsAtLocations(device.id, locations)))
+
+            assertTrue(detectionAlgorithm.runDetection().isEmpty())
+            assertNull(detectionAlgorithm.runDetectionForDevice(device.id))
+
+            val accurateLocations = locations.map { it.copy(accuracy = 5f) }
+            configureRealDetection(
+                listOf(device),
+                accurateLocations,
+                mapOf(device.id to recordsAtLocations(device.id, accurateLocations)),
+            )
+            assertEquals(3, detectionAlgorithm.runDetection().single().locations.size)
+            assertEquals(3, detectionAlgorithm.runDetectionForDevice(device.id)?.locations?.size)
+        }
+
+    @Test
+    fun `accurate separated places respect a configured distance below 100m`() =
+        runTest {
+            val now = System.currentTimeMillis()
+            val locations =
+                List(5) { index ->
+                    createLocation(index + 1L, 40.0 + index * 0.00045, -74.0, now + index * 1000L)
+                        .copy(accuracy = 5f)
+                }
+            val device =
+                createTestDevice(1, "AA:BB:CC:DD:EE:FF", "Follower", "TRACKER").copy(
+                    isTracker = true,
+                    findMyStatus = 0,
+                    findMyStatusTimestamp = locations.last().timestamp,
+                    findMySeparated = true,
+                )
+            configureRealDetection(listOf(device), locations, mapOf(device.id to recordsAtLocations(device.id, locations)))
+            every { settingsRepository.getSettings() } returns flowOf(defaultSettings.copy(minDetectionDistanceMeters = 25.0))
+
+            assertEquals(5, detectionAlgorithm.runDetection().single().locations.size)
+            assertEquals(5, detectionAlgorithm.runDetectionForDevice(device.id)?.locations?.size)
+
+            every { settingsRepository.getSettings() } returns flowOf(defaultSettings.copy(minDetectionDistanceMeters = 100.0))
+            assertTrue(detectionAlgorithm.runDetection().isEmpty())
+        }
+
+    @Test
+    fun `invalid accuracy cannot manufacture proven separation`() {
+        for (accuracy in listOf(Float.NaN, Float.POSITIVE_INFINITY, -10f, 0f)) {
+            assertEquals(0.0, DistanceCalculator.minimumSeparationMeters(1000.0, accuracy, 10f), 0.0)
+            assertEquals(0.0, DistanceCalculator.minimumSeparationMeters(1000.0, 10f, accuracy), 0.0)
+        }
+        assertEquals(0.0, DistanceCalculator.minimumSeparationMeters(Double.NaN, 10f, 10f), 0.0)
+        assertEquals(0.0, DistanceCalculator.minimumSeparationMeters(300.0, 200f, 200f), 0.0)
+        assertEquals(180.0, DistanceCalculator.minimumSeparationMeters(200.0, 10f, 10f), 0.0)
+    }
+
+    private fun recordsAtLocations(
+        deviceId: Long,
+        locations: List<Location>,
+    ): List<DeviceLocationRecord> =
+        locations.map { location ->
+            DeviceLocationRecord(
+                id = deviceId * 100 + location.id,
+                deviceId = deviceId,
+                locationId = location.id,
+                rssi = -30,
+                timestamp = location.timestamp,
+                scanTriggerType = "PERIODIC",
+            )
+        }
+
+    private fun configureRealDetection(
+        candidates: List<ScannedDevice>,
+        locations: List<Location>,
+        recordsByDevice: Map<Long, List<DeviceLocationRecord>>,
+    ) {
+        every { settingsRepository.getSettings() } returns flowOf(defaultSettings)
+        every { whitelistRepository.getAllWhitelistedDeviceIds() } returns flowOf(emptyList())
+        every { deviceRepository.getSuspiciousDevicesWithLinked(any(), any()) } returns flowOf(candidates)
+        every { locationRepository.getAllLocations() } returns flowOf(locations)
+        coEvery { locationRepository.getUserPathSince(any()) } returns
+            locations.map { UserPath(locationId = it.id, timestamp = it.timestamp, accuracy = it.accuracy) }
+        coEvery { deviceRepository.getSuspiciousShadowKeys(any(), any()) } returns emptyList()
+        for (device in candidates) {
+            coEvery { deviceRepository.getDeviceById(device.id) } returns device
+            coEvery { deviceRepository.getDeviceLocationRecordsForDeviceWithLinked(device.id, any()) } returns
+                recordsByDevice.getValue(device.id)
+            coEvery { locationRepository.getLocationsForDeviceWithLinked(device.id) } returns locations
+        }
+        detectionAlgorithm =
+            DetectionAlgorithm(
+                deviceRepository,
+                locationRepository,
+                whitelistRepository,
+                settingsRepository,
+                ThreatScoreCalculator(MovementCorrelationCalculator()),
+                ShadowAnalyzer(deviceRepository, locationRepository, MacRotationDetector()),
+            )
+    }
 
     // ==================== Helper Methods ====================
 
@@ -789,6 +1009,7 @@ class DetectionAlgorithmTest {
             lastSeen = System.currentTimeMillis(),
             detectionCount = 1,
             deviceType = deviceType,
+            highestRssi = -70,
         )
     }
 

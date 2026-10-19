@@ -2,6 +2,7 @@ package com.tailbait.ui.screens.settings
 
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tailbait.BuildConfig
@@ -11,6 +12,7 @@ import com.tailbait.data.repository.DeviceRepository
 import com.tailbait.data.repository.LocationRepository
 import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.service.DataExportService
+import com.tailbait.service.TailBaitService
 import com.tailbait.util.CsvDataExporter
 import com.tailbait.util.FileShareHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -103,6 +105,7 @@ class SettingsViewModel
             viewModelScope.launch {
                 try {
                     settingsRepository.updateCompanionEnabled(enabled)
+                    if (!enabled) companionLink.stop()
                 } catch (e: Exception) {
                     showError("Failed to update companion setting: ${e.message}")
                 }
@@ -128,6 +131,7 @@ class SettingsViewModel
         }
 
         fun stopCompanionScan() {
+            companionLink.stopScanningForCompanions()
             _companionScan.value = emptyList()
         }
 
@@ -140,9 +144,6 @@ class SettingsViewModel
                     companionRepository.pair(address, name)
                     settingsRepository.updateCompanionEnabled(true)
                     stopCompanionScan()
-                    // start the link immediately if tracking is already running
-                    companionIngestor.attach(companionLink)
-                    companionLink.start(address)
                 } catch (e: Exception) {
                     showError("Pairing failed: ${e.message}")
                 }
@@ -210,10 +211,16 @@ class SettingsViewModel
         fun updateTrackingEnabled(enabled: Boolean) {
             viewModelScope.launch {
                 try {
-                    val currentSettings = settingsRepository.getSettingsOnce()
-                    settingsRepository.updateSettings(
-                        currentSettings.copy(isTrackingEnabled = enabled),
-                    )
+                    settingsRepository.updateTrackingEnabled(enabled)
+                    val intent =
+                        Intent(context, TailBaitService::class.java).setAction(
+                            if (enabled) TailBaitService.ACTION_START_TRACKING else TailBaitService.ACTION_STOP_TRACKING,
+                        )
+                    if (enabled) {
+                        ContextCompat.startForegroundService(context, intent)
+                    } else {
+                        context.startService(intent)
+                    }
                 } catch (e: Exception) {
                     showError("Failed to update tracking setting: ${e.message}")
                 }

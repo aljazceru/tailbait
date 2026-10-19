@@ -1,5 +1,6 @@
 package com.tailbait.service
 
+import com.tailbait.data.database.dao.isMeaningfullyEscalatedBy
 import com.tailbait.data.database.entities.AlertHistory
 import com.tailbait.data.model.DetectionResult
 import com.tailbait.data.model.ThreatLevel
@@ -50,10 +51,8 @@ class AlertGenerator
             // Default throttle window: 1 hour (used by insertAlertWithThrottling as final safety net)
             private const val DEFAULT_THROTTLE_WINDOW_MS = 60 * 60 * 1000L
 
-            // Smart throttling constants
-            private const val MIN_ALERT_INTERVAL_MS = 6 * 60 * 60 * 1000L // 6 hours minimum
-            private const val ESCALATION_WINDOW_MS = 72 * 60 * 60 * 1000L // 72 hours
-            private const val ESCALATION_THRESHOLD = 0.15 // Score increase needed
+            // Without escalation, allow a periodic reminder after 72 hours.
+            private const val ESCALATION_WINDOW_MS = 72 * 60 * 60 * 1000L
 
             // Camera glasses presence alerts: re-alert at most every 15 minutes per device.
             // Keyed by database device ID (not BLE address) so MAC rotation cannot
@@ -87,30 +86,13 @@ class AlertGenerator
                 // Smart throttling: check previous alert for this device
                 val previousAlert = alertRepository.getLatestAlertForDevice(deviceAddresses)
                 if (previousAlert != null) {
-                    val now = System.currentTimeMillis()
-                    val timeSinceLastAlert = now - previousAlert.timestamp
-                    val scoreIncrease = detectionResult.threatScore - previousAlert.threatScore
-
-                    // Suppress if less than 6 hours since last alert
-                    if (timeSinceLastAlert < MIN_ALERT_INTERVAL_MS) {
-                        Timber.d("Smart throttle: suppressing (${timeSinceLastAlert / 3600000}h < 6h minimum)")
+                    val timeSinceLastAlert = detectionResult.timestamp - previousAlert.timestamp
+                    if (timeSinceLastAlert < ESCALATION_WINDOW_MS &&
+                        !previousAlert.isMeaningfullyEscalatedBy(detectionResult.threatScore)
+                    ) {
+                        Timber.d("Smart throttle: suppressing unchanged threat within 72h")
                         return null
                     }
-
-                    // Between 6-72 hours: only allow if score escalated significantly
-                    if (timeSinceLastAlert < ESCALATION_WINDOW_MS && scoreIncrease < ESCALATION_THRESHOLD) {
-                        Timber.d(
-                            "Smart throttle: suppressing (score +${"%.2f".format(scoreIncrease)} < " +
-                                "$ESCALATION_THRESHOLD threshold, ${timeSinceLastAlert / 3600000}h < 72h)",
-                        )
-                        return null
-                    }
-
-                    // >= 72 hours: allow as periodic reminder
-                    Timber.d(
-                        "Smart throttle: allowing (${timeSinceLastAlert / 3600000}h since last, " +
-                            "score +${"%.2f".format(scoreIncrease)})",
-                    )
                 }
 
                 // Determine alert level
@@ -259,7 +241,7 @@ class AlertGenerator
          *
          * This checks:
          * - Threat score meets minimum threshold
-         * - No similar recent alert exists
+         * - No similar recent alert exists unless the threat meaningfully escalated
          *
          * @param detectionResult The detection result to check
          * @param minThreatScore Minimum threat score threshold
@@ -276,11 +258,12 @@ class AlertGenerator
                 return false
             }
 
-            // Check for similar recent alerts
             val deviceAddresses = createDeviceAddressesJson(detectionResult)
-            val throttleThreshold = System.currentTimeMillis() - throttleWindowMs
+            val previousAlert = alertRepository.getLatestAlertForDevice(deviceAddresses) ?: return true
+            val throttleThreshold = detectionResult.timestamp - throttleWindowMs
 
-            return !alertRepository.hasSimilarRecentAlert(deviceAddresses, throttleThreshold)
+            return previousAlert.timestamp < throttleThreshold ||
+                previousAlert.isMeaningfullyEscalatedBy(detectionResult.threatScore)
         }
 
         /**

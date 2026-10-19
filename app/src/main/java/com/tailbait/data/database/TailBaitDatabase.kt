@@ -1,11 +1,13 @@
 package com.tailbait.data.database
 
 import android.content.Context
+import android.os.ParcelUuid
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.tailbait.algorithm.ShadowKeyGenerator
 import com.tailbait.data.database.dao.AlertHistoryDao
 import com.tailbait.data.database.dao.AppSettingsDao
 import com.tailbait.data.database.dao.CompanionDeviceDao
@@ -22,9 +24,14 @@ import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.database.entities.UserPath
 import com.tailbait.data.database.entities.WhitelistEntry
+import com.tailbait.util.BeaconDetectionUtils
+import com.tailbait.util.DeviceFingerprinter
+import com.tailbait.util.DeviceIdentifier
+import com.tailbait.util.ManufacturerDataParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * Main Room database for the TailBait application.
@@ -37,13 +44,9 @@ import kotlinx.coroutines.launch
  * - Alert history
  * - Application settings
  *
- * The database uses version 1 as the initial schema. All entities have proper
- * indices defined for efficient querying, and foreign key constraints are
- * enforced with cascade delete behavior.
- *
- * Migration strategy:
- * - Version 1: Initial schema with all 6 entities
- * - Future versions: Will include migration paths (see MIGRATION_STRATEGY.md)
+ * Schema upgrades use explicit migrations; a missing path fails rather than
+ * deleting user data. Version 14 discards unverifiable legacy identity metadata
+ * while preserving observations, original IDs, explicit trust, and settings.
  *
  * @see ScannedDevice
  * @see Location
@@ -63,7 +66,7 @@ import kotlinx.coroutines.launch
         UserPath::class,
         CompanionDevice::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class TailBaitDatabase : RoomDatabase() {
@@ -209,14 +212,9 @@ abstract class TailBaitDatabase : RoomDatabase() {
          * Migration from version 5 to 6.
          * Adds Find My network fingerprinting fields to scanned_devices table.
          *
-         * These fields enable tracking AirTags and other Find My accessories across
-         * MAC address rotations by using payload-based fingerprinting:
-         *
-         * - payload_fingerprint: Semi-stable identifier from Find My payload
-         * - find_my_status: Raw status byte from advertisement
-         * - find_my_separated: Whether device is separated from owner (CRITICAL for stalking detection)
-         * - linked_device_id: Links devices with same fingerprint but different MAC
-         * - last_mac_rotation: Timestamp of last detected MAC rotation
+         * Legacy payload-based identity and owner-state fields are retained for
+         * compatibility with the schema upgrade path. Version 14 discards
+         * unverifiable identity metadata and resets the old status interpretation.
          */
         private val MIGRATION_5_6 =
             object : Migration(5, 6) {
@@ -465,6 +463,141 @@ abstract class TailBaitDatabase : RoomDatabase() {
             }
 
         /**
+         * Add observation time for validated Find My state and reclassify legacy BLE
+         * evidence, never discarding observations or explicit trust.
+         * Only full FM/FHN identifiers can support a direct STRONG link to a root.
+         */
+        private val MIGRATION_13_14 =
+            object : Migration(13, 14) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE scanned_devices ADD COLUMN find_my_status_timestamp INTEGER")
+                    db.execSQL("UPDATE scanned_devices SET payload_fingerprint = NULL WHERE radio != 'BLE'")
+                    reclassifyLegacyBleDevices(db)
+                    db.execSQL(
+                        """
+                        UPDATE scanned_devices
+                        SET linked_device_id = NULL, link_strength = NULL,
+                            link_reason = NULL, last_mac_rotation = NULL
+                        WHERE id NOT IN (
+                            SELECT child.id
+                            FROM scanned_devices child
+                            JOIN scanned_devices root ON root.id = child.linked_device_id
+                            WHERE root.linked_device_id IS NULL
+                                AND child.link_strength = 'STRONG'
+                                AND child.radio = 'BLE' AND root.radio = 'BLE'
+                                AND child.payload_fingerprint IS NOT NULL
+                                AND child.payload_fingerprint = root.payload_fingerprint
+                        )
+                        """.trimIndent(),
+                    )
+                    // Legacy OR-latching and cross-MAC updates lost validated latest-state provenance.
+                    db.execSQL(
+                        "UPDATE scanned_devices SET find_my_status = NULL, find_my_status_timestamp = NULL, find_my_separated = 0",
+                    )
+                }
+
+                private fun reclassifyLegacyBleDevices(db: SupportSQLiteDatabase) {
+                    db.compileStatement(
+                        """
+                        UPDATE scanned_devices SET payload_fingerprint = ?, is_tracker = ?,
+                            device_type = ?, device_model = ?, identification_confidence = ?,
+                            identification_method = ?, apple_continuity_type = ?, beacon_type = ?,
+                            shadow_key = ? WHERE id = ?
+                        """.trimIndent(),
+                    ).use { update ->
+                        db.query(
+                            """
+                            SELECT id, address, name, advertised_name, first_seen, last_seen, created_at,
+                                manufacturer_id, manufacturer_data, service_uuids, appearance,
+                                tx_power_level, payload_fingerprint
+                            FROM scanned_devices WHERE radio = 'BLE'
+                            """.trimIndent(),
+                        ).use { cursor ->
+                            while (cursor.moveToNext()) {
+                                val manufacturerId = if (cursor.isNull(7)) null else cursor.getInt(7)
+                                val manufacturerData = legacyManufacturerData(cursor.getString(8))
+                                val serviceUuids = legacyServiceUuids(cursor.getString(9))
+                                val appearance = if (cursor.isNull(10)) null else cursor.getInt(10)
+                                val fingerprint = cursor.getString(12)?.takeIf(DeviceFingerprinter::isHighConfidenceFingerprint)
+                                val identification =
+                                    DeviceIdentifier.identifyDevice(
+                                        manufacturerId,
+                                        manufacturerData,
+                                        serviceUuids,
+                                        appearance,
+                                        cursor.getString(3) ?: cursor.getString(2),
+                                    )
+                                // A complete identity survives even when its raw advertisement was overwritten.
+                                val identityOnly = fingerprint != null && !identification.isTracker
+                                val device =
+                                    ScannedDevice(
+                                        id = cursor.getLong(0),
+                                        address = cursor.getString(1),
+                                        name = cursor.getString(2),
+                                        firstSeen = cursor.getLong(4),
+                                        lastSeen = cursor.getLong(5),
+                                        createdAt = cursor.getLong(6),
+                                        manufacturerId = manufacturerId,
+                                        serviceUuids = cursor.getString(9),
+                                        txPowerLevel = if (cursor.isNull(11)) null else cursor.getInt(11),
+                                        deviceType =
+                                            if (fingerprint != null) {
+                                                ManufacturerDataParser.DeviceType.TRACKER.name
+                                            } else {
+                                                identification.deviceType.name
+                                            },
+                                        deviceModel = if (identityOnly) null else identification.deviceModel,
+                                        isTracker = identification.isTracker || identityOnly,
+                                        appleContinuityType = identification.appleContinuityType,
+                                        identificationConfidence = if (identityOnly) 0.0f else identification.confidence,
+                                        identificationMethod = if (identityOnly) null else identification.identificationMethod,
+                                        beaconType =
+                                            BeaconDetectionUtils.detectBeacon(
+                                                manufacturerId,
+                                                manufacturerData,
+                                                serviceUuids,
+                                            )?.beaconType?.name,
+                                    )
+                                update.clearBindings()
+                                fingerprint?.let { update.bindString(1, it) }
+                                update.bindLong(2, if (device.isTracker) 1 else 0)
+                                update.bindString(3, device.deviceType!!)
+                                device.deviceModel?.let { update.bindString(4, it) }
+                                update.bindDouble(5, device.identificationConfidence.toDouble())
+                                device.identificationMethod?.let { update.bindString(6, it) }
+                                device.appleContinuityType?.let { update.bindLong(7, it.toLong()) }
+                                device.beaconType?.let { update.bindString(8, it) }
+                                // State remains unknown; do not recreate SEP:1 from old OR-latched flags.
+                                ShadowKeyGenerator.generate(device)?.let { update.bindString(9, it) }
+                                update.bindLong(10, device.id)
+                                update.executeUpdateDelete()
+                            }
+                        }
+                    }
+                }
+
+                @OptIn(ExperimentalStdlibApi::class)
+                private fun legacyManufacturerData(value: String?): ByteArray? =
+                    try {
+                        value?.hexToByteArray()
+                    } catch (_: IllegalArgumentException) {
+                        null
+                    }
+
+                private fun legacyServiceUuids(value: String?): List<ParcelUuid> =
+                    DeviceIdentifier.stringToServiceUuids(value).mapNotNull { stored ->
+                        val expanded = if (stored.length == 4) "0000$stored-0000-1000-8000-00805F9B34FB" else stored
+                        try {
+                            val uuid = UUID.fromString(expanded)
+                            // UUID.fromString also accepts abbreviated groups, which were never stored UUIDs.
+                            if (uuid.toString().equals(expanded, ignoreCase = true)) ParcelUuid(uuid) else null
+                        } catch (_: IllegalArgumentException) {
+                            null
+                        }
+                    }
+            }
+
+        /**
          * Gets the singleton database instance.
          * Creates a new instance if one doesn't exist, using double-checked locking
          * for thread safety.
@@ -488,35 +621,28 @@ abstract class TailBaitDatabase : RoomDatabase() {
          * Builds the Room database instance with proper configuration.
          *
          * Configuration includes:
-         * - Fallback to destructive migration (development only)
+         * - Explicit, non-destructive migrations
          * - Database creation callback for initialization
          * - Write-ahead logging (WAL) mode for better concurrency
          *
          * @param context Application context
          * @return Configured database instance
          */
-        private fun buildDatabase(context: Context): TailBaitDatabase {
+        internal fun buildDatabase(
+            context: Context,
+            databaseName: String = DATABASE_NAME,
+        ): TailBaitDatabase {
             return Room.databaseBuilder(
                 context.applicationContext,
                 TailBaitDatabase::class.java,
-                DATABASE_NAME,
+                databaseName,
             )
-                // CRITICAL FIX: Removed fallbackToDestructiveMigration() to prevent data loss
-                // This was deleting all user data on schema updates - UNACCEPTABLE for production
-                //
-                // Migration Strategy:
-                // - Use AutoMigration for simple schema changes (add columns, etc.)
-                // - Use manual Migration objects for complex changes
-                // - Current version: 4
-                // - Migrations:
-                //   - 1 -> 2: Added index on scanned_devices.last_seen for query optimization
-                //   - 2 -> 3: Added comprehensive device identification fields
-                //   - 3 -> 4: Added advertised_name column for BLE local name
-                // Add migrations
+                // Missing migrations must fail rather than erase observations, trust, or settings.
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                     MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+                    MIGRATION_13_14,
                 )
                 // Enable Write-Ahead Logging for better concurrent access
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)

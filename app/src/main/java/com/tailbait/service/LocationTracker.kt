@@ -3,34 +3,39 @@ package com.tailbait.service
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Looper
-import com.google.android.gms.location.*
-import com.google.android.gms.tasks.CancellationTokenSource
+import androidx.core.location.LocationListenerCompat
+import androidx.core.location.LocationManagerCompat
+import androidx.core.location.LocationRequestCompat
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
- * LocationTracker handles GPS location tracking using Google Play Services Fused Location Provider.
+ * LocationTracker handles GPS location tracking using Android's native location providers.
  *
  * This class provides battery-efficient location tracking with configurable update intervals,
  * accuracy filtering, and integration with the BLE scanning system. It supports both continuous
  * location updates and on-demand location requests.
  *
  * Key Features:
- * - Fused Location Provider for optimal accuracy and battery usage
+ * - Native fused, network, or GPS provider selection for accuracy and battery usage
  * - Configurable update intervals based on scan settings
- * - Accuracy filtering (< 100m) to ensure reliable location data
+ * - Accuracy filtering (up to 200m) to ensure reliable location data
  * - Permission checking integrated with PermissionHelper
  * - State flow for reactive location updates
  * - Battery-efficient location request settings
@@ -46,13 +51,19 @@ class LocationTracker
         @ApplicationContext private val context: Context,
         private val settingsRepository: SettingsRepository,
     ) {
-        private val fusedLocationClient: FusedLocationProviderClient =
-            LocationServices.getFusedLocationProviderClient(context)
+        private val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         private val _locationState = MutableStateFlow<LocationState>(LocationState.Idle)
         val locationState: StateFlow<LocationState> = _locationState.asStateFlow()
 
-        private var locationCallback: LocationCallback? = null
+        private val registrationLock = Any()
+        private var registrationGeneration = 0L
+        private var locationCallback: LocationListenerCompat? = null
+        private var updateIntervalSeconds: Int? = null
+        private var locationProvider: String? = null
+        private var locationQuality = 0
+        private val currentLocationRequests =
+            mutableMapOf<LocationListenerCompat, CancellableContinuation<android.location.Location?>>()
 
         /**
          * Sealed class representing the current location tracking state.
@@ -72,84 +83,107 @@ class LocationTracker
         }
 
         /**
-         * Start continuous location tracking.
+         * Start or replace continuous location tracking at the configured interval.
+         * Updates with accuracy up to 200m are emitted through locationState.
          *
-         * Begins receiving location updates at the configured interval. Updates are filtered
-         * by accuracy (< 100m) and emitted through the locationState flow.
-         *
-         * @return Result indicating success or failure with error details
-         * @throws SecurityException if location permission is not granted
+         * @param scanIntervalSeconds Current service interval, or null to read persisted settings.
+         * @return Whether native location updates were registered.
          */
-        suspend fun startLocationTracking(): Result<Unit> {
-            Timber.i("Starting location tracking")
+        suspend fun startLocationTracking(scanIntervalSeconds: Int? = null): Result<Unit> {
+            currentCoroutineContext().ensureActive()
+            val generation = synchronized(registrationLock) { registrationGeneration }
+            val interval = scanIntervalSeconds ?: settingsRepository.getSettingsOnce().scanIntervalSeconds
+            return synchronized(registrationLock) {
+                // A stop during the settings read must not register a late callback.
+                if (generation != registrationGeneration) {
+                    return@synchronized Result.failure(CancellationException("Location tracking was stopped"))
+                }
+                if (!hasLocationPermission()) {
+                    stopLocationTracking()
+                    val error = "Location permission not granted"
+                    _locationState.value = LocationState.Error(error)
+                    return@synchronized Result.failure(SecurityException(error))
+                }
+                try {
+                    val providers = locationManager.getProviders(true)
+                    val provider =
+                        when {
+                            LocationManagerCompat.hasProvider(locationManager, "fused") &&
+                                locationManager.isProviderEnabled("fused") -> "fused"
+                            LocationManager.NETWORK_PROVIDER in providers -> LocationManager.NETWORK_PROVIDER
+                            LocationManager.GPS_PROVIDER in providers -> LocationManager.GPS_PROVIDER
+                            else -> throw IllegalStateException("Location unavailable: no enabled provider")
+                        }
+                    // A fused provider without network must be allowed to activate GPS.
+                    val quality =
+                        if (LocationManager.NETWORK_PROVIDER in providers) {
+                            LocationRequestCompat.QUALITY_BALANCED_POWER_ACCURACY
+                        } else {
+                            LocationRequestCompat.QUALITY_HIGH_ACCURACY
+                        }
+                    if (locationCallback != null && updateIntervalSeconds == interval &&
+                        locationProvider == provider && locationQuality == quality
+                    ) {
+                        return@synchronized Result.success(Unit)
+                    }
+                    stopLocationTracking()
+                    val request =
+                        LocationRequestCompat.Builder(interval * 1000L)
+                            .setMinUpdateIntervalMillis(60_000L)
+                            .setQuality(quality)
+                            .build()
+                    val callback =
+                        object : LocationListenerCompat {
+                            override fun onLocationChanged(location: android.location.Location) {
+                                synchronized(registrationLock) {
+                                    if (locationCallback !== this) return
+                                    if (!hasLocationPermission()) {
+                                        stopLocationTracking()
+                                        _locationState.value = LocationState.Error("Location permission revoked")
+                                    } else if (
+                                        location.accuracy.isFinite() && location.accuracy in 0f..200f &&
+                                        System.currentTimeMillis() - location.time <= MAX_STALE_LOCATION_AGE_MS
+                                    ) {
+                                        _locationState.value = LocationState.LocationUpdated(location)
+                                    }
+                                }
+                            }
 
-            if (!hasLocationPermission()) {
-                val error = "Location permission not granted"
-                Timber.w(error)
-                _locationState.value = LocationState.Error(error)
-                return Result.failure(SecurityException(error))
-            }
-
-            val settings = settingsRepository.getSettings().first()
-
-            // Configure location request with battery-efficient settings
-            val locationRequest =
-                LocationRequest.Builder(
-                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                    (settings.scanIntervalSeconds * 1000L),
-                ).apply {
-                    setMinUpdateIntervalMillis(60000L) // Min 1 minute between updates
-                    setMaxUpdateAgeMillis(120000L) // Max 2 minutes old
-                    setWaitForAccurateLocation(false) // Don't wait indefinitely for accuracy
-                }.build()
-
-            locationCallback =
-                object : LocationCallback() {
-                    override fun onLocationResult(result: LocationResult) {
-                        result.lastLocation?.let { location ->
-                            Timber.d("Location update received: accuracy=${location.accuracy}m")
-
-                            // Only accept locations with accuracy < 200m (matching repository max)
-                            if (location.accuracy <= 200f) {
-                                _locationState.value = LocationState.LocationUpdated(location)
-                                Timber.i(
-                                    "Location update: lat=${location.latitude}, " +
-                                        "lon=${location.longitude}, " +
-                                        "accuracy=${location.accuracy}m",
-                                )
-                            } else {
-                                Timber.w("Dropped low accuracy location: ${location.accuracy}m > 200m")
+                            override fun onProviderDisabled(provider: String) {
+                                synchronized(registrationLock) {
+                                    if (locationCallback === this) {
+                                        _locationState.value = LocationState.Error("Location unavailable")
+                                    }
+                                }
                             }
                         }
+                    locationCallback = callback
+                    updateIntervalSeconds = interval
+                    locationProvider = provider
+                    locationQuality = quality
+                    LocationManagerCompat.requestLocationUpdates(
+                        locationManager,
+                        provider,
+                        request,
+                        callback,
+                        Looper.getMainLooper(),
+                    )
+                    if (_locationState.value !is LocationState.LocationUpdated) {
+                        _locationState.value = LocationState.Tracking
                     }
-
-                    override fun onLocationAvailability(availability: LocationAvailability) {
-                        if (!availability.isLocationAvailable) {
-                            Timber.w("Location unavailable")
-                            _locationState.value = LocationState.Error("Location unavailable")
-                        }
-                    }
+                    Result.success(Unit)
+                } catch (e: CancellationException) {
+                    stopLocationTracking()
+                    throw e
+                } catch (se: SecurityException) {
+                    stopLocationTracking()
+                    _locationState.value = LocationState.Error(se.message ?: "Location permission revoked")
+                    Result.failure(se)
+                } catch (e: Exception) {
+                    stopLocationTracking()
+                    _locationState.value = LocationState.Error(e.message ?: "Location registration failed")
+                    Result.failure(e)
                 }
-
-            try {
-                fusedLocationClient.requestLocationUpdates(
-                    locationRequest,
-                    locationCallback!!,
-                    Looper.getMainLooper(),
-                )
-                _locationState.value = LocationState.Tracking
-                Timber.i("Location tracking started successfully")
-                return Result.success(Unit)
-            } catch (se: SecurityException) {
-                val errorMsg = "Location permission revoked while starting tracking"
-                Timber.e(se, errorMsg)
-                _locationState.value = LocationState.Error(errorMsg)
-                return Result.failure(se)
-            } catch (e: Exception) {
-                val errorMsg = e.message ?: "Unknown error starting location tracking"
-                Timber.e(e, "Failed to start location tracking")
-                _locationState.value = LocationState.Error(errorMsg)
-                return Result.failure(e)
             }
         }
 
@@ -162,6 +196,8 @@ class LocationTracker
          * @return Current location or null if unavailable or permission denied
          */
         suspend fun getCurrentLocation(): Location? {
+            currentCoroutineContext().ensureActive()
+            val generation = synchronized(registrationLock) { registrationGeneration }
             Timber.d("Requesting current location")
 
             if (!hasLocationPermission()) {
@@ -170,40 +206,93 @@ class LocationTracker
             }
 
             return try {
-                suspendCancellableCoroutine { continuation ->
-                    fusedLocationClient.getCurrentLocation(
-                        Priority.PRIORITY_HIGH_ACCURACY,
-                        CancellationTokenSource().token,
-                    ).addOnSuccessListener { androidLocation: android.location.Location? ->
-                        if (androidLocation != null) {
-                            Timber.i(
-                                "Current location obtained: lat=${androidLocation.latitude}, " +
-                                    "lon=${androidLocation.longitude}, " +
-                                    "accuracy=${androidLocation.accuracy}m",
-                            )
+                val androidLocation =
+                    withTimeoutOrNull(CURRENT_LOCATION_TIMEOUT_MS) {
+                        suspendCancellableCoroutine<android.location.Location?> { continuation ->
+                            synchronized(registrationLock) {
+                                if (generation != registrationGeneration) {
+                                    continuation.cancel(CancellationException("Location tracking was stopped"))
+                                    return@synchronized
+                                }
+                                val providers = locationManager.getProviders(true)
+                                val provider =
+                                    when {
+                                        LocationManagerCompat.hasProvider(locationManager, "fused") &&
+                                            locationManager.isProviderEnabled("fused") -> "fused"
+                                        LocationManager.GPS_PROVIDER in providers -> LocationManager.GPS_PROVIDER
+                                        LocationManager.NETWORK_PROVIDER in providers -> LocationManager.NETWORK_PROVIDER
+                                        else -> {
+                                            continuation.resume(null)
+                                            return@synchronized
+                                        }
+                                    }
+                                val callback =
+                                    object : LocationListenerCompat {
+                                        override fun onLocationChanged(location: android.location.Location) {
+                                            finishCurrentLocation(this, location)
+                                        }
 
-                            val location =
-                                Location(
-                                    latitude = androidLocation.latitude,
-                                    longitude = androidLocation.longitude,
-                                    accuracy = androidLocation.accuracy,
-                                    altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
-                                    timestamp = androidLocation.time,
-                                    provider = androidLocation.provider ?: "FUSED",
-                                )
-                            continuation.resume(location)
-                        } else {
-                            Timber.w("Current location is null")
-                            continuation.resume(null)
+                                        override fun onProviderDisabled(provider: String) {
+                                            finishCurrentLocation(this, null)
+                                        }
+                                    }
+                                currentLocationRequests[callback] = continuation
+                                continuation.invokeOnCancellation {
+                                    synchronized(registrationLock) {
+                                        currentLocationRequests.remove(callback)
+                                        removeLocationCallback(callback)
+                                    }
+                                }
+                                if (continuation.isActive) {
+                                    try {
+                                        LocationManagerCompat.requestLocationUpdates(
+                                            locationManager,
+                                            provider,
+                                            CURRENT_LOCATION_REQUEST,
+                                            callback,
+                                            Looper.getMainLooper(),
+                                        )
+                                    } catch (e: Exception) {
+                                        currentLocationRequests.remove(callback)
+                                        removeLocationCallback(callback)
+                                        throw e
+                                    }
+                                }
+                            }
                         }
-                    }.addOnFailureListener { exception ->
-                        Timber.e(exception, "Failed to get current location")
-                        continuation.resumeWithException(exception)
+                    } ?: return null
+                synchronized(registrationLock) {
+                    if (generation != registrationGeneration) {
+                        throw CancellationException("Location tracking was stopped")
                     }
                 }
+                if (!hasLocationPermission() ||
+                    System.currentTimeMillis() - androidLocation.time > MAX_STALE_LOCATION_AGE_MS
+                ) {
+                    return null
+                }
+                Location(
+                    latitude = androidLocation.latitude,
+                    longitude = androidLocation.longitude,
+                    accuracy = androidLocation.accuracy,
+                    altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
+                    timestamp = androidLocation.time,
+                    provider = androidLocation.provider ?: "unknown",
+                )
             } catch (se: SecurityException) {
                 Timber.e(se, "Location permission revoked while requesting current location")
                 null
+            }
+        }
+
+        private fun finishCurrentLocation(
+            callback: LocationListenerCompat,
+            location: android.location.Location?,
+        ) {
+            synchronized(registrationLock) {
+                val continuation = currentLocationRequests.remove(callback) ?: return
+                removeLocationCallback(callback)
+                if (continuation.isActive) continuation.resume(location)
             }
         }
 
@@ -216,6 +305,7 @@ class LocationTracker
          * @return Last known location or null if unavailable
          */
         suspend fun getLastKnownLocation(): Location? {
+            currentCoroutineContext().ensureActive()
             Timber.d("Requesting last known location")
 
             if (!hasLocationPermission()) {
@@ -224,36 +314,22 @@ class LocationTracker
             }
 
             return try {
-                suspendCancellableCoroutine { continuation ->
-                    fusedLocationClient.lastLocation
-                        .addOnSuccessListener { androidLocation: android.location.Location? ->
-                            if (androidLocation != null) {
-                                Timber.d(
-                                    "Last known location: lat=${androidLocation.latitude}, " +
-                                        "lon=${androidLocation.longitude}, " +
-                                        "accuracy=${androidLocation.accuracy}m",
-                                )
-
-                                val location =
-                                    Location(
-                                        latitude = androidLocation.latitude,
-                                        longitude = androidLocation.longitude,
-                                        accuracy = androidLocation.accuracy,
-                                        altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
-                                        timestamp = androidLocation.time,
-                                        provider = "FUSED",
-                                    )
-                                continuation.resume(location)
-                            } else {
-                                Timber.d("Last known location is null")
-                                continuation.resume(null)
-                            }
-                        }
-                        .addOnFailureListener { exception ->
-                            Timber.e(exception, "Failed to get last known location")
-                            continuation.resumeWithException(exception)
-                        }
+                var newest: android.location.Location? = null
+                for (provider in locationManager.getProviders(true)) {
+                    val candidate = locationManager.getLastKnownLocation(provider) ?: continue
+                    if (newest == null || candidate.elapsedRealtimeNanos > newest.elapsedRealtimeNanos) {
+                        newest = candidate
+                    }
                 }
+                val androidLocation = newest ?: return null
+                Location(
+                    latitude = androidLocation.latitude,
+                    longitude = androidLocation.longitude,
+                    accuracy = androidLocation.accuracy,
+                    altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
+                    timestamp = androidLocation.time,
+                    provider = androidLocation.provider ?: "unknown",
+                )
             } catch (se: SecurityException) {
                 Timber.e(se, "Location permission revoked while requesting last known location")
                 null
@@ -261,20 +337,38 @@ class LocationTracker
         }
 
         /**
-         * Stop continuous location tracking.
+         * Stop continuous and pending one-shot location tracking.
          *
-         * Removes location update callbacks and resets tracking state to idle.
+         * Removes native listeners, cancels pending requests, and resets tracking state to idle.
          */
         fun stopLocationTracking() {
-            Timber.i("Stopping location tracking")
-
-            locationCallback?.let {
-                fusedLocationClient.removeLocationUpdates(it)
+            synchronized(registrationLock) {
+                registrationGeneration++
+                val callback = locationCallback
                 locationCallback = null
-                Timber.i("Location updates removed")
+                updateIntervalSeconds = null
+                locationProvider = null
+                locationQuality = 0
+                _locationState.value = LocationState.Idle
+                callback?.let(::removeLocationCallback)
+                val pending = currentLocationRequests.iterator()
+                while (pending.hasNext()) {
+                    val (listener, continuation) = pending.next()
+                    pending.remove()
+                    removeLocationCallback(listener)
+                    continuation.cancel(CancellationException("Location tracking was stopped"))
+                }
             }
+        }
 
-            _locationState.value = LocationState.Idle
+        private fun removeLocationCallback(callback: LocationListenerCompat) {
+            try {
+                LocationManagerCompat.removeUpdates(locationManager, callback)
+            } catch (se: SecurityException) {
+                Timber.w(se, "Location permission revoked while removing location updates")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove location updates")
+            }
         }
 
         /**
@@ -283,7 +377,7 @@ class LocationTracker
          * @return True if location updates are being received
          */
         fun isTracking(): Boolean {
-            return _locationState.value is LocationState.Tracking
+            return synchronized(registrationLock) { locationCallback != null }
         }
 
         /**
@@ -295,5 +389,16 @@ class LocationTracker
             return context.checkSelfPermission(
                 Manifest.permission.ACCESS_FINE_LOCATION,
             ) == PackageManager.PERMISSION_GRANTED
+        }
+
+        companion object {
+            private const val CURRENT_LOCATION_TIMEOUT_MS = 30_000L
+            private const val MAX_STALE_LOCATION_AGE_MS = 120_000L
+            private val CURRENT_LOCATION_REQUEST =
+                LocationRequestCompat.Builder(0L)
+                    .setQuality(LocationRequestCompat.QUALITY_HIGH_ACCURACY)
+                    .setDurationMillis(CURRENT_LOCATION_TIMEOUT_MS)
+                    .setMaxUpdates(1)
+                    .build()
         }
     }

@@ -41,7 +41,7 @@ interface WhitelistRepository {
     )
 
     /**
-     * Add a device to the whitelist.
+     * Add a device to the whitelist, storing confirmed STRONG aliases on their root.
      *
      * @param deviceId Device ID to whitelist
      * @param label User-friendly label for the device
@@ -67,7 +67,7 @@ interface WhitelistRepository {
     suspend fun addMultipleToWhitelist(entries: List<WhitelistEntry>): List<Long>
 
     /**
-     * Remove a device from the whitelist.
+     * Remove all explicit trust entries in the device's confirmed STRONG family.
      *
      * @param deviceId Device ID to remove
      * @return Number of entries removed
@@ -75,7 +75,7 @@ interface WhitelistRepository {
     suspend fun removeFromWhitelist(deviceId: Long): Int
 
     /**
-     * Check if a device is whitelisted.
+     * Check explicit trust on the device or any member of its confirmed STRONG family.
      *
      * @param deviceId Device ID to check
      * @return True if whitelisted
@@ -98,7 +98,7 @@ interface WhitelistRepository {
     fun getAllEntriesWithDevices(): Flow<List<WhitelistEntryWithDevice>>
 
     /**
-     * Get all whitelisted device IDs.
+     * Get all explicitly trusted IDs and their confirmed root/direct STRONG members.
      *
      * @return Flow of device IDs
      */
@@ -179,7 +179,7 @@ interface WhitelistRepository {
     suspend fun getEntryById(entryId: Long): WhitelistEntry?
 
     /**
-     * Get a whitelist entry by device ID.
+     * Get an explicit trust entry for the device's confirmed STRONG family.
      *
      * @param deviceId Device ID
      * @return WhitelistEntry or null if device is not whitelisted
@@ -213,7 +213,7 @@ class WhitelistRepositoryImpl
         ): Long {
             val entry =
                 WhitelistEntry(
-                    deviceId = deviceId,
+                    deviceId = canonicalDeviceId(deviceId),
                     label = label,
                     category = category,
                     addedViaLearnMode = addedViaLearnMode,
@@ -223,15 +223,20 @@ class WhitelistRepositoryImpl
         }
 
         override suspend fun addMultipleToWhitelist(entries: List<WhitelistEntry>): List<Long> {
-            return whitelistEntryDao.insertAll(entries)
+            return whitelistEntryDao.insertAll(
+                entries.map { entry ->
+                    val rootId = canonicalDeviceId(entry.deviceId)
+                    if (rootId == entry.deviceId) entry else entry.copy(deviceId = rootId)
+                },
+            )
         }
 
         override suspend fun removeFromWhitelist(deviceId: Long): Int {
-            return whitelistEntryDao.deleteByDeviceId(deviceId)
+            return whitelistEntryDao.deleteByConfirmedFamily(deviceId)
         }
 
         override suspend fun isDeviceWhitelisted(deviceId: Long): Boolean {
-            return whitelistEntryDao.isDeviceWhitelisted(deviceId)
+            return whitelistEntryDao.getByConfirmedFamily(deviceId) != null
         }
 
         override fun getAllWhitelistEntries(): Flow<List<WhitelistEntry>> {
@@ -329,10 +334,18 @@ class WhitelistRepositoryImpl
         }
 
         override suspend fun getEntryByDeviceId(deviceId: Long): WhitelistEntry? {
-            return whitelistEntryDao.getByDeviceId(deviceId)
+            return whitelistEntryDao.getByConfirmedFamily(deviceId)
         }
 
         override fun getManualEntries(): Flow<List<WhitelistEntry>> {
             return whitelistEntryDao.getManualEntries()
+        }
+
+        private suspend fun canonicalDeviceId(deviceId: Long): Long {
+            val device = scannedDeviceDao.getById(deviceId) ?: return deviceId
+            val linkedId = device.linkedDeviceId ?: return deviceId
+            if (device.linkStrength != "STRONG") return deviceId
+            val root = scannedDeviceDao.getById(linkedId)
+            return if (root != null && root.linkedDeviceId == null) root.id else deviceId
         }
     }

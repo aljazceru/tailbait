@@ -21,12 +21,21 @@ import com.tailbait.data.repository.CompanionDeviceRepository
 import com.tailbait.data.repository.LocationRepository
 import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.util.Constants
+import com.tailbait.util.PermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -83,76 +92,98 @@ class TailBaitService : NotificationService() {
     @Inject
     lateinit var alertGenerator: AlertGenerator
 
-    // Flow collector jobs - tracked to prevent duplicate collectors on pause/resume
+    @Inject
+    lateinit var permissionHelper: PermissionHelper
+
+    private val transitionMutex = Mutex()
+    private var settingsJob: Job? = null
+    private var scanJob: Job? = null
     private var scanStateJob: Job? = null
     private var locationStateJob: Job? = null
-
-    // Service binder for UI communication
+    private var scanIntervalSeconds: Int? = null
+    private var companionAddress: String? = null
+    private var destroyed = false
+    private var foregroundStarted = false
     private val binder = LocalBinder()
 
-    // ... (rest of class)
+    private suspend fun transition(action: suspend () -> Unit) {
+        transitionMutex.withLock {
+            if (destroyed) return
+            try {
+                action()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Tracking transition failed")
+                stopResources()
+                stopSelf()
+            }
+        }
+    }
 
-    // ... (inside startTracking)
-    private fun startTracking() {
-        if (isTracking) {
-            Timber.w("Tracking already started")
+    private fun observeSettings() {
+        if (settingsJob?.isActive == true) return
+        settingsJob =
+            lifecycleScope.launch {
+                combine(settingsRepository.getSettings(), companionRepository.getFirst()) { settings, paired ->
+                    Triple(
+                        settings.isTrackingEnabled,
+                        settings.scanIntervalSeconds,
+                        paired?.takeIf { settings.companionEnabled && it.isEnabled }?.address,
+                    )
+                }.distinctUntilChanged().collect {
+                    // Read current persisted values inside the transition, not a queued stale emission.
+                    transition { applySettings() }
+                }
+            }
+    }
+
+    private fun hasTrackingPermissions(): Boolean = permissionHelper.hasLocationPermissions() && permissionHelper.hasBluetoothPermissions()
+
+    private suspend fun applySettings() {
+        val settings = settingsRepository.getSettingsOnce()
+        if (!settings.isTrackingEnabled || !hasTrackingPermissions()) {
+            stopResources()
             return
         }
-
-        lifecycleScope.launch {
-            try {
-                // Update settings to enable tracking
-                settingsRepository.updateTrackingEnabled(true)
-                isTracking = true
-
-                // Start location tracking
-                val locationResult = locationTracker.startLocationTracking()
-                if (locationResult.isFailure) {
-                    Timber.e(locationResult.exceptionOrNull(), "Failed to start location tracking")
-                }
-
-                // Companion link (ESP32): connect if paired + enabled
-                startCompanionIfNeeded()
-
-                // Trigger first scan immediately via the new mechanism
-                // This ensures consistent behavior with periodic scans
+        val paired = companionRepository.getFirst().firstOrNull()
+        val address = paired?.takeIf { settings.companionEnabled && it.isEnabled }?.address
+        if (!foregroundStarted) {
+            startForegroundService()
+            foregroundStarted = true
+        }
+        val starting = !isTracking
+        val intervalChanged = scanIntervalSeconds != settings.scanIntervalSeconds
+        isTracking = true
+        if (starting || intervalChanged) {
+            locationTracker.startLocationTracking(settings.scanIntervalSeconds).getOrThrow()
+            scanIntervalSeconds = settings.scanIntervalSeconds
+        }
+        if (starting) {
+            scanStateJob =
+                bleScannerManager.scanState.onEach(::handleScanStateChange).launchIn(lifecycleScope)
+            locationStateJob =
+                locationTracker.locationState.onEach { state ->
+                    if (state is LocationTracker.LocationState.LocationUpdated) {
+                        handleLocationUpdate(state.location)
+                    }
+                }.launchIn(lifecycleScope)
+        }
+        if (companionAddress != address) {
+            companionLink.stop()
+            companionIngestor.detach()
+            companionAddress = address
+            if (address != null) {
+                companionIngestor.attach(companionLink, lifecycleScope)
+                companionLink.start(address)
+            } else if (!starting) {
                 handleTriggerScan()
-
-                // Cancel existing collectors to prevent duplicates on pause/resume
-                scanStateJob?.cancel()
-                locationStateJob?.cancel()
-
-                // Observe scan state and update notification accordingly
-                // WakeLock is now managed based on scan state for battery optimization
-                scanStateJob =
-                    bleScannerManager.scanState
-                        .onEach { state ->
-                            handleScanStateChange(state)
-                        }
-                        .launchIn(lifecycleScope)
-
-                // Observe location state and save user path points
-                locationStateJob =
-                    locationTracker.locationState
-                        .onEach { state ->
-                            if (state is LocationTracker.LocationState.LocationUpdated) {
-                                handleLocationUpdate(state.location)
-                            }
-                        }
-                        .launchIn(lifecycleScope)
-
-                Timber.i("Tracking started successfully")
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to start tracking")
-                updateNotification(
-                    NOTIFICATION_ID,
-                    createTrackingNotification(
-                        title = "BLE Tracker Error",
-                        message = "Failed to start tracking: ${e.message}",
-                        isScanning = false,
-                    ),
-                )
             }
+        }
+        if (starting) {
+            handleTriggerScan()
+        } else if (intervalChanged) {
+            scheduleNextScan()
         }
     }
 
@@ -160,275 +191,137 @@ class TailBaitService : NotificationService() {
      * Handle continuous location updates from LocationTracker.
      * Persists location and user path data regardless of scan results.
      */
-    private fun handleLocationUpdate(androidLocation: android.location.Location) {
+    private suspend fun handleLocationUpdate(androidLocation: android.location.Location) {
         if (!isTracking) return
-
-        lifecycleScope.launch {
-            try {
-                // Convert Android location to entity
-                // FQN needed to disambiguate from android.location.Location
-                val location =
-                    com.tailbait.data.database.entities.Location(
-                        latitude = androidLocation.latitude,
-                        longitude = androidLocation.longitude,
-                        accuracy = androidLocation.accuracy,
-                        altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
-                        timestamp = androidLocation.time,
-                        provider = androidLocation.provider ?: "FUSED",
-                    )
-
-                // Save location (find existing nearby or create new)
-                // Use a slightly larger radius (50m) to group nearby points
-                val (locationId, _) = locationRepository.findOrCreateLocation(location, 50.0)
-
-                // Record user path point to track movement history
-                locationRepository.insertUserPath(locationId, location)
-
-                Timber.d("Recorded user path point: $locationId (acc=${location.accuracy}m)")
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to record user path point")
-            }
+        try {
+            val location =
+                com.tailbait.data.database.entities.Location(
+                    latitude = androidLocation.latitude,
+                    longitude = androidLocation.longitude,
+                    accuracy = androidLocation.accuracy,
+                    altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
+                    timestamp = androidLocation.time,
+                    provider = androidLocation.provider ?: "FUSED",
+                )
+            val (locationId, _) = locationRepository.findOrCreateLocation(location, 50.0)
+            locationRepository.insertUserPath(locationId, location)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to record user path point")
         }
     }
 
-    /**
-     * Handle the trigger scan action.
-     * Accuires WakeLock, performs scan, and schedules next alarm.
-     */
     private fun handleTriggerScan() {
-        if (!isTracking) {
-            Timber.w("Scan triggered but tracking is disabled")
-            return
-        }
-
-        // Prefer companion: when the companion ESP32 is connected it streams
-        // continuous BLE+WiFi coverage; skip the phone's own scan burst to
-        // avoid radio contention (and the GATT 133 storms it causes).
-        val companionConnected =
-            companionLink.state.value is CompanionLinkManager.State.Connected
-        if (companionConnected) {
-            Timber.i("Companion connected - skipping phone scan (companion provides coverage)")
-            scheduleNextScan()
-            return
-        }
-
-        // Acquire safety WakeLock IMMEDIATELY to prevent Doze mode from suspending
-        // the app before the coroutine even starts.
-        // Increased timeout to account for detection analysis
-        acquireWakeLock(45 * 1000L) // 45 seconds safety buffer
-
-        lifecycleScope.launch {
-            try {
-                // Perform the scan (this will suspend until scan + processing is complete)
-                bleScannerManager.performManualScan(Constants.SCAN_TRIGGER_PERIODIC)
-
-                // Run detection algorithm immediately after scan
-                Timber.d("Running detection algorithm...")
-                val detectionResults = detectionAlgorithm.runDetection()
-
-                if (detectionResults.isNotEmpty()) {
-                    Timber.d("Detection complete: found ${detectionResults.size} suspicious devices")
-                    val alertIds = alertGenerator.generateAlerts(detectionResults)
-                    Timber.d("Generated ${alertIds.size} alerts")
-                } else {
-                    Timber.d("No suspicious devices detected")
+        if (!isTracking || destroyed) return
+        scheduleNextScan()
+        // Connected is published only after the companion protocol is ready.
+        if (scanJob?.isActive == true || companionLink.state.value is CompanionLinkManager.State.Connected) return
+        acquireWakeLock(45 * 1000L)
+        scanJob =
+            lifecycleScope.launch {
+                try {
+                    bleScannerManager.performManualScan(Constants.SCAN_TRIGGER_PERIODIC)
+                    val results = detectionAlgorithm.runDetection()
+                    if (results.isNotEmpty()) alertGenerator.generateAlerts(results)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.e(e, "Error during triggered scan")
+                } finally {
+                    releaseWakeLock()
                 }
-
-                // Schedule the next scan
-                scheduleNextScan()
-            } catch (e: Exception) {
-                Timber.e(e, "Error during triggered scan")
-                // Even on error, try to reschedule to keep the loop alive
-                scheduleNextScan()
-            } finally {
-                releaseWakeLock()
             }
+    }
+
+    private fun scanPendingIntent(flags: Int): PendingIntent? {
+        val intent = Intent(this, TailBaitService::class.java).setAction(ACTION_TRIGGER_SCAN)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(this, REQUEST_CODE_TRIGGER_SCAN, intent, flags)
+        } else {
+            PendingIntent.getService(this, REQUEST_CODE_TRIGGER_SCAN, intent, flags)
         }
     }
 
-    /**
-     * Schedule the next scan using AlarmManager.
-     */
     private fun scheduleNextScan() {
-        lifecycleScope.launch {
-            try {
-                val settings = settingsRepository.getSettingsOnce()
-                if (!settings.isTrackingEnabled) return@launch
-
-                val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                val intent =
-                    Intent(this@TailBaitService, TailBaitService::class.java).apply {
-                        action = ACTION_TRIGGER_SCAN
-                    }
-
-                val flags =
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    } else {
-                        PendingIntent.FLAG_UPDATE_CURRENT
-                    }
-
-                val pendingIntent =
-                    PendingIntent.getService(
-                        this@TailBaitService,
-                        REQUEST_CODE_TRIGGER_SCAN,
-                        intent,
-                        flags,
-                    )
-
-                // Use scanIntervalSeconds (default 300s = 5 min)
-                val intervalMs = settings.scanIntervalSeconds * 1000L
-                val triggerAtMillis = SystemClock.elapsedRealtime() + intervalMs
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    if (alarmManager.canScheduleExactAlarms()) {
-                        alarmManager.setExactAndAllowWhileIdle(
-                            AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                            triggerAtMillis,
-                            pendingIntent,
-                        )
-                    } else {
-                        Timber.w("SCHEDULE_EXACT_ALARM permission not granted, falling back to inexact alarm")
-                        alarmManager.setAndAllowWhileIdle(
-                            AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                            triggerAtMillis,
-                            pendingIntent,
-                        )
-                    }
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent,
-                    )
-                } else {
-                    alarmManager.setExact(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        triggerAtMillis,
-                        pendingIntent,
-                    )
-                }
-
-                Timber.d("Scheduled next scan in ${settings.scanIntervalSeconds}s")
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to schedule next scan")
+        val interval = scanIntervalSeconds ?: return
+        if (!isTracking || destroyed) return
+        try {
+            cancelScheduledScan()
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val pendingIntent =
+                scanPendingIntent(PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE) ?: return
+            val triggerAtMillis = SystemClock.elapsedRealtime() + interval * 1000L
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, pendingIntent)
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtMillis, pendingIntent)
             }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to schedule next scan")
         }
     }
 
-    // ...
-
-    /**
-     * Connect the companion link when a paired+enabled ESP32 exists.
-     * Records flow into the repositories via CompanionIngestor.
-     */
-    private fun startCompanionIfNeeded() {
-        lifecycleScope.launch {
+    private suspend fun stopResources() {
+        isTracking = false
+        scanIntervalSeconds = null
+        companionAddress = null
+        cancelScheduledScan()
+        locationTracker.stopLocationTracking()
+        companionLink.stop()
+        scanStateJob?.cancel()
+        locationStateJob?.cancel()
+        scanJob?.cancel()
+        releaseAllWakeLocks()
+        try {
+            bleScannerManager.stopAndSaveScanResults()
+        } finally {
             try {
-                val settings = settingsRepository.getSettingsOnce()
-                if (!settings.companionEnabled) return@launch
-                val paired = companionRepository.getFirst()
-                val device = paired.firstOrNull() ?: return@launch
-                companionIngestor.attach(companionLink)
-                companionLink.start(device.address)
-                Timber.i("Companion link started for ${device.address}")
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to start companion link")
+                scanJob?.cancelAndJoin()
+                scanStateJob?.cancelAndJoin()
+                locationStateJob?.cancelAndJoin()
+            } finally {
+                companionIngestor.detach()
             }
         }
-    }
-
-    private fun stopTracking() {
-        lifecycleScope.launch {
-            try {
-                // Release WakeLock
-                releaseWakeLock()
-
-                // Cancel any pending alarms
-                cancelScheduledScan()
-
-                // Update settings to disable tracking
-                settingsRepository.updateTrackingEnabled(false)
-                isTracking = false
-
-                // Stop location tracking
-                locationTracker.stopLocationTracking()
-
-                // Stop BLE scanning and save results
-                bleScannerManager.stopAndSaveScanResults()
-
-                // Stop companion link
-                companionLink.stop()
-
-                Timber.i("Tracking stopped, terminating service")
-
-                // Stop the foreground service
-                stopSelf()
-            } catch (e: Exception) {
-                Timber.e(e, "Error stopping tracking")
-                // Still try to stop the service even if there's an error
-                stopSelf()
-            }
-        }
+        scanJob = null
+        scanStateJob = null
+        locationStateJob = null
     }
 
     private fun cancelScheduledScan() {
         try {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent =
-                Intent(this, TailBaitService::class.java).apply {
-                    action = ACTION_TRIGGER_SCAN
+            val flags = PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            scanPendingIntent(flags)?.let {
+                alarmManager.cancel(it)
+                it.cancel()
+            }
+            // Remove the pre-cutover getService alarm as well as the foreground-service alarm.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val intent = Intent(this, TailBaitService::class.java).setAction(ACTION_TRIGGER_SCAN)
+                PendingIntent.getService(this, REQUEST_CODE_TRIGGER_SCAN, intent, flags)?.let {
+                    alarmManager.cancel(it)
+                    it.cancel()
                 }
-            val flags =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                } else {
-                    PendingIntent.FLAG_UPDATE_CURRENT
-                }
-            val pendingIntent =
-                PendingIntent.getService(
-                    this,
-                    REQUEST_CODE_TRIGGER_SCAN,
-                    intent,
-                    flags,
-                )
-            alarmManager.cancel(pendingIntent)
-            pendingIntent.cancel()
-            Timber.d("Cancelled scheduled scans")
+            }
         } catch (e: Exception) {
             Timber.e(e, "Error cancelling scheduled scan")
         }
     }
 
-    private fun pauseTracking() {
-        lifecycleScope.launch {
-            try {
-                // Update settings to disable tracking (but keep service running)
-                settingsRepository.updateTrackingEnabled(false)
-                isTracking = false
-
-                // Stop location tracking
-                locationTracker.stopLocationTracking()
-
-                // Stop scanning and save results
-                bleScannerManager.stopAndSaveScanResults()
-
-                // Update notification to show paused state
-                updateNotification(
-                    NOTIFICATION_ID,
-                    createTrackingNotification(
-                        title = "BLE Tracker Paused",
-                        message = "Tracking paused",
-                        isScanning = false,
-                        showResumeAction = true,
-                    ),
-                )
-
-                Timber.i("Tracking paused")
-            } catch (e: Exception) {
-                Timber.e(e, "Error pausing tracking")
-            }
-        }
+    private suspend fun pauseTracking() {
+        settingsRepository.updateTrackingEnabled(false)
+        stopResources()
+        updateNotification(
+            NOTIFICATION_ID,
+            createTrackingNotification(
+                title = "BLE Tracker Paused",
+                message = "Tracking paused",
+                isScanning = false,
+                showResumeAction = true,
+            ),
+        )
     }
 
     // Track if service is currently tracking
@@ -456,7 +349,7 @@ class TailBaitService : NotificationService() {
 
     /**
      * Service creation lifecycle callback.
-     * Initializes the service and starts foreground notification.
+     * Initializes resources without starting radios for a bound-only client.
      */
     override fun onCreate() {
         super.onCreate()
@@ -471,11 +364,6 @@ class TailBaitService : NotificationService() {
             ).apply {
                 setReferenceCounted(true)
             }
-
-        // Note: WakeLock is acquired during active scans to save battery.
-        // The foreground service notification is sufficient to keep the service alive.
-
-        startForegroundService()
     }
 
     /**
@@ -496,34 +384,46 @@ class TailBaitService : NotificationService() {
 
         Timber.d("onStartCommand: action=${intent?.action}, flags=$flags, startId=$startId")
 
-        when (intent?.action) {
-            ACTION_START_TRACKING -> {
-                Timber.i("Starting tracking")
-                startTracking()
-            }
-            ACTION_STOP_TRACKING -> {
-                Timber.i("Stopping tracking")
-                stopTracking()
-            }
-            ACTION_PAUSE_TRACKING -> {
-                Timber.i("Pausing tracking")
-                pauseTracking()
-            }
-            ACTION_RESUME_TRACKING -> {
-                Timber.i("Resuming tracking")
-                resumeTracking()
-            }
-            ACTION_TRIGGER_SCAN -> {
-                Timber.i("Triggering periodic scan")
-                handleTriggerScan()
-            }
-            else -> {
-                Timber.w("Unknown action: ${intent?.action}")
+        lifecycleScope.launch {
+            transition {
+                when (intent?.action) {
+                    ACTION_START_TRACKING, ACTION_RESUME_TRACKING -> {
+                        if (hasTrackingPermissions()) {
+                            settingsRepository.updateTrackingEnabled(true)
+                            applySettings()
+                            observeSettings()
+                        } else {
+                            stopResources()
+                            stopSelf()
+                        }
+                    }
+                    ACTION_STOP_TRACKING -> {
+                        settingsJob?.cancel()
+                        settingsRepository.updateTrackingEnabled(false)
+                        stopResources()
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        foregroundStarted = false
+                        stopSelf()
+                    }
+                    ACTION_PAUSE_TRACKING -> {
+                        pauseTracking()
+                        observeSettings()
+                    }
+                    null, ACTION_TRIGGER_SCAN -> {
+                        val alreadyTracking = isTracking
+                        applySettings()
+                        if (isTracking) {
+                            if (alreadyTracking && intent?.action == ACTION_TRIGGER_SCAN) handleTriggerScan()
+                            observeSettings()
+                        } else {
+                            stopSelf()
+                        }
+                    }
+                    else -> Timber.w("Unknown action: ${intent?.action}")
+                }
             }
         }
-
-        // Return START_STICKY to ensure service restarts if killed by system
-        return START_STICKY
+        return if (intent?.action == ACTION_STOP_TRACKING) START_NOT_STICKY else START_STICKY
     }
 
     /**
@@ -544,22 +444,15 @@ class TailBaitService : NotificationService() {
      * Cleans up resources when service is destroyed.
      */
     override fun onDestroy() {
-        Timber.i("TailBaitService destroyed")
-
-        // Release WakeLock if held (force cleanup)
-        try {
-            if (::wakeLock.isInitialized) {
-                while (wakeLock.isHeld) {
-                    wakeLock.release()
-                    Timber.w("WakeLock released in onDestroy (was still held)")
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error releasing WakeLock in onDestroy")
-        }
-
-        bleScannerManager.stopScanning()
+        destroyed = true
         isTracking = false
+        cancelScheduledScan()
+        locationTracker.stopLocationTracking()
+        companionLink.stop()
+        bleScannerManager.stopScanning()
+        // Cancels commands, path persistence and the service-owned companion collector together.
+        lifecycleScope.cancel()
+        releaseAllWakeLocks()
         super.onDestroy()
     }
 
@@ -622,6 +515,17 @@ class TailBaitService : NotificationService() {
         }
     }
 
+    private fun releaseAllWakeLocks() {
+        scanStateWakeLockHeld = false
+        try {
+            if (::wakeLock.isInitialized) {
+                while (wakeLock.isHeld) wakeLock.release()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error releasing WakeLock")
+        }
+    }
+
     // Track if the scan state observer currently holds a WakeLock
     private var scanStateWakeLockHeld = false
 
@@ -632,6 +536,7 @@ class TailBaitService : NotificationService() {
      * preventing leaks when multiple Scanning(count) updates occur.
      */
     private fun handleScanStateChange(state: BleScannerManager.ScanState) {
+        if (!isTracking || destroyed) return
         val shouldHoldLock =
             when (state) {
                 is BleScannerManager.ScanState.Scanning,
@@ -652,15 +557,6 @@ class TailBaitService : NotificationService() {
             }
         }
         updateNotificationForScanState(state)
-    }
-
-    /**
-     * Resume BLE tracking after pause.
-     * Restarts scanning and observing scan state.
-     */
-    private fun resumeTracking() {
-        Timber.i("Resuming tracking")
-        startTracking()
     }
 
     /**

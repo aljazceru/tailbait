@@ -1,6 +1,7 @@
 package com.tailbait.flows
 
 import android.content.Context
+import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -9,8 +10,14 @@ import com.tailbait.data.database.entities.AppSettings
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.database.entities.WhitelistEntry
 import com.tailbait.data.repository.*
+import com.tailbait.ui.screens.whitelist.WhitelistViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -18,18 +25,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Integration test for the complete Learn Mode flow.
+ * Integration tests for Learn Mode's persisted settings, discovery data, and explicit trust.
  *
- * This test verifies the end-to-end Learn Mode process:
- * 1. Starting Learn Mode
- * 2. Discovering devices during Learn Mode
- * 3. Selecting devices
- * 4. Labeling devices
- * 5. Adding devices to whitelist
- * 6. Stopping Learn Mode
- *
- * This is a full integration test that uses a real in-memory database
- * and exercises the complete Learn Mode workflow.
+ * Device discovery is seeded in an isolated in-memory database; these tests do not start BLE scans.
  */
 @RunWith(AndroidJUnit4::class)
 class LearnModeFlowTest {
@@ -53,7 +51,12 @@ class LearnModeFlowTest {
             ).allowMainThreadQueries().build()
 
         // Initialize repositories
-        deviceRepository = DeviceRepositoryImpl(database.scannedDeviceDao())
+        deviceRepository =
+            DeviceRepositoryImpl(
+                database,
+                database.scannedDeviceDao(),
+                database.deviceLocationRecordDao(),
+            )
         whitelistRepository =
             WhitelistRepositoryImpl(
                 database.whitelistEntryDao(),
@@ -63,7 +66,7 @@ class LearnModeFlowTest {
 
         // Initialize default settings
         runTest {
-            database.appSettingsDao().insert(AppSettings())
+            database.appSettingsDao().insert(AppSettings(isTrackingEnabled = false))
         }
     }
 
@@ -110,9 +113,9 @@ class LearnModeFlowTest {
                     detectionCount = 4,
                 )
 
-            val deviceId1 = deviceRepository.insertDevice(device1)
-            val deviceId2 = deviceRepository.insertDevice(device2)
-            val deviceId3 = deviceRepository.insertDevice(device3)
+            val deviceId1 = database.scannedDeviceDao().insert(device1)
+            val deviceId2 = database.scannedDeviceDao().insert(device2)
+            val deviceId3 = database.scannedDeviceDao().insert(device3)
 
             // Step 3: Verify devices were discovered
             val discoveredDevices = deviceRepository.getAllDevices().first()
@@ -144,6 +147,9 @@ class LearnModeFlowTest {
             // Step 6: Verify devices were added to whitelist
             val whitelistEntries = whitelistRepository.getAllWhitelistEntries().first()
             assertEquals("Whitelist should have 2 entries", 2, whitelistEntries.size)
+            assertTrue(whitelistRepository.isDeviceWhitelisted(deviceId1))
+            assertTrue(whitelistRepository.isDeviceWhitelisted(deviceId2))
+            assertFalse("Unselected devices must remain untrusted", whitelistRepository.isDeviceWhitelisted(deviceId3))
 
             // Verify entries are marked as added via Learn Mode
             assertTrue(
@@ -183,7 +189,7 @@ class LearnModeFlowTest {
                     lastSeen = 2000L,
                     detectionCount = 1,
                 )
-            val deviceId = deviceRepository.insertDevice(device)
+            val deviceId = database.scannedDeviceDao().insert(device)
 
             whitelistRepository.addToWhitelist(
                 deviceId = deviceId,
@@ -203,13 +209,24 @@ class LearnModeFlowTest {
                 whitelistedDeviceIds.contains(deviceId),
             )
 
-            // Step 4: Attempt to add same device again via Learn Mode (should fail or be prevented)
-            val isWhitelisted = whitelistRepository.isDeviceWhitelisted(deviceId)
-            assertTrue("Device should still be whitelisted", isWhitelisted)
+            // Step 4: Re-add the discovered device through the Learn Mode batch path.
+            whitelistRepository.addMultipleToWhitelist(
+                listOf(
+                    WhitelistEntry(
+                        deviceId = deviceId,
+                        label = "My Phone",
+                        category = WhitelistRepository.Category.OWN,
+                        addedViaLearnMode = true,
+                    ),
+                ),
+            )
+            assertTrue("Device should still be whitelisted", whitelistRepository.isDeviceWhitelisted(deviceId))
 
             // Step 5: Verify only one entry exists
             val entries = whitelistRepository.getAllWhitelistEntries().first()
             assertEquals("Should have only 1 entry", 1, entries.size)
+            assertEquals(deviceId, entries.single().deviceId)
+            assertTrue(entries.single().addedViaLearnMode)
 
             // Stop Learn Mode
             settingsRepository.stopLearnMode()
@@ -227,7 +244,7 @@ class LearnModeFlowTest {
                     lastSeen = 1000L,
                     detectionCount = 1,
                 )
-            deviceRepository.insertDevice(oldDevice)
+            database.scannedDeviceDao().insert(oldDevice)
 
             // Step 2: Start Learn Mode
             settingsRepository.startLearnMode()
@@ -243,14 +260,14 @@ class LearnModeFlowTest {
                     lastSeen = learnModeStartTime + 2000,
                     detectionCount = 2,
                 )
-            deviceRepository.insertDevice(newDevice)
+            database.scannedDeviceDao().insert(newDevice)
 
             // Step 4: Get all devices
             val allDevices = deviceRepository.getAllDevices().first()
             assertEquals("Should have 2 total devices", 2, allDevices.size)
 
             // Step 5: Filter devices discovered during Learn Mode
-            val learnModeDevices = allDevices.filter { it.lastSeen >= learnModeStartTime }
+            val learnModeDevices = database.scannedDeviceDao().getRecentDevices(learnModeStartTime).first()
             assertEquals("Should have 1 device from Learn Mode", 1, learnModeDevices.size)
             assertEquals("Should be the new device", "NEW:NEW:NEW:NEW:NEW:NEW", learnModeDevices[0].address)
 
@@ -264,7 +281,8 @@ class LearnModeFlowTest {
             // Step 1: Start Learn Mode
             settingsRepository.startLearnMode()
 
-            // Step 2: Don't discover or select any devices
+            // Step 2: Submit an empty selection.
+            assertTrue(whitelistRepository.addMultipleToWhitelist(emptyList()).isEmpty())
 
             // Step 3: Stop Learn Mode without adding devices
             settingsRepository.stopLearnMode()
@@ -312,9 +330,9 @@ class LearnModeFlowTest {
                     detectionCount = 1,
                 )
 
-            val ownId = deviceRepository.insertDevice(ownDevice)
-            val partnerId = deviceRepository.insertDevice(partnerDevice)
-            val trustedId = deviceRepository.insertDevice(trustedDevice)
+            val ownId = database.scannedDeviceDao().insert(ownDevice)
+            val partnerId = database.scannedDeviceDao().insert(partnerDevice)
+            val trustedId = database.scannedDeviceDao().insert(trustedDevice)
 
             // Add devices with different categories
             whitelistRepository.addToWhitelist(
@@ -369,7 +387,7 @@ class LearnModeFlowTest {
                     lastSeen = learnModeStartTime + 2000,
                     detectionCount = 1,
                 )
-            val deviceId = deviceRepository.insertDevice(device)
+            val deviceId = database.scannedDeviceDao().insert(device)
 
             // Add with custom label
             val customLabel = "My Custom Label for This Device"
@@ -392,5 +410,73 @@ class LearnModeFlowTest {
 
             // Stop Learn Mode
             settingsRepository.stopLearnMode()
+        }
+
+    @Test
+    fun removingWhitelistEntry_removesItsConfirmedFamilyWithoutTrustingEntryIdAsDeviceId() =
+        runBlocking {
+            val fingerprint = "FM:" + "AB".repeat(22)
+            val root =
+                ScannedDevice(
+                    id = 41L,
+                    address = "C0:00:00:00:00:01",
+                    name = "Trusted tracker",
+                    firstSeen = 1000L,
+                    lastSeen = 2000L,
+                    payloadFingerprint = fingerprint,
+                )
+            val alias =
+                root.copy(
+                    id = 42L,
+                    address = "C0:00:00:00:00:02",
+                    linkedDeviceId = root.id,
+                    linkStrength = LinkStrength.STRONG.name,
+                )
+            val unrelated =
+                root.copy(
+                    id = 901L,
+                    address = "C0:00:00:00:00:03",
+                    name = "Other trusted device",
+                    payloadFingerprint = null,
+                )
+            database.scannedDeviceDao().insertAll(listOf(root, alias, unrelated))
+            // Legacy trust can exist on both aliases; entry 901 must not target device 901.
+            database.whitelistEntryDao().insertAll(
+                listOf(
+                    WhitelistEntry(900L, root.id, "Root", WhitelistRepository.Category.OWN),
+                    WhitelistEntry(901L, alias.id, "Alias", WhitelistRepository.Category.OWN),
+                    WhitelistEntry(902L, unrelated.id, "Unrelated", WhitelistRepository.Category.TRUSTED),
+                ),
+            )
+            assertEquals(
+                setOf(root.id, alias.id, unrelated.id),
+                whitelistRepository.getAllWhitelistedDeviceIds().first().toSet(),
+            )
+
+            val viewModel = withContext(Dispatchers.Main) { WhitelistViewModel(whitelistRepository) }
+            try {
+                val initialState =
+                    withTimeout(5000) {
+                        viewModel.uiState.first { !it.isLoading && it.entries.size == 3 }
+                    }
+                val selectedEntry = initialState.entries.single { it.entry.id == 901L }
+                withContext(Dispatchers.Main) {
+                    viewModel.showDeleteConfirmation(selectedEntry)
+                    viewModel.removeFromWhitelist(selectedEntry.entry.id)
+                }
+                withTimeout(5000) {
+                    viewModel.uiState.first {
+                        !it.showDeleteConfirmation && it.entries.map { entry -> entry.entry.id } == listOf(902L)
+                    }
+                }
+
+                assertFalse(whitelistRepository.isDeviceWhitelisted(root.id))
+                assertFalse(whitelistRepository.isDeviceWhitelisted(alias.id))
+                assertTrue(whitelistRepository.isDeviceWhitelisted(unrelated.id))
+                assertEquals(listOf(902L), whitelistRepository.getAllWhitelistEntries().first().map { it.id })
+                assertEquals(setOf(root.id, alias.id, unrelated.id), deviceRepository.getAllDevices().first().map { it.id }.toSet())
+            } finally {
+                withContext(Dispatchers.Main) { viewModel.viewModelScope.cancel() }
+            }
         }
 }

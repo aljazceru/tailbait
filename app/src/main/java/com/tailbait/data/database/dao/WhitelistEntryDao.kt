@@ -72,6 +72,21 @@ interface WhitelistEntryDao {
     @Query("SELECT * FROM whitelist_entries WHERE device_id = :deviceId")
     suspend fun getByDeviceId(deviceId: Long): WhitelistEntry?
 
+    /** Find family trust, preferring the root's entry and then the lowest entry ID. */
+    @Query(
+        CONFIRMED_DEVICE_FAMILIES_SQL + """
+        SELECT entry.*
+        FROM whitelist_entries entry
+        INNER JOIN confirmed_device_families family ON family.device_id = entry.device_id
+        WHERE family.family_id = (
+            SELECT family_id FROM confirmed_device_families WHERE device_id = :deviceId
+        )
+        ORDER BY CASE WHEN entry.device_id = family.family_id THEN 0 ELSE 1 END, entry.id
+        LIMIT 1
+        """,
+    )
+    suspend fun getByConfirmedFamily(deviceId: Long): WhitelistEntry?
+
     /**
      * Get all whitelist entries as a Flow for reactive updates.
      *
@@ -96,12 +111,22 @@ interface WhitelistEntryDao {
     fun getAllEntriesWithDevices(): Flow<List<WhitelistEntry>>
 
     /**
-     * Get all whitelisted device IDs.
-     * This is used by the detection algorithm to filter out trusted devices.
+     * Get all members of explicitly trusted confirmed families.
+     * Detection and UI consumers share the same direct STRONG-link boundary.
      *
      * @return Flow emitting set of whitelisted device IDs
      */
-    @Query("SELECT device_id FROM whitelist_entries")
+    @Query(
+        CONFIRMED_DEVICE_FAMILIES_SQL + """
+        SELECT family.device_id
+        FROM confirmed_device_families family
+        WHERE family.family_id IN (
+            SELECT trusted.family_id
+            FROM confirmed_device_families trusted
+            INNER JOIN whitelist_entries entry ON entry.device_id = trusted.device_id
+        )
+        """,
+    )
     fun getAllWhitelistedDeviceIds(): Flow<List<Long>>
 
     /**
@@ -202,6 +227,21 @@ interface WhitelistEntryDao {
      */
     @Query("DELETE FROM whitelist_entries WHERE device_id = :deviceId")
     suspend fun deleteByDeviceId(deviceId: Long): Int
+
+    /** Remove every explicit trust entry in the confirmed family with one atomic statement. */
+    @Query(
+        CONFIRMED_DEVICE_FAMILIES_SQL + """
+        DELETE FROM whitelist_entries
+        WHERE device_id IN (
+            SELECT device_id
+            FROM confirmed_device_families
+            WHERE family_id = (
+                SELECT family_id FROM confirmed_device_families WHERE device_id = :deviceId
+            )
+        )
+        """,
+    )
+    suspend fun deleteByConfirmedFamily(deviceId: Long): Int
 
     /**
      * Delete all whitelist entries in a specific category.

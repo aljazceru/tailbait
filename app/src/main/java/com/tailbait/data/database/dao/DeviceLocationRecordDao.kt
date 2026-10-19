@@ -315,24 +315,48 @@ interface DeviceLocationRecordDao {
     suspend fun deleteAll()
 
     /**
-     * Get all records for a device AND its linked child devices.
+     * Get observations for a confirmed family, excluding explicitly trusted families.
+     * A STRONG child resolves to its root; weak links never contribute sibling history.
      *
-     * When a device rotates its MAC address, historical records are stored under
-     * child device IDs. This query aggregates records across all linked devices
-     * to give a complete picture for detection scoring.
-     *
-     * @param deviceId The primary device ID
-     * @return List of all records for the device and its linked children
+     * @param deviceId Any confirmed family member's ID
+     * @param sinceTimestamp Inclusive observation cutoff; zero preserves all-history callers
+     * @return Eligible observations for the root and its direct STRONG children
      */
     @Query(
-        """
-        SELECT * FROM device_location_records
-        WHERE device_id = :deviceId
-           OR device_id IN (SELECT id FROM scanned_devices WHERE linked_device_id = :deviceId)
-        ORDER BY timestamp DESC
+        UNTRUSTED_DEVICE_FAMILIES_SQL + """
+        SELECT dlr.*
+        FROM device_location_records dlr
+        INNER JOIN untrusted_device_families family ON family.device_id = dlr.device_id
+        WHERE family.family_id = (
+            SELECT family_id FROM confirmed_device_families WHERE device_id = :deviceId
+        )
+          AND dlr.timestamp >= :sinceTimestamp
+        ORDER BY dlr.timestamp DESC
     """,
     )
-    suspend fun getRecordsForDeviceWithLinked(deviceId: Long): List<DeviceLocationRecord>
+    suspend fun getRecordsForDeviceWithLinked(
+        deviceId: Long,
+        sinceTimestamp: Long = 0,
+    ): List<DeviceLocationRecord>
+
+    /**
+     * Get the same windowed, untrusted observations used by all shadow aggregates.
+     */
+    @Query(
+        UNTRUSTED_DEVICE_FAMILIES_SQL + """
+        SELECT dlr.*
+        FROM device_location_records dlr
+        INNER JOIN scanned_devices sd ON sd.id = dlr.device_id
+        INNER JOIN untrusted_device_families family ON family.device_id = sd.id
+        WHERE sd.shadow_key = :shadowKey
+          AND dlr.timestamp >= :sinceTimestamp
+        ORDER BY dlr.timestamp DESC
+    """,
+    )
+    suspend fun getRecordsForShadow(
+        shadowKey: String,
+        sinceTimestamp: Long,
+    ): List<DeviceLocationRecord>
 
     /**
      * Optimized query for map data to avoid N+1 problem.

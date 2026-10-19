@@ -34,6 +34,7 @@ object BeaconDetectionUtils {
         const val GOOGLE = 0x00E0
         const val NORDIC_SEMI = 0x0059
         const val SAMSUNG = 0x0075
+
         // Tile and Chipolo per the official SIG registry: 0x0099 is i.Tech
         // Dynamic and 0x02E5 is Espressif — neither is a tracker company.
         const val TILE = 0x067C
@@ -404,10 +405,10 @@ object BeaconDetectionUtils {
 
         return when (messageType) {
             AppleContinuityType.FIND_MY -> {
-                Timber.d("Detected Apple Find My beacon (AirTag/Find My accessory)")
+                if (!ManufacturerDataParser.isValidFindMyPayload(data)) return null
+                Timber.d("Detected Apple Find My beacon")
                 BeaconDetectionResult(
                     beaconType = BeaconType.FIND_MY,
-                    // Very high - this is an AirTag!
                     confidence = 0.98f,
                     rawData = data,
                 )
@@ -450,15 +451,14 @@ object BeaconDetectionUtils {
     }
 
     /**
-     * Check if data represents Find My network (AirTag).
+     * Check for a complete Find My network frame.
      */
     fun isFindMy(
         manufacturerId: Int,
         data: ByteArray?,
     ): Boolean {
         if (manufacturerId != CompanyId.APPLE) return false
-        if (data == null || data.isEmpty()) return false
-        return data[0].toInt() and 0xFF == AppleContinuityType.FIND_MY
+        return data != null && ManufacturerDataParser.isValidFindMyPayload(data)
     }
 
     // ============================================================================

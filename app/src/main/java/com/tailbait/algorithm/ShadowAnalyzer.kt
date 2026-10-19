@@ -1,5 +1,7 @@
 package com.tailbait.algorithm
 
+import com.tailbait.data.database.entities.DeviceLocationRecord
+import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.repository.DeviceRepository
 import com.tailbait.data.repository.LocationRepository
@@ -67,6 +69,8 @@ class ShadowAnalyzer
             val rotationScore: Double,
             val locationCount: Int,
             val combinedScore: Double,
+            val records: List<DeviceLocationRecord>,
+            val locations: List<Location>,
         )
 
         /**
@@ -74,27 +78,45 @@ class ShadowAnalyzer
          *
          * @param minLocationCount Minimum locations a shadow must appear at.
          * @param whitelistedIds Device IDs to exclude from results.
+         * @param sinceTimestamp Earliest eligible observation time.
          * @return List of shadow detection results above [MIN_COMBINED_SCORE].
          */
         suspend fun findSuspiciousShadows(
             minLocationCount: Int,
             whitelistedIds: Set<Long>,
+            sinceTimestamp: Long,
         ): List<ShadowDetectionResult> {
-            val shadowKeys = deviceRepository.getSuspiciousShadowKeys(minLocationCount)
+            val shadowKeys = deviceRepository.getSuspiciousShadowKeys(minLocationCount, sinceTimestamp)
             if (shadowKeys.isEmpty()) {
                 Timber.tag(TAG).d("No shadow keys at $minLocationCount+ locations")
                 return emptyList()
             }
 
-            val totalUserLocations = locationRepository.getAllLocations().first().size
-            if (totalUserLocations == 0) return emptyList()
+            val locationsById = locationRepository.getAllLocations().first().associateBy { it.id }
+            val pathLocationIds =
+                locationRepository.getUserPathSince(sinceTimestamp)
+                    .filter { it.timestamp >= sinceTimestamp }
+                    .map { it.locationId }
+                    .toSet()
+            val currentLocationIds =
+                locationsById.values.filter { it.timestamp >= sinceTimestamp || it.id in pathLocationIds }
+                    .map { it.id }
+                    .toSet()
 
-            Timber.tag(TAG).d("Analyzing ${shadowKeys.size} shadow keys across $totalUserLocations user locations")
+            Timber.tag(TAG).d("Analyzing ${shadowKeys.size} shadow keys across ${currentLocationIds.size} user locations")
 
             val results = mutableListOf<ShadowDetectionResult>()
 
             for (shadowKey in shadowKeys) {
-                val result = analyzeShadow(shadowKey, totalUserLocations, whitelistedIds)
+                val result =
+                    analyzeShadow(
+                        shadowKey,
+                        minLocationCount,
+                        locationsById,
+                        currentLocationIds,
+                        whitelistedIds,
+                        sinceTimestamp,
+                    )
                 if (result != null && result.combinedScore >= MIN_COMBINED_SCORE) {
                     results.add(result)
                 }
@@ -105,45 +127,65 @@ class ShadowAnalyzer
 
         private suspend fun analyzeShadow(
             shadowKey: String,
-            totalUserLocations: Int,
+            minLocationCount: Int,
+            locationsById: Map<Long, Location>,
+            currentLocationIds: Set<Long>,
             whitelistedIds: Set<Long>,
+            sinceTimestamp: Long,
         ): ShadowDetectionResult? {
-            // Get per-location device counts
-            val locationCounts = deviceRepository.getShadowLocationDeviceCounts(shadowKey)
-            if (locationCounts.isEmpty()) return null
+            val devices =
+                deviceRepository.getDevicesByShadowKey(shadowKey, sinceTimestamp)
+                    .filter { it.id !in whitelistedIds }
+            val eligibleDeviceIds = devices.map { it.id }.toSet()
+            val records =
+                deviceRepository.getDeviceLocationRecordsForShadow(shadowKey, sinceTimestamp)
+                    .filter {
+                        it.timestamp >= sinceTimestamp &&
+                            it.deviceId in eligibleDeviceIds &&
+                            it.locationId in locationsById
+                    }
+            val recordsByLocation = records.groupBy { it.locationId }
+            if (recordsByLocation.size < minLocationCount) return null
+            val locations = recordsByLocation.keys.map { locationsById.getValue(it) }
 
-            // Compute persistence score
-            val counts = locationCounts.map { it.deviceCount.toDouble() }
+            // Derive every score from the same eligible observations, not lifetime MAC summaries.
+            val counts =
+                recordsByLocation.values.map { atLocation ->
+                    atLocation.mapTo(mutableSetOf()) { it.deviceId }.size.toDouble()
+                }
             val mean = counts.average()
-            val variance = counts.map { (it - mean) * (it - mean) }.average()
-
+            val variance = counts.sumOf { (it - mean) * (it - mean) } / counts.size
             val specificityMultiplier = ShadowKeyGenerator.specificityScore(shadowKey).toDouble()
-            val locationCoverage = locationCounts.size.toDouble() / totalUserLocations
-
+            val totalUserLocations = currentLocationIds.size + recordsByLocation.keys.count { it !in currentLocationIds }
+            val locationCoverage = locations.size.toDouble() / totalUserLocations
             val persistenceScore = (1.0 / (1.0 + variance)) * specificityMultiplier * locationCoverage
 
-            // Get devices for rotation analysis
-            val devices = deviceRepository.getDevicesByShadowKey(shadowKey)
-            val nonWhitelistedDevices = devices.filter { it.id !in whitelistedIds }
-            if (nonWhitelistedDevices.isEmpty()) return null
-
-            // Run MAC rotation detection
-            val rotationResult = macRotationDetector.detectRotation(nonWhitelistedDevices)
-
-            // Combined score
+            val recordsByDevice = records.groupBy { it.deviceId }
+            val scopedDevices =
+                devices.mapNotNull { device ->
+                    val observations = recordsByDevice[device.id] ?: return@mapNotNull null
+                    val hasCurrentStatus =
+                        device.findMyStatus != null && (device.findMyStatusTimestamp ?: Long.MIN_VALUE) >= sinceTimestamp
+                    device.copy(
+                        firstSeen = observations.minOf { it.timestamp },
+                        lastSeen = observations.maxOf { it.timestamp },
+                        highestRssi = observations.maxOf { it.rssi },
+                        findMyStatus = device.findMyStatus.takeIf { hasCurrentStatus },
+                        findMyStatusTimestamp = device.findMyStatusTimestamp.takeIf { hasCurrentStatus },
+                        findMySeparated = hasCurrentStatus && device.findMySeparated,
+                    )
+                }
+            val rotationResult = macRotationDetector.detectRotation(scopedDevices)
             val combinedScore =
                 (persistenceScore * PERSISTENCE_WEIGHT) +
                     (rotationResult.score * ROTATION_WEIGHT)
-
-            // Pick representative device: most recently seen with highest RSSI
             val representative =
-                nonWhitelistedDevices.maxByOrNull {
-                    it.lastSeen * 1000 + (it.highestRssi ?: -100)
-                } ?: return null
+                scopedDevices.maxWithOrNull(compareBy<ScannedDevice> { it.lastSeen }.thenBy { it.highestRssi })
+                    ?: return null
 
             Timber.tag(TAG).d(
                 "Shadow $shadowKey: persistence=%.2f, rotation=%.2f, combined=%.2f, " +
-                    "locations=${locationCounts.size}, devices=${nonWhitelistedDevices.size}",
+                    "locations=${locations.size}, devices=${scopedDevices.size}",
                 persistenceScore,
                 rotationResult.score,
                 combinedScore,
@@ -154,8 +196,10 @@ class ShadowAnalyzer
                 shadowKey = shadowKey,
                 persistenceScore = persistenceScore,
                 rotationScore = rotationResult.score,
-                locationCount = locationCounts.size,
+                locationCount = locations.size,
                 combinedScore = combinedScore,
+                records = records,
+                locations = locations,
             )
         }
     }

@@ -128,74 +128,42 @@ data class ScannedDevice(
     @ColumnInfo(name = "identification_method")
     val identificationMethod: String? = null,
     /**
-     * FIND MY NETWORK FINGERPRINTING (AirTag MAC rotation handling).
-     *
-     * Payload fingerprint for Find My network devices.
-     * This is extracted from the semi-stable portion of the Find My advertisement
-     * payload and remains consistent across MAC address rotations (every ~15 min).
-     *
-     * For AirTags/Find My accessories, this is derived from the public key portion
-     * of the advertisement, providing a stable identifier for tracking the same
-     * physical device across MAC rotations.
-     *
-     * Format: Hex string of the fingerprint bytes (typically 6-8 bytes)
+     * Validated full advertised identity: FM: plus 44 uppercase hex digits, or
+     * FHN: plus 40/64 uppercase hex digits. Equal identifiers can link MACs;
+     * identity-key rotations and shared device profiles cannot.
      */
     @ColumnInfo(name = "payload_fingerprint")
     val payloadFingerprint: String? = null,
     /**
-     * Raw Find My status byte from the advertisement payload.
-     * Contains device state flags including the critical "separated from owner" bit.
-     *
-     * Bit layout:
-     * - Bit 0x04: Separated from owner (device is away from paired iPhone)
-     * - Other bits: Battery level hints, device state, etc.
+     * Latest validated Find My status byte. Bit 0x04 indicates a maintained or
+     * recent owner connection, not separation from the owner.
      */
     @ColumnInfo(name = "find_my_status")
     val findMyStatus: Int? = null,
+    /** Observation time of the latest validated Find My status, or null when unknown. */
+    @ColumnInfo(name = "find_my_status_timestamp")
+    val findMyStatusTimestamp: Long? = null,
     /**
-     * Whether the Find My device is currently separated from its owner.
-     * Extracted from bit 0x04 of the status byte.
-     *
-     * TRUE = Device is separated from owner's iPhone (HIGHLY SUSPICIOUS)
-     * FALSE = Device is near its owner
-     * NULL = Not a Find My device or status unknown
-     *
-     * A device that is both separated from owner AND following you is
-     * a strong indicator of unwanted tracking.
+     * Whether the latest valid status lacks the owner-connection bit (0x04).
+     * This is a protocol inference, not proof of separation. False also covers
+     * unknown state; consult findMyStatus and findMyStatusTimestamp for validity.
      */
     @ColumnInfo(name = "find_my_separated", defaultValue = "0")
     val findMySeparated: Boolean = false,
     /**
-     * ID of a linked device with the same payload fingerprint but different MAC.
-     * Used to correlate the same physical device across MAC address rotations.
-     *
-     * When we detect a new MAC with a matching fingerprint, we link it to the
-     * original device to maintain tracking continuity.
+     * Existing, unlinked root of a confirmed full-identity match across MACs.
+     * Only direct STRONG links form a family for detection and explicit trust.
      */
     @ColumnInfo(name = "linked_device_id")
     val linkedDeviceId: Long? = null,
     /**
-     * Strength/confidence of the link to the primary device.
-     *
-     * - "STRONG": Link based on stable identifiers (fingerprint, device name, etc.)
-     *   High confidence this is the same physical device.
-     *
-     * - "WEAK": Link based only on circumstantial evidence (temporal proximity,
-     *   same manufacturer/type, similar RSSI). Could be wrong in crowded areas.
-     *
-     * - null: Not linked (linkedDeviceId is null)
-     *
-     * Detection algorithm should weight weak links less when counting locations.
+     * STRONG links require a validated full FM/FHN identity, never names or profiles.
+     * Legacy WEAK links do not combine observations or propagate explicit trust.
+     * Null means this record is not linked.
      */
     @ColumnInfo(name = "link_strength")
     val linkStrength: String? = null,
-    /**
-     * Detailed reason for the link, useful for debugging and transparency.
-     * Examples:
-     * - "fingerprint_match:FM:AABBCCDD"
-     * - "name_match:John's iPhone"
-     * - "temporal:rssi=-45,disappeared=120s"
-     */
+    /** Reason for a confirmed link, formatted as fingerprint_match:<full FM/FHN identifier>. */
     @ColumnInfo(name = "link_reason")
     val linkReason: String? = null,
     /**

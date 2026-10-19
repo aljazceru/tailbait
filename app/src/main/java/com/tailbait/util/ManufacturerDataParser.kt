@@ -1,5 +1,7 @@
 package com.tailbait.util
 
+import android.os.ParcelUuid
+import com.tailbait.algorithm.TrackerServiceDetector
 import timber.log.Timber
 
 /**
@@ -53,10 +55,7 @@ object ManufacturerDataParser {
         //   Chipolo d.o.o. = 0x08C3 (0x02E5 is Espressif — NOT Chipolo)
         const val TILE = 0x067C
         const val CHIPOLO = 0x08C3
-        // NOTE: Pebblebee and Cube have no SIG company IDs. 0x0636 is Electronica
-        // Integral de Sonido and 0x05B8 is Ambystoma Labs — both were previously
-        // misattributed here. Those trackers are detected via their service
-        // UUIDs (FE8D / FE8E) instead.
+        // Pebblebee and Cube have no verified SIG company IDs here.
 
         // Pentest / surveillance hardware (IDs verified in the SIG registry)
         const val FLIPPER = 0x0E29 // Flipper Devices Inc.
@@ -300,8 +299,7 @@ object ManufacturerDataParser {
                     null
                 }
 
-            // Extract payload fingerprint for device correlation across MAC rotations
-            val payloadFingerprint = extractPayloadFingerprint(manufacturerId, safePayload)
+            val payloadFingerprint = findMyInfo?.payloadFingerprint
 
             ManufacturerInfo(
                 manufacturerId = manufacturerId,
@@ -327,6 +325,7 @@ object ManufacturerDataParser {
      * Use this version when the manufacturer data includes the 2-byte ID prefix
      * (standard BLE advertisement format).
      */
+    @OptIn(ExperimentalStdlibApi::class)
     fun parseManufacturerData(manufacturerData: ByteArray?): ManufacturerInfo? {
         if (manufacturerData == null || manufacturerData.size < 2) {
             return null
@@ -416,10 +415,13 @@ object ManufacturerDataParser {
             // FIND MY NETWORK (Type 0x12) - AIRTAG DETECTION!
             // =====================================================
             AppleContinuityType.FIND_MY -> {
+                if (!isValidFindMyPayload(payload)) {
+                    return DeviceInference(DeviceType.UNKNOWN, null, null, 0.30f)
+                }
                 Timber.d("Detected Apple Find My device (AirTag/Find My accessory)")
                 DeviceInference(
                     deviceType = DeviceType.TRACKER,
-                    deviceModel = "AirTag",
+                    deviceModel = "Find My device",
                     appleContinuityType = AppleContinuityType.FIND_MY,
                     confidence = 0.95f,
                 )
@@ -679,45 +681,40 @@ object ManufacturerDataParser {
     // ============================================================================
 
     /**
-     * Find My advertisement payload structure (Type 0x12):
+     * Find My manufacturer payload, excluding the company identifier:
+     * - Full frame: type 0x12, length 0x19, status, 22 key bytes, key bits, hint.
+     * - Short frame: type 0x12, length 0x02, status, hint; no public key.
      *
-     * Byte 0: Type (0x12)
-     * Byte 1: Length (typically 0x19 = 25 bytes)
-     * Byte 2: Status byte (contains separated-from-owner flag)
-     * Bytes 3-24: Public key data (rotates but has semi-stable portions)
-     *
-     * Status byte (Byte 2) bit flags:
-     * - Bit 2 (0x04): Separated from owner
-     * - Bits 6-7: Battery level hint (00=full, 01=medium, 10=low, 11=critical)
+     * Status bit 2 means the owner connected during the current key rotation period.
+     * Battery bits 6-7 are meaningful only when that maintained-connection bit is set.
+     * Source: https://raw.githubusercontent.com/furiousMAC/continuity/master/messages/findmy.md
      */
     object FindMyPayload {
-        const val MIN_PAYLOAD_LENGTH = 3 // Minimum for type + length + status
-        const val FULL_PAYLOAD_LENGTH = 27 // Type + length + 25 bytes of data
+        const val SHORT_PAYLOAD_LENGTH = 4
+        const val FULL_PAYLOAD_LENGTH = 27
+        const val MAINTAINED_OWNER_CONNECTION_MASK = 0x04
 
-        // Status byte bit masks
-        const val SEPARATED_FROM_OWNER_MASK = 0x04 // Bit 2
-
-        // Battery level bits (bits 6-7)
         const val BATTERY_MASK = 0xC0
         const val BATTERY_FULL = 0x00
         const val BATTERY_MEDIUM = 0x40
         const val BATTERY_LOW = 0x80
         const val BATTERY_CRITICAL = 0xC0
 
-        // Fingerprint extraction: We use bytes 3-8 (first 6 bytes of public key)
-        // These rotate less frequently than the MAC and provide device correlation
-        const val FINGERPRINT_START = 3 // After type, length, and status byte
-        const val FINGERPRINT_LENGTH = 6 // 6 bytes = 12 hex chars
+        const val FINGERPRINT_START = 3
+        const val FINGERPRINT_LENGTH = 22
     }
 
     /**
      * Parsed Find My network payload information.
+     *
+     * [FindMyInfo.separatedFromOwner] retains its storage-compatible name, but means
+     * no maintained/recent owner connection was advertised, not physical separation.
      */
     data class FindMyInfo(
         val statusByte: Int,
         val separatedFromOwner: Boolean,
         val batteryLevel: BatteryLevel,
-        val payloadFingerprint: String,
+        val payloadFingerprint: String?,
         val rawPayload: ByteArray,
     ) {
         enum class BatteryLevel {
@@ -747,50 +744,35 @@ object ManufacturerDataParser {
             var result = statusByte
             result = 31 * result + separatedFromOwner.hashCode()
             result = 31 * result + batteryLevel.hashCode()
-            result = 31 * result + payloadFingerprint.hashCode()
+            result = 31 * result + (payloadFingerprint?.hashCode() ?: 0)
             result = 31 * result + rawPayload.contentHashCode()
             return result
         }
     }
 
+    internal fun isValidFindMyPayload(payload: ByteArray): Boolean {
+        if (payload.size != FindMyPayload.SHORT_PAYLOAD_LENGTH &&
+            payload.size != FindMyPayload.FULL_PAYLOAD_LENGTH
+        ) {
+            return false
+        }
+        return payload[0].toInt() and 0xFF == AppleContinuityType.FIND_MY &&
+            payload[1].toInt() and 0xFF == payload.size - 2
+    }
+
     /**
-     * Parse Find My network payload to extract fingerprint and status.
-     *
-     * This is CRITICAL for AirTag tracking across MAC rotations.
-     * AirTags rotate their MAC address every ~15 minutes, but the payload
-     * contains semi-stable portions that can be used as a fingerprint.
-     *
-     * @param payload The manufacturer data payload (after type byte)
-     * @return FindMyInfo if parsing succeeds, null otherwise
+     * Parse a complete Find My frame. Only the full frame carries an identity;
+     * its advertised key changes with key rotation and is not a permanent device ID.
      */
     fun parseFindMyPayload(payload: ByteArray): FindMyInfo? {
-        if (payload.isEmpty()) {
-            Timber.d("Find My payload is empty")
-            return null
-        }
+        if (!isValidFindMyPayload(payload)) return null
 
-        // Check if this is a Find My advertisement (type 0x12)
-        val messageType = payload[0].toInt() and 0xFF
-        if (messageType != AppleContinuityType.FIND_MY) {
-            return null
-        }
-
-        // Need at least type + length + status
-        if (payload.size < FindMyPayload.MIN_PAYLOAD_LENGTH) {
-            Timber.d("Find My payload too short: ${payload.size} bytes")
-            return null
-        }
-
-        try {
-            // Extract length byte (byte 1)
-            // Extract status byte (byte 2)
-            val statusByte = if (payload.size > 2) payload[2].toInt() and 0xFF else 0
-
-            // Check if separated from owner (bit 2)
-            val separatedFromOwner = (statusByte and FindMyPayload.SEPARATED_FROM_OWNER_MASK) != 0
-
-            // Extract battery level
-            val batteryLevel =
+        val statusByte = payload[2].toInt() and 0xFF
+        val ownerRecentlyConnected = (statusByte and FindMyPayload.MAINTAINED_OWNER_CONNECTION_MASK) != 0
+        val batteryLevel =
+            if (!ownerRecentlyConnected) {
+                FindMyInfo.BatteryLevel.UNKNOWN
+            } else {
                 when (statusByte and FindMyPayload.BATTERY_MASK) {
                     FindMyPayload.BATTERY_FULL -> FindMyInfo.BatteryLevel.FULL
                     FindMyPayload.BATTERY_MEDIUM -> FindMyInfo.BatteryLevel.MEDIUM
@@ -798,415 +780,53 @@ object ManufacturerDataParser {
                     FindMyPayload.BATTERY_CRITICAL -> FindMyInfo.BatteryLevel.CRITICAL
                     else -> FindMyInfo.BatteryLevel.UNKNOWN
                 }
-
-            // Extract fingerprint from bytes 3-8 (or as many as available)
-            // This is the semi-stable portion of the public key
-            val fingerprintStart = FindMyPayload.FINGERPRINT_START
-            val fingerprintEnd =
-                minOf(
-                    fingerprintStart + FindMyPayload.FINGERPRINT_LENGTH,
-                    payload.size,
-                )
-
-            val fingerprint =
-                if (fingerprintEnd > fingerprintStart) {
-                    payload.copyOfRange(fingerprintStart, fingerprintEnd).toHexString()
-                } else {
-                    // Fallback: use status byte + any available bytes
-                    payload.copyOfRange(0, minOf(4, payload.size)).toHexString()
+            }
+        val fingerprint =
+            if (payload.size == FindMyPayload.FULL_PAYLOAD_LENGTH) {
+                buildString(3 + FindMyPayload.FINGERPRINT_LENGTH * 2) {
+                    append("FM:")
+                    for (
+                    index in FindMyPayload.FINGERPRINT_START until
+                        FindMyPayload.FINGERPRINT_START + FindMyPayload.FINGERPRINT_LENGTH
+                    ) {
+                        val value = payload[index].toInt() and 0xFF
+                        append("0123456789ABCDEF"[value ushr 4])
+                        append("0123456789ABCDEF"[value and 0x0F])
+                    }
                 }
+            } else {
+                null
+            }
 
-            Timber.d(
-                "Find My payload parsed: separated=$separatedFromOwner, " +
-                    "battery=$batteryLevel, fingerprint=$fingerprint",
-            )
-
-            return FindMyInfo(
-                statusByte = statusByte,
-                separatedFromOwner = separatedFromOwner,
-                batteryLevel = batteryLevel,
-                payloadFingerprint = fingerprint,
-                rawPayload = payload,
-            )
-        } catch (e: Exception) {
-            Timber.e(e, "Error parsing Find My payload")
-            return null
-        }
+        return FindMyInfo(
+            statusByte = statusByte,
+            separatedFromOwner = !ownerRecentlyConnected,
+            batteryLevel = batteryLevel,
+            payloadFingerprint = fingerprint,
+            rawPayload = payload,
+        )
     }
 
     /**
-     * Extract fingerprint from Apple Continuity payloads for device correlation.
-     *
-     * This is CRITICAL for tracking devices across MAC address rotations.
-     * Apple devices rotate their BLE MAC address every ~15 minutes for privacy,
-     * but their Continuity payloads contain semi-stable data that can be used
-     * to correlate the same physical device across rotations.
-     *
-     * ## Supported Continuity Types:
-     * - **Find My (0x12)**: AirTags - uses public key bytes 3-8 (highest stability)
-     * - **Proximity Pairing (0x07)**: AirPods/Beats - uses model ID + status bytes
-     * - **Nearby Info (0x10)**: iPhones/iPads - uses action code + status flags
-     * - **Magic Switch (0x0B)**: Apple Watch - uses device state bytes
-     * - **Handoff (0x0C)**: Mac/iPad - uses activity hash bytes
-     * - **AirDrop (0x05)**: Any Apple - uses truncated contact hash
-     *
-     * ## Fingerprint Stability:
-     * - Find My: Changes with each key rotation (~15 min), but correlates MAC rotations
-     * - Proximity Pairing: Stable per device (model ID doesn't change)
-     * - Nearby Info: Semi-stable (status flags change with device state)
-     * - Others: Variable stability, but useful for short-term correlation
-     *
-     * @param manufacturerId The manufacturer ID
-     * @param payload The manufacturer data payload
-     * @return Fingerprint string prefixed with type (e.g., "FM:AABBCCDD" for Find My)
-     *         or null if fingerprint cannot be extracted
+     * Extract a full advertised Find My key, not a shared model/status profile.
      */
     fun extractPayloadFingerprint(
         manufacturerId: Int,
         payload: ByteArray?,
     ): String? {
-        if (payload == null || payload.isEmpty()) return null
-
-        // Only process Apple devices for now (Samsung/Tile handled separately via service UUIDs)
-        if (manufacturerId != ManufacturerId.APPLE) return null
-
-        val messageType = payload[0].toInt() and 0xFF
-
-        return when (messageType) {
-            // =====================================================
-            // FIND MY (0x12) - AirTags
-            // Payload: Type(1) + Length(1) + Status(1) + PublicKey(25)
-            // Fingerprint: Bytes 2-7 (first 6 bytes of rotating public key)
-            //
-            // WARNING: These bytes are part of the rotating public key prefix
-            // and change every ~15 minutes when the MAC address rotates.
-            // This fingerprint is only valid within a single rotation window.
-            // Cross-rotation correlation requires the shadow detection path.
-            // =====================================================
-            AppleContinuityType.FIND_MY -> {
-                val findMyFingerprint = parseFindMyPayload(payload)?.payloadFingerprint
-                findMyFingerprint?.let { "FM:$it" }
-            }
-
-            // =====================================================
-            // PROXIMITY PAIRING (0x07) - AirPods/Beats
-            // Payload: Type(1) + Length(1) + ModelID(2 LE) + Status(1) + BatteryL(1) + BatteryR(1) + Case(1) + Lid(1)
-            // Fingerprint: Model ID (stable) + color byte if available
-            // =====================================================
-            AppleContinuityType.PROXIMITY_PAIRING -> {
-                if (payload.size >= 4) {
-                    // Extract model ID (bytes 2-3, little-endian) and status byte
-                    val modelId = ((payload[2].toInt() and 0xFF) shl 8) or (payload[1].toInt() and 0xFF)
-                    val statusByte = if (payload.size >= 5) payload[4].toInt() and 0xFF else 0
-                    // Include color byte (byte 6) if available for better differentiation
-                    val colorByte = if (payload.size >= 7) payload[6].toInt() and 0xFF else 0
-                    "PP:%04X%02X%02X".format(modelId, statusByte and 0xF0, colorByte)
-                } else {
-                    null
-                }
-            }
-
-            // =====================================================
-            // NEARBY INFO (0x10) - iPhones/iPads - MOST COMMON
-            // =====================================================
-            // IMPORTANT: These devices CANNOT be reliably fingerprinted!
-            // The auth tag (bytes 4+) rotates WITH the MAC address every ~15 min.
-            // Only bytes 2-3 (status + action code) are semi-stable, but they're
-            // NOT unique - many iPhones will have identical values.
-            //
-            // Attempting to fingerprint these leads to:
-            // - False correlation (different iPhones with same status+action)
-            // - OR no correlation (same iPhone with different auth tags)
-            //
-            // SOLUTION: Return null - these are NOT tracker threats anyway.
-            // The detection algorithm should focus on isTracker=true devices.
-            // =====================================================
-            AppleContinuityType.NEARBY_INFO -> {
-                // Do NOT fingerprint regular iPhones - they rotate too frequently
-                // and are not stalking threats. Let them be "noise" in the database.
-                null
-            }
-
-            // =====================================================
-            // MAGIC SWITCH (0x0B) - Apple Watch
-            // =====================================================
-            // Similar problem: the payload bytes rotate with MAC address.
-            // Apple Watches are not stalking threats - don't fingerprint.
-            // =====================================================
-            AppleContinuityType.MAGIC_SWITCH -> {
-                null // Not a tracker, not fingerprintable
-            }
-
-            // =====================================================
-            // HANDOFF (0x0C) - Mac/iPad cross-device sync
-            // =====================================================
-            // Auth tag rotates with MAC. Not a tracker threat.
-            // =====================================================
-            AppleContinuityType.HANDOFF -> {
-                null // Not a tracker, not fingerprintable
-            }
-
-            // =====================================================
-            // NON-TRACKER APPLE CONTINUITY TYPES
-            // =====================================================
-            // All of these are regular Apple devices (phones, tablets, Macs)
-            // that rotate their BLE data with MAC address. They are NOT
-            // stalking threats and CANNOT be reliably fingerprinted.
-            //
-            // Return null for all of them - the detection algorithm will
-            // filter them out via isTracker=false.
-            // =====================================================
-            AppleContinuityType.AIRDROP,
-            AppleContinuityType.HEY_SIRI,
-            AppleContinuityType.TETHERING_SOURCE,
-            AppleContinuityType.TETHERING_TARGET,
-            AppleContinuityType.AIRPLAY_SOURCE,
-            AppleContinuityType.AIRPLAY_TARGET,
-            -> {
-                null // Not trackers, not fingerprintable
-            }
-
-            // Unknown Apple Continuity type
-            else -> {
-                // Don't try to fingerprint unknown types - likely not trackers
-                Timber.d("Unknown Apple Continuity type 0x${messageType.toString(16)}, not fingerprinting")
-                null
-            }
-        }
-    }
-
-    // ============================================================================
-    // SERVICE UUID-BASED FINGERPRINTING (Non-Apple Trackers)
-    // ============================================================================
-
-    /**
-     * Known tracker service UUIDs for fingerprinting.
-     * These are stable identifiers that don't rotate with MAC address.
-     */
-    object TrackerServiceUuid {
-        // Samsung SmartTag - most reliable identifier
-        const val SAMSUNG_SMARTTAG = "0000FD5A-0000-1000-8000-00805F9B34FB"
-        const val SAMSUNG_SMARTTAG_SHORT = "FD5A"
-
-        // Tile trackers
-        const val TILE = "0000FEED-0000-1000-8000-00805F9B34FB"
-        const val TILE_SHORT = "FEED"
-        const val TILE_FULL = "FEED0001-C497-4476-A7ED-727DE7648AB1"
-        // Tile's second SIG-assigned service UUID (both FEED and FEEC are
-        // officially assigned to Tile, Inc. by the Bluetooth SIG)
-        const val TILE_SECOND = "0000FEEC-0000-1000-8000-00805F9B34FB"
-        const val TILE_SECOND_SHORT = "FEEC"
-
-        // Chipolo trackers
-        const val CHIPOLO = "0000FE8C-0000-1000-8000-00805F9B34FB"
-        const val CHIPOLO_SHORT = "FE8C"
-
-        // Google Find My Device Network
-        const val GOOGLE_FIND_MY = "0000FE2C-0000-1000-8000-00805F9B34FB"
-        const val GOOGLE_FIND_MY_SHORT = "FE2C"
-
-        // Other trackers
-        const val PEBBLEBEE = "0000FE8D-0000-1000-8000-00805F9B34FB"
-        const val PEBBLEBEE_SHORT = "FE8D"
-        const val CUBE = "0000FE8E-0000-1000-8000-00805F9B34FB"
-        const val CUBE_SHORT = "FE8E"
-        const val EUFY = "0000FE9F-0000-1000-8000-00805F9B34FB"
-        const val EUFY_SHORT = "FE9F"
-        const val JIO_TAG = "0000FEA0-0000-1000-8000-00805F9B34FB"
-        const val JIO_TAG_SHORT = "FEA0"
-
-        // Apple Find My Network (for third-party Find My accessories)
-        const val APPLE_FIND_MY = "0000FD6F-0000-1000-8000-00805F9B34FB"
-        const val APPLE_FIND_MY_SHORT = "FD6F"
-
-        // Camera glasses (Ray-Ban Meta advertise the Oculus VR service)
-        const val META_OCULUS = "0000FD5F-0000-1000-8000-00805F9B34FB"
-        const val META_OCULUS_SHORT = "FD5F"
-
-        // Flipper Zero — advertises one of three fixed service UUIDs, one per
-        // case colour (per Flipper's own firmware)
-        const val FLIPPER_1 = "00003081-0000-1000-8000-00805F9B34FB"
-        const val FLIPPER_1_SHORT = "3081"
-        const val FLIPPER_2 = "00003082-0000-1000-8000-00805F9B34FB"
-        const val FLIPPER_2_SHORT = "3082"
-        const val FLIPPER_3 = "00003083-0000-1000-8000-00805F9B34FB"
-        const val FLIPPER_3_SHORT = "3083"
-
-        // OpenDroneID / ASTM F3411 Remote ID (drones)
-        const val OPEN_DRONE_ID = "0000FFFA-0000-1000-8000-00805F9B34FB"
-        const val OPEN_DRONE_ID_SHORT = "FFFA"
+        if (manufacturerId != ManufacturerId.APPLE || payload == null) return null
+        return parseFindMyPayload(payload)?.payloadFingerprint
     }
 
     /**
-     * Extract fingerprint from service UUIDs for non-Apple trackers.
-     *
-     * Service UUIDs are the MOST STABLE identifier for BLE trackers.
-     * Unlike MAC addresses, they don't rotate and uniquely identify
-     * the tracker type/manufacturer.
-     *
-     * For additional correlation, we combine the service UUID with
-     * manufacturer data bytes when available to differentiate between
-     * multiple devices of the same type.
-     *
-     * ## Fingerprint Format: "{TYPE}:{UUID}:{PAYLOAD_HASH}"
-     * Examples:
-     * - "ST:FD5A:A1B2C3" for Samsung SmartTag
-     * - "TL:FEED:D4E5F6" for Tile
-     * - "CH:FE8C:789ABC" for Chipolo
-     *
-     * @param manufacturerId Bluetooth SIG manufacturer ID
-     * @param serviceUuids List of advertised service UUIDs
-     * @param manufacturerData Raw manufacturer data bytes
-     * @return Fingerprint string or null if no tracker UUID found
-     */
-    @Suppress("CyclomaticComplexMethod", "ReturnCount")
-    fun extractServiceUuidFingerprint(
-        manufacturerId: Int?,
-        serviceUuids: List<android.os.ParcelUuid>?,
-        manufacturerData: ByteArray?,
-    ): String? {
-        if (serviceUuids.isNullOrEmpty()) return null
-
-        // Convert service UUIDs to uppercase strings for comparison
-        val uuidStrings = serviceUuids.map { it.uuid.toString().uppercase() }
-        val shortUuids =
-            uuidStrings.map { uuid ->
-                // Extract short UUID from full UUID (e.g., "0000FD5A-0000-1000-8000-00805F9B34FB" -> "FD5A")
-                if (uuid.startsWith("0000") && uuid.contains("-0000-1000-8000-00805F9B34FB")) {
-                    uuid.substring(4, 8)
-                } else {
-                    uuid
-                }
-            }
-
-        // Extract payload hash for differentiation between multiple devices of same type
-        val payloadHash =
-            manufacturerData?.let {
-                if (it.size >= 4) {
-                    it.copyOfRange(0, minOf(4, it.size)).joinToString("") { b -> "%02X".format(b) }
-                } else if (it.isNotEmpty()) {
-                    it.joinToString("") { b -> "%02X".format(b) }
-                } else {
-                    null
-                }
-            } ?: ""
-
-        // Check for Samsung SmartTag
-        if (shortUuids.contains(TrackerServiceUuid.SAMSUNG_SMARTTAG_SHORT) ||
-            uuidStrings.any { it.contains("FD5A") }
-        ) {
-            return "ST:FD5A:$payloadHash"
-        }
-
-        // Check for Tile (both SIG-assigned UUIDs)
-        if (shortUuids.contains(TrackerServiceUuid.TILE_SHORT) ||
-            shortUuids.contains(TrackerServiceUuid.TILE_SECOND_SHORT) ||
-            uuidStrings.any { it.contains("FEED") || it.contains("FEEC") }
-        ) {
-            return "TL:FEED:$payloadHash"
-        }
-
-        // Check for Chipolo
-        if (shortUuids.contains(TrackerServiceUuid.CHIPOLO_SHORT) ||
-            uuidStrings.any { it.contains("FE8C") }
-        ) {
-            return "CH:FE8C:$payloadHash"
-        }
-
-        // Check for Google Find My Device
-        if (shortUuids.contains(TrackerServiceUuid.GOOGLE_FIND_MY_SHORT) ||
-            uuidStrings.any { it.contains("FE2C") }
-        ) {
-            return "GF:FE2C:$payloadHash"
-        }
-
-        // Check for Pebblebee
-        if (shortUuids.contains(TrackerServiceUuid.PEBBLEBEE_SHORT) ||
-            uuidStrings.any { it.contains("FE8D") }
-        ) {
-            return "PB:FE8D:$payloadHash"
-        }
-
-        // Check for Cube
-        if (shortUuids.contains(TrackerServiceUuid.CUBE_SHORT) ||
-            uuidStrings.any { it.contains("FE8E") }
-        ) {
-            return "CB:FE8E:$payloadHash"
-        }
-
-        // Check for eufy
-        if (shortUuids.contains(TrackerServiceUuid.EUFY_SHORT) ||
-            uuidStrings.any { it.contains("FE9F") }
-        ) {
-            return "EF:FE9F:$payloadHash"
-        }
-
-        // Check for Jio Tag
-        if (shortUuids.contains(TrackerServiceUuid.JIO_TAG_SHORT) ||
-            uuidStrings.any { it.contains("FEA0") }
-        ) {
-            return "JT:FEA0:$payloadHash"
-        }
-
-        // Check for Apple Find My Network (third-party accessories)
-        if (shortUuids.contains(TrackerServiceUuid.APPLE_FIND_MY_SHORT) ||
-            uuidStrings.any { it.contains("FD6F") }
-        ) {
-            return "AF:FD6F:$payloadHash"
-        }
-
-        // Check for camera glasses (Ray-Ban Meta advertise the Oculus VR service UUID)
-        if (shortUuids.contains(TrackerServiceUuid.META_OCULUS_SHORT) ||
-            uuidStrings.any { it.contains("FD5F") }
-        ) {
-            return "CG:FD5F:$payloadHash"
-        }
-
-        // Check for Flipper Zero (three fixed service UUIDs, one per case colour)
-        if (shortUuids.contains(TrackerServiceUuid.FLIPPER_1_SHORT) ||
-            shortUuids.contains(TrackerServiceUuid.FLIPPER_2_SHORT) ||
-            shortUuids.contains(TrackerServiceUuid.FLIPPER_3_SHORT)
-        ) {
-            return "FP:308X:$payloadHash"
-        }
-
-        // Check for OpenDroneID / Remote ID broadcasts
-        if (shortUuids.contains(TrackerServiceUuid.OPEN_DRONE_ID_SHORT) ||
-            uuidStrings.any { it.contains("FFFA") }
-        ) {
-            return "OD:FFFA:$payloadHash"
-        }
-
-        // Also check by manufacturer ID for known tracker manufacturers
-        return when (manufacturerId) {
-            ManufacturerId.TILE -> "TL:MFR:$payloadHash"
-            ManufacturerId.CHIPOLO -> "CH:MFR:$payloadHash"
-            ManufacturerId.FLIPPER -> "FP:MFR:$payloadHash"
-            ManufacturerId.LUXOTTICA -> "CG:MFR:$payloadHash"
-            ManufacturerId.META_PLATFORMS -> "CG:MFR:$payloadHash"
-            ManufacturerId.META -> "CG:MFR:$payloadHash"
-            ManufacturerId.SNAP -> "CG:MFR:$payloadHash"
-            else -> null
-        }
-    }
-
-    /**
-     * Combined fingerprint extraction that tries all methods.
-     *
-     * Priority order:
-     * 1. Apple Continuity payload fingerprint (for Apple devices)
-     * 2. Service UUID fingerprint (for Samsung, Tile, Chipolo, etc.)
-     * 3. Returns null if no fingerprint can be extracted
-     *
-     * @param manufacturerId Bluetooth SIG manufacturer ID
-     * @param manufacturerData Raw manufacturer data bytes
-     * @param serviceUuids List of advertised service UUIDs
-     * @return Best available fingerprint or null
+     * Extract only validated Find My or Find Hub identity bytes.
+     * Service UUIDs, manufacturer prefixes, and device profiles are not physical IDs.
      */
     fun extractBestFingerprint(
         manufacturerId: Int?,
         manufacturerData: ByteArray?,
-        serviceUuids: List<android.os.ParcelUuid>?,
+        serviceUuids: List<ParcelUuid>?,
+        serviceData: Map<ParcelUuid, ByteArray> = emptyMap(),
     ): String? {
         // Try Apple payload fingerprint first (most specific for Apple devices)
         if (manufacturerId == ManufacturerId.APPLE) {
@@ -1216,14 +836,7 @@ object ManufacturerDataParser {
             }
         }
 
-        // Try service UUID fingerprint (works for Samsung, Tile, Chipolo, etc.)
-        val serviceFingerprint = extractServiceUuidFingerprint(manufacturerId, serviceUuids, manufacturerData)
-        if (serviceFingerprint != null) {
-            return serviceFingerprint
-        }
-
-        // No fingerprint available
-        return null
+        return TrackerServiceDetector.findHubFingerprint(serviceData)
     }
 
     // ============================================================================
@@ -1298,16 +911,5 @@ object ManufacturerDataParser {
                 "isTracker=$isTracker, " +
                 "confidence=${(identificationConfidence * 100).toInt()}%)"
         }
-    }
-
-    // ============================================================================
-    // UTILITY EXTENSIONS
-    // ============================================================================
-
-    /**
-     * Convert ByteArray to hex string for logging/storage.
-     */
-    private fun ByteArray.toHexString(): String {
-        return joinToString("") { "%02X".format(it) }
     }
 }

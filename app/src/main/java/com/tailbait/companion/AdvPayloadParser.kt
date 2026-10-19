@@ -1,9 +1,14 @@
 package com.tailbait.companion
 
+import android.os.ParcelUuid
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.UUID
+
 /**
  * Parses a raw BLE advertisement payload (sequence of AD structures) coming
  * from the companion device into the pieces the existing identification
- * pipeline consumes (manufacturer data, service UUIDs, names).
+ * pipeline consumes (manufacturer data, service UUIDs/data, names).
  *
  * The companion forwards the raw adv bytes (NimBLE payload order); the phone
  * stays the brain and runs DeviceIdentifier / ManufacturerDataParser on it —
@@ -18,6 +23,9 @@ object AdvPayloadParser {
     private const val AD_UUID128_MORE = 0x06
     private const val AD_NAME_COMPLETE = 0x09
     private const val AD_NAME_SHORT = 0x08
+    private const val AD_SERVICE_DATA16 = 0x16
+    private const val AD_SERVICE_DATA32 = 0x20
+    private const val AD_SERVICE_DATA128 = 0x21
     private const val AD_MFG_DATA = 0xFF
     private const val AD_TX_POWER = 0x0A
     private const val AD_APPEARANCE = 0x19
@@ -30,12 +38,14 @@ object AdvPayloadParser {
         val txPowerLevel: Int?,
         val appearance: Int?,
         val advertisingFlags: Int?,
+        val serviceData: Map<ParcelUuid, ByteArray>,
     )
 
     fun parse(adv: ByteArray): Parsed {
         var manufacturerId: Int? = null
         var manufacturerData: ByteArray? = null
         val uuids = ArrayList<String>()
+        val serviceData = LinkedHashMap<ParcelUuid, ByteArray>()
         var name: String? = null
         var txPower: Int? = null
         var appearance: Int? = null
@@ -67,15 +77,29 @@ object AdvPayloadParser {
                 AD_UUID128_COMPLETE, AD_UUID128_MORE -> {
                     var j = 0
                     while (j + 16 <= data.size) {
-                        val b = data.copyOfRange(j, j + 16)
-                        // BLE UUIDs are little-endian on air
-                        b.reverse()
-                        val hex = b.joinToString("") { "%02x".format(it) }
-                        uuids.add(
-                            hex.substring(0, 8) + "-" + hex.substring(8, 12) + "-" +
-                                hex.substring(12, 16) + "-" + hex.substring(16, 20) + "-" + hex.substring(20),
-                        )
+                        uuids.add(uuid128(data, j).toString())
                         j += 16
+                    }
+                }
+                AD_SERVICE_DATA16, AD_SERVICE_DATA32, AD_SERVICE_DATA128 -> {
+                    val uuidSize =
+                        when (type) {
+                            AD_SERVICE_DATA16 -> 2
+                            AD_SERVICE_DATA32 -> 4
+                            else -> 16
+                        }
+                    if (data.size >= uuidSize) {
+                        val uuid =
+                            if (uuidSize == 16) {
+                                uuid128(data)
+                            } else {
+                                var value = 0L
+                                for (j in 0 until uuidSize) {
+                                    value = value or ((data[j].toLong() and 0xFF) shl (j * 8))
+                                }
+                                UUID.fromString("%08x-0000-1000-8000-00805f9b34fb".format(value))
+                            }
+                        serviceData[ParcelUuid(uuid)] = data.copyOfRange(uuidSize, data.size)
                     }
                 }
                 AD_NAME_COMPLETE, AD_NAME_SHORT -> name = data.toString(Charsets.UTF_8)
@@ -97,11 +121,21 @@ object AdvPayloadParser {
             txPowerLevel = txPower,
             appearance = appearance,
             advertisingFlags = flags,
+            serviceData = serviceData,
         )
     }
 
     private fun uuid16ToString(u: Int): String {
         val hex = "%04x".format(u)
         return "0000$hex-0000-1000-8000-00805f9b34fb"
+    }
+
+    private fun uuid128(
+        data: ByteArray,
+        offset: Int = 0,
+    ): UUID {
+        val bytes = ByteBuffer.wrap(data, offset, 16).order(ByteOrder.LITTLE_ENDIAN)
+        val leastSignificantBits = bytes.long
+        return UUID(bytes.long, leastSignificantBits)
     }
 }

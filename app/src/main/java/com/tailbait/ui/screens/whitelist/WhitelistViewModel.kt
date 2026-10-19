@@ -325,7 +325,9 @@ class WhitelistViewModel
                 try {
                     Timber.i("Removing entry $entryId from whitelist")
 
-                    whitelistRepository.removeFromWhitelist(entryId)
+                    whitelistRepository.getEntryById(entryId)?.let { entry ->
+                        whitelistRepository.removeFromWhitelist(entry.deviceId)
+                    }
 
                     hideDeleteConfirmation()
                     Timber.i("Entry removed from whitelist successfully")

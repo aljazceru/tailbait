@@ -27,7 +27,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.tailbait.flows.TailBaitRegressionRunner"
     }
 
     signingConfigs {
@@ -76,15 +76,17 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            merges += setOf("META-INF/LICENSE.md", "META-INF/LICENSE-notice.md")
         }
     }
 
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
-            isReturnDefaultValues = true
         }
     }
+
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 }
 
 dependencies {
@@ -137,10 +139,6 @@ dependencies {
     implementation("org.osmdroid:osmdroid-mapsforge:6.1.18")
     implementation("org.osmdroid:osmdroid-wms:6.1.18")
 
-    // Location Services (kept for location access)
-    implementation(libs.google.play.services.location)
-    implementation(libs.kotlinx.coroutines.play.services)
-
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
@@ -158,6 +156,10 @@ dependencies {
     testImplementation(libs.turbine)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation("io.mockk:mockk-android:${libs.versions.mockk.get()}")
+    androidTestImplementation("androidx.room:room-testing:${libs.versions.room.get()}")
+    androidTestImplementation("androidx.test:rules:1.7.0")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)

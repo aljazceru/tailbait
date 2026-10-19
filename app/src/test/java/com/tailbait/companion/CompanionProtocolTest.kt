@@ -124,25 +124,20 @@ class CompanionProtocolTest {
 
     @Test
     fun `adv payload parser extracts find-my style manufacturer data`() {
-        // ADV: flags + manufacturer 0x004C with Find My payload
         val md =
-            byteArrayOf(
-                0x4C, 0x00, 0x12, 0x19, 0x04, 0x31, 0x16, 0x7B, 0x4C,
-            ) + byteArrayOf(0xB6.toByte(), 0xC8.toByte())
-        val adv =
-            byteArrayOf(
-                0x02, 0x01, 0x06,
-                (md.size + 1).toByte(), 0xFF.toByte(),
-            ) + md
+            byteArrayOf(0x4C, 0x00, 0x12, 0x19, 0x04) +
+                ByteArray(22) { (it + 1).toByte() } +
+                byteArrayOf(0x00, 0x00)
+        val adv = byteArrayOf((md.size + 1).toByte(), 0xFF.toByte()) + md
         val parsed = AdvPayloadParser.parse(adv)
         assertEquals(0x004C, parsed.manufacturerId)
-        assertEquals(9, parsed.manufacturerData?.size)
+        assertArrayEquals(md.copyOfRange(2, md.size), parsed.manufacturerData!!)
         val fm =
             com.tailbait.util.ManufacturerDataParser.parseManufacturerData(
                 parsed.manufacturerId!!,
                 parsed.manufacturerData!!,
             )
-        assertTrue(fm?.findMyInfo?.separatedFromOwner == true)
+        assertEquals(false, fm?.findMyInfo?.separatedFromOwner)
     }
 
     @Test

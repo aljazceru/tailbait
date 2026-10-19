@@ -1,478 +1,340 @@
 package com.tailbait.flows
 
+import android.app.Application
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.runner.AndroidJUnitRunner
 import com.tailbait.algorithm.DetectionAlgorithm
+import com.tailbait.algorithm.MacRotationDetector
+import com.tailbait.algorithm.MovementCorrelationCalculator
+import com.tailbait.algorithm.ShadowAnalyzer
+import com.tailbait.algorithm.ShadowKeyGenerator
+import com.tailbait.algorithm.ThreatScoreCalculator
 import com.tailbait.data.database.TailBaitDatabase
-import com.tailbait.data.database.entities.*
-import com.tailbait.data.repository.*
+import com.tailbait.data.database.entities.AppSettings
+import com.tailbait.data.database.entities.Location
+import com.tailbait.data.database.entities.ScannedDevice
+import com.tailbait.data.repository.AlertRepositoryImpl
+import com.tailbait.data.repository.DeviceRepositoryImpl
+import com.tailbait.data.repository.LinkStrength
+import com.tailbait.data.repository.LocationRepositoryImpl
+import com.tailbait.data.repository.SettingsRepositoryImpl
+import com.tailbait.data.repository.WhitelistRepository
+import com.tailbait.data.repository.WhitelistRepositoryImpl
 import com.tailbait.service.AlertGenerator
+import com.tailbait.service.NotificationHelper
+import com.tailbait.util.Constants
+import dagger.hilt.android.testing.HiltTestApplication
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Integration test for the complete detection flow.
- *
- * This test verifies the end-to-end detection process:
- * 1. Device scanning and storage
- * 2. Location tracking
- * 3. Device-location correlation
- * 4. Detection algorithm execution
- * 5. Alert generation
- *
- * This is a full integration test that uses a real in-memory database
- * and exercises all components together.
- */
+// Do not start TailBaitApplication's production detection and cleanup workers during tests.
+class TailBaitRegressionRunner : AndroidJUnitRunner() {
+    override fun newApplication(
+        cl: ClassLoader?,
+        className: String?,
+        context: Context?,
+    ): Application = super.newApplication(cl, HiltTestApplication::class.java.name, context)
+}
+
 @RunWith(AndroidJUnit4::class)
 class DetectionFlowIntegrationTest {
-    private lateinit var database: TailBaitDatabase
-    private lateinit var context: Context
-
-    // Repositories
-    private lateinit var deviceRepository: DeviceRepository
-    private lateinit var locationRepository: LocationRepository
-    private lateinit var alertRepository: AlertRepository
-    private lateinit var whitelistRepository: WhitelistRepository
-    private lateinit var settingsRepository: SettingsRepository
-
-    // Services
-    private lateinit var detectionAlgorithm: DetectionAlgorithm
-    private lateinit var alertGenerator: AlertGenerator
+    private lateinit var fixture: DetectionFixture
 
     @Before
-    fun setup() {
-        context = ApplicationProvider.getApplicationContext()
-
-        // Create in-memory database for testing
-        database =
-            Room.inMemoryDatabaseBuilder(
-                context,
-                TailBaitDatabase::class.java,
-            ).allowMainThreadQueries().build()
-
-        // Initialize repositories
-        deviceRepository = DeviceRepositoryImpl(database.scannedDeviceDao())
-        locationRepository = LocationRepositoryImpl(context, database.locationDao())
-        alertRepository = AlertRepositoryImpl(database.alertHistoryDao())
-        whitelistRepository =
-            WhitelistRepositoryImpl(
-                database.whitelistEntryDao(),
-                database.scannedDeviceDao(),
-            )
-        settingsRepository = SettingsRepositoryImpl(database.appSettingsDao())
-
-        // Initialize services
-        detectionAlgorithm =
-            DetectionAlgorithm(
-                deviceLocationRecordDao = database.deviceLocationRecordDao(),
-                whitelistEntryDao = database.whitelistEntryDao(),
-                scannedDeviceDao = database.scannedDeviceDao(),
-            )
-        alertGenerator =
-            AlertGenerator(
-                alertRepository = alertRepository,
-                settingsRepository = settingsRepository,
-            )
-
-        // Initialize default settings
-        runTest {
-            database.appSettingsDao().insert(AppSettings())
+    fun setup() =
+        runBlocking {
+            fixture = DetectionFixture(ApplicationProvider.getApplicationContext())
+            fixture.initialize()
         }
-    }
 
     @After
     fun tearDown() {
-        database.close()
+        fixture.close()
     }
 
     @Test
-    fun completeDetectionFlow_withSuspiciousDevice_generatesAlert() =
-        runTest {
-            // Step 1: Create locations
-            val location1 =
-                Location(
-                    latitude = 37.7749,
-                    longitude = -122.4194,
-                    accuracy = 10.0f,
-                    timestamp = 1000L,
-                    provider = "GPS",
-                )
-            val location2 =
-                Location(
-                    latitude = 37.7850,
-                    longitude = -122.4294,
-                    accuracy = 10.0f,
-                    timestamp = 2000L,
-                    provider = "GPS",
-                )
-            val location3 =
-                Location(
-                    latitude = 37.7950,
-                    longitude = -122.4394,
-                    accuracy = 10.0f,
-                    timestamp = 3000L,
-                    provider = "GPS",
-                )
+    fun closeUnknownFollowerAtEveryPlace_generatesPersistedAlert() =
+        runBlocking {
+            val path = fixture.addPath()
+            val device = fixture.addDevice(path)
 
-            val locationId1 = locationRepository.insertLocation(location1)
-            val locationId2 = locationRepository.insertLocation(location2)
-            val locationId3 = locationRepository.insertLocation(location3)
+            val detections = fixture.algorithm.runDetection()
 
-            // Step 2: Create a suspicious device (not whitelisted)
-            val suspiciousDevice =
-                ScannedDevice(
-                    address = "AA:BB:CC:DD:EE:FF",
-                    name = "Suspicious Device",
-                    firstSeen = 1000L,
-                    lastSeen = 3000L,
-                    detectionCount = 3,
-                )
-            val deviceId = deviceRepository.insertDevice(suspiciousDevice)
+            assertEquals(listOf(device.id), detections.map { it.device.id })
+            val detection = detections.single()
+            assertEquals(path.map { it.id }.toSet(), detection.locations.map { it.id }.toSet())
+            assertTrue(detection.threatScore >= 0.5)
+            assertEquals(path.last().timestamp - path.first().timestamp, detection.timeSpanMs)
 
-            // Step 3: Create device-location correlation records
-            database.deviceLocationRecordDao().insert(
-                DeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId1,
-                    rssi = -70,
-                    timestamp = 1000L,
-                    scanTriggerType = "PERIODIC",
-                ),
-            )
-            database.deviceLocationRecordDao().insert(
-                DeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId2,
-                    rssi = -75,
-                    timestamp = 2000L,
-                    scanTriggerType = "PERIODIC",
-                ),
-            )
-            database.deviceLocationRecordDao().insert(
-                DeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId3,
-                    rssi = -72,
-                    timestamp = 3000L,
-                    scanTriggerType = "PERIODIC",
-                ),
-            )
-
-            // Step 4: Run detection algorithm
-            val detections =
-                detectionAlgorithm.runDetection(
-                    minLocationCount = 3,
-                    minThreatScore = 0.5,
-                )
-
-            // Step 5: Verify detection found the suspicious device
-            assertTrue("Should detect at least one suspicious device", detections.isNotEmpty())
-            val detection = detections.find { it.deviceAddress == "AA:BB:CC:DD:EE:FF" }
-            assertNotNull("Should detect the suspicious device", detection)
-
-            // Step 6: Generate alert
-            val alertIds =
-                alertGenerator.generateAlerts(
-                    detectionResults = detections,
-                    throttleWindowMs = 60000L,
-                )
-
-            // Step 7: Verify alert was created
-            assertTrue("Should generate at least one alert", alertIds.isNotEmpty())
-            val alerts = alertRepository.getAllAlerts().first()
-            assertEquals("Should have exactly one alert", 1, alerts.size)
-
-            val alert = alerts[0]
-            assertEquals("Alert should be active", false, alert.isDismissed)
-            assertTrue(
-                "Alert should contain device address",
-                alert.deviceAddresses.contains("AA:BB:CC:DD:EE:FF"),
-            )
+            val alertIds = fixture.alertGenerator.generateAlerts(detections)
+            val alert = fixture.alertRepository.getAllAlerts().first().single()
+            assertEquals(listOf(alert.id), alertIds)
+            assertFalse(alert.isDismissed)
+            assertEquals(device.address, JSONArray(alert.deviceAddresses).getString(0))
+            assertEquals(path.size, JSONArray(alert.locationIds).length())
         }
 
     @Test
-    fun completeDetectionFlow_withWhitelistedDevice_doesNotGenerateAlert() =
-        runTest {
-            // Step 1: Create locations
-            val location1 =
-                Location(
-                    latitude = 37.7749,
-                    longitude = -122.4194,
-                    accuracy = 10.0f,
-                    timestamp = 1000L,
-                    provider = "GPS",
-                )
-            val location2 =
-                Location(
-                    latitude = 37.7850,
-                    longitude = -122.4294,
-                    accuracy = 10.0f,
-                    timestamp = 2000L,
-                    provider = "GPS",
-                )
-            val location3 =
-                Location(
-                    latitude = 37.7950,
-                    longitude = -122.4394,
-                    accuracy = 10.0f,
-                    timestamp = 3000L,
-                    provider = "GPS",
-                )
+    fun unlinkedShadowWithNoOrdinaryCandidate_aggregatesEveryObservation() =
+        runBlocking {
+            val path = fixture.addPath()
+            val devices =
+                path.mapIndexed { index, location ->
+                    fixture.addDevice(listOf(location), address(index), shadow = true)
+                }
+            assertTrue(devices.all { it.linkedDeviceId == null })
+            assertTrue(fixture.deviceRepository.getSuspiciousDevicesWithLinked(3, fixture.cutoff).first().isEmpty())
 
-            val locationId1 = locationRepository.insertLocation(location1)
-            val locationId2 = locationRepository.insertLocation(location2)
-            val locationId3 = locationRepository.insertLocation(location3)
+            val detection = fixture.algorithm.runDetection().single()
 
-            // Step 2: Create a device
-            val trustedDevice =
-                ScannedDevice(
-                    address = "11:22:33:44:55:66",
-                    name = "My Phone",
-                    firstSeen = 1000L,
-                    lastSeen = 3000L,
-                    detectionCount = 3,
-                )
-            val deviceId = deviceRepository.insertDevice(trustedDevice)
-
-            // Step 3: Add device to whitelist
-            whitelistRepository.addToWhitelist(
-                deviceId = deviceId,
-                label = "My Phone",
-                category = WhitelistRepository.Category.OWN,
-                notes = "Personal device",
-                addedViaLearnMode = false,
-            )
-
-            // Step 4: Create device-location correlation records
-            database.deviceLocationRecordDao().insert(
-                DeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId1,
-                    rssi = -70,
-                    timestamp = 1000L,
-                    scanTriggerType = "PERIODIC",
-                ),
-            )
-            database.deviceLocationRecordDao().insert(
-                DeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId2,
-                    rssi = -75,
-                    timestamp = 2000L,
-                    scanTriggerType = "PERIODIC",
-                ),
-            )
-            database.deviceLocationRecordDao().insert(
-                DeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId3,
-                    rssi = -72,
-                    timestamp = 3000L,
-                    scanTriggerType = "PERIODIC",
-                ),
-            )
-
-            // Step 5: Run detection algorithm
-            val detections =
-                detectionAlgorithm.runDetection(
-                    minLocationCount = 3,
-                    minThreatScore = 0.5,
-                )
-
-            // Step 6: Verify whitelisted device is not detected as suspicious
-            val detection = detections.find { it.deviceAddress == "11:22:33:44:55:66" }
-            assertNull("Whitelisted device should not be detected as suspicious", detection)
-
-            // Step 7: Verify no alerts were generated
-            val alertIds =
-                alertGenerator.generateAlerts(
-                    detectionResults = detections,
-                    throttleWindowMs = 60000L,
-                )
-            assertTrue("Should not generate alerts for whitelisted devices", alertIds.isEmpty())
+            assertTrue(detection.device.id in devices.map { it.id })
+            assertEquals(path.map { it.id }.toSet(), detection.locations.map { it.id }.toSet())
+            assertEquals(path.last().timestamp - path.first().timestamp, detection.timeSpanMs)
+            assertEquals(1, fixture.alertGenerator.generateAlerts(listOf(detection)).size)
+            assertEquals(path.size, JSONArray(fixture.alertRepository.getAllAlerts().first().single().locationIds).length())
         }
 
     @Test
-    fun completeDetectionFlow_withInsufficientLocations_doesNotGenerateAlert() =
-        runTest {
-            // Step 1: Create only 2 locations (below threshold of 3)
-            val location1 =
-                Location(
-                    latitude = 37.7749,
-                    longitude = -122.4194,
-                    accuracy = 10.0f,
-                    timestamp = 1000L,
-                    provider = "GPS",
-                )
-            val location2 =
-                Location(
-                    latitude = 37.7850,
-                    longitude = -122.4294,
-                    accuracy = 10.0f,
-                    timestamp = 2000L,
-                    provider = "GPS",
-                )
+    fun shadowCutoffAndTrust_removeEvidenceWithoutTrustingSimilarDevices() =
+        runBlocking {
+            val path = fixture.addPath()
+            val devices =
+                path.mapIndexed { index, location ->
+                    fixture.addDevice(listOf(location), address(index), shadow = true)
+                }
+            val trusted = fixture.addDevice(path, address(20), shadow = true)
+            fixture.whitelistRepository.addToWhitelist(trusted.id, "Trusted tracker", WhitelistRepository.Category.OWN)
+            val expiredPath = fixture.addPath(count = 3, start = fixture.now - 4 * DetectionFixture.DAY_MS)
+            val expired = fixture.addDevice(expiredPath, address(21), shadow = true)
+            // A recent packet must not make this device's old location evidence recent.
+            fixture.database.scannedDeviceDao().update(expired.copy(lastSeen = fixture.now))
 
-            val locationId1 = locationRepository.insertLocation(location1)
-            val locationId2 = locationRepository.insertLocation(location2)
-
-            // Step 2: Create device
-            val device =
-                ScannedDevice(
-                    address = "FF:FF:FF:FF:FF:FF",
-                    name = "Test Device",
-                    firstSeen = 1000L,
-                    lastSeen = 2000L,
-                    detectionCount = 2,
-                )
-            val deviceId = deviceRepository.insertDevice(device)
-
-            // Step 3: Create only 2 correlation records
-            database.deviceLocationRecordDao().insert(
-                DeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId1,
-                    rssi = -70,
-                    timestamp = 1000L,
-                    scanTriggerType = "PERIODIC",
-                ),
-            )
-            database.deviceLocationRecordDao().insert(
-                DeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId2,
-                    rssi = -75,
-                    timestamp = 2000L,
-                    scanTriggerType = "PERIODIC",
-                ),
-            )
-
-            // Step 4: Run detection algorithm with minLocationCount = 3
-            val detections =
-                detectionAlgorithm.runDetection(
+            val shadow =
+                fixture.shadowAnalyzer.findSuspiciousShadows(
                     minLocationCount = 3,
-                    minThreatScore = 0.5,
-                )
+                    whitelistedIds = fixture.whitelistRepository.getAllWhitelistedDeviceIds().first().toSet(),
+                    sinceTimestamp = fixture.cutoff,
+                ).single()
 
-            // Step 5: Verify device is not detected (insufficient locations)
-            val detection = detections.find { it.deviceAddress == "FF:FF:FF:FF:FF:FF" }
-            assertNull("Device with insufficient locations should not be detected", detection)
-
-            // Step 6: Verify no alerts generated
-            val alertIds =
-                alertGenerator.generateAlerts(
-                    detectionResults = detections,
-                    throttleWindowMs = 60000L,
-                )
-            assertTrue("Should not generate alerts for devices below threshold", alertIds.isEmpty())
+            assertEquals(devices.map { it.id }.toSet(), shadow.records.map { it.deviceId }.toSet())
+            assertEquals(path.size, shadow.records.size)
+            assertEquals(path.size, shadow.locationCount)
+            assertEquals(path.map { it.id }.toSet(), shadow.locations.map { it.id }.toSet())
+            val detection = fixture.algorithm.runDetection().single()
+            assertEquals(path.map { it.id }.toSet(), detection.locations.map { it.id }.toSet())
+            assertTrue(detection.device.id in devices.map { it.id })
         }
 
     @Test
-    fun completeDetectionFlow_withMultipleSuspiciousDevices_generatesMultipleAlerts() =
-        runTest {
-            // Create 3 locations
-            val location1 =
-                Location(
-                    latitude = 37.7749,
-                    longitude = -122.4194,
-                    accuracy = 10.0f,
-                    timestamp = 1000L,
-                    provider = "GPS",
-                )
-            val location2 =
-                Location(
-                    latitude = 37.7850,
-                    longitude = -122.4294,
-                    accuracy = 10.0f,
-                    timestamp = 2000L,
-                    provider = "GPS",
-                )
-            val location3 =
-                Location(
-                    latitude = 37.7950,
-                    longitude = -122.4394,
-                    accuracy = 10.0f,
-                    timestamp = 3000L,
-                    provider = "GPS",
-                )
+    fun linkedEvidenceUsesCutoff_andExplicitAliasTrustExcludesFamily() =
+        runBlocking {
+            val path = fixture.addPath()
+            val root = fixture.addDevice(path)
+            val expiredPath = fixture.addPath(count = 3, start = fixture.now - 4 * DetectionFixture.DAY_MS)
+            val alias = fixture.addDevice(expiredPath, address(30))
+            val fingerprint = "FM:" + "AB".repeat(22)
+            fixture.database.scannedDeviceDao().update(root.copy(payloadFingerprint = fingerprint))
+            fixture.database.scannedDeviceDao().update(
+                alias.copy(
+                    lastSeen = fixture.now,
+                    linkedDeviceId = root.id,
+                    linkStrength = LinkStrength.STRONG.name,
+                    payloadFingerprint = fingerprint,
+                ),
+            )
 
-            val locationId1 = locationRepository.insertLocation(location1)
-            val locationId2 = locationRepository.insertLocation(location2)
-            val locationId3 = locationRepository.insertLocation(location3)
+            val detection = fixture.algorithm.runDetection().single()
+            assertEquals(root.id, detection.device.id)
+            assertEquals(path.map { it.id }.toSet(), detection.locations.map { it.id }.toSet())
+            assertEquals(path.last().timestamp - path.first().timestamp, detection.timeSpanMs)
 
-            // Create 2 suspicious devices
-            val device1 =
-                ScannedDevice(
-                    address = "AA:AA:AA:AA:AA:AA",
-                    name = "Device 1",
-                    firstSeen = 1000L,
-                    lastSeen = 3000L,
-                    detectionCount = 3,
-                )
-            val device2 =
-                ScannedDevice(
-                    address = "BB:BB:BB:BB:BB:BB",
-                    name = "Device 2",
-                    firstSeen = 1000L,
-                    lastSeen = 3000L,
-                    detectionCount = 3,
-                )
+            fixture.whitelistRepository.addToWhitelist(alias.id, "My tracker", WhitelistRepository.Category.OWN)
 
-            val deviceId1 = deviceRepository.insertDevice(device1)
-            val deviceId2 = deviceRepository.insertDevice(device2)
-
-            // Create correlation records for both devices
-            for (deviceId in listOf(deviceId1, deviceId2)) {
-                database.deviceLocationRecordDao().insert(
-                    DeviceLocationRecord(
-                        deviceId = deviceId,
-                        locationId = locationId1,
-                        rssi = -70,
-                        timestamp = 1000L,
-                        scanTriggerType = "PERIODIC",
-                    ),
-                )
-                database.deviceLocationRecordDao().insert(
-                    DeviceLocationRecord(
-                        deviceId = deviceId,
-                        locationId = locationId2,
-                        rssi = -75,
-                        timestamp = 2000L,
-                        scanTriggerType = "PERIODIC",
-                    ),
-                )
-                database.deviceLocationRecordDao().insert(
-                    DeviceLocationRecord(
-                        deviceId = deviceId,
-                        locationId = locationId3,
-                        rssi = -72,
-                        timestamp = 3000L,
-                        scanTriggerType = "PERIODIC",
-                    ),
-                )
-            }
-
-            // Run detection
-            val detections = detectionAlgorithm.runDetection(minLocationCount = 3, minThreatScore = 0.5)
-
-            // Verify multiple detections
-            assertEquals("Should detect 2 suspicious devices", 2, detections.size)
-
-            // Generate alerts
-            val alertIds =
-                alertGenerator.generateAlerts(
-                    detectionResults = detections,
-                    throttleWindowMs = 60000L,
-                )
-
-            // Verify multiple alerts created
-            assertEquals("Should generate 2 alerts", 2, alertIds.size)
+            assertTrue(fixture.whitelistRepository.isDeviceWhitelisted(root.id))
+            assertTrue(fixture.algorithm.runDetection().isEmpty())
+            assertTrue(fixture.alertRepository.getAllAlerts().first().isEmpty())
         }
+
+    @Test
+    fun overlappingGpsUncertainty_doesNotManufactureMovement() =
+        runBlocking {
+            val path = fixture.addPath(accuracy = 2_000f, latitudeStep = 0.002)
+            val device = fixture.addDevice(path)
+            assertEquals(
+                listOf(device.id),
+                fixture.deviceRepository.getSuspiciousDevicesWithLinked(3, fixture.cutoff).first().map { it.id },
+            )
+
+            assertTrue(fixture.algorithm.runDetection().isEmpty())
+        }
+
+    @Test
+    fun invalidGpsAccuracy_doesNotManufactureMovement() =
+        runBlocking {
+            val path = fixture.addPath(accuracy = -1f)
+            val device = fixture.addDevice(path)
+            assertEquals(
+                listOf(device.id),
+                fixture.deviceRepository.getSuspiciousDevicesWithLinked(3, fixture.cutoff).first().map { it.id },
+            )
+
+            assertTrue(fixture.algorithm.runDetection().isEmpty())
+        }
+
+    @Test
+    fun concurrentCriticalEscalationAfterTwoHours_persistsExactlyOneNewAlert() =
+        runBlocking {
+            fixture.addDevice(fixture.addPath())
+            val detection = fixture.algorithm.runDetection().single()
+            val initial = detection.copy(threatScore = 0.51, timestamp = fixture.now - 2 * DetectionFixture.HOUR_MS)
+            assertNotNull(fixture.alertGenerator.generateAlert(initial))
+            val critical = detection.copy(threatScore = 0.99, timestamp = fixture.now)
+            val secondGenerator =
+                AlertGenerator(
+                    AlertRepositoryImpl(fixture.database.alertHistoryDao()),
+                    fixture.notificationHelper,
+                )
+
+            val inserted =
+                coroutineScope {
+                    listOf(fixture.alertGenerator, secondGenerator).map { generator ->
+                        async(Dispatchers.IO) {
+                            generator.generateAlert(critical, throttleWindowMs = 6 * DetectionFixture.HOUR_MS)
+                        }
+                    }.awaitAll().filterNotNull()
+                }
+
+            assertEquals(1, inserted.size)
+            val alerts = fixture.alertRepository.getAllAlerts().first()
+            assertEquals(2, alerts.size)
+            val criticalAlert = alerts.single { it.alertLevel == Constants.ALERT_LEVEL_CRITICAL }
+            assertEquals(inserted.single(), criticalAlert.id)
+            assertEquals(0.99, criticalAlert.threatScore, 0.0)
+            assertNull(fixture.alertGenerator.generateAlert(critical))
+            assertNull(fixture.alertGenerator.generateAlert(critical.copy(threatScore = 1.0)))
+            assertEquals(2, fixture.alertRepository.getAllAlerts().first().size)
+        }
+
+    private fun address(index: Int): String = "C0:00:00:00:00:${index.toString(16).padStart(2, '0')}"
+}
+
+internal class DetectionFixture(context: Context) : AutoCloseable {
+    val now = System.currentTimeMillis()
+    val cutoff = now - 3 * DAY_MS
+    val database = Room.inMemoryDatabaseBuilder(context, TailBaitDatabase::class.java).build()
+    val deviceRepository = DeviceRepositoryImpl(database, database.scannedDeviceDao(), database.deviceLocationRecordDao())
+    val locationRepository = LocationRepositoryImpl(context, database.locationDao(), database.userPathDao())
+    val settingsRepository = SettingsRepositoryImpl(database.appSettingsDao())
+    val whitelistRepository = WhitelistRepositoryImpl(database.whitelistEntryDao(), database.scannedDeviceDao())
+    val alertRepository = AlertRepositoryImpl(database.alertHistoryDao())
+    val notificationHelper = NotificationHelper(context, alertRepository, settingsRepository)
+    val alertGenerator = AlertGenerator(alertRepository, notificationHelper)
+    val shadowAnalyzer = ShadowAnalyzer(deviceRepository, locationRepository, MacRotationDetector())
+    val algorithm =
+        DetectionAlgorithm(
+            deviceRepository,
+            locationRepository,
+            whitelistRepository,
+            settingsRepository,
+            ThreatScoreCalculator(MovementCorrelationCalculator()),
+            shadowAnalyzer,
+        )
+
+    suspend fun initialize() {
+        database.appSettingsDao().insert(
+            AppSettings(
+                isTrackingEnabled = false,
+                alertThresholdCount = 3,
+                minDetectionDistanceMeters = 100.0,
+                alertNotificationEnabled = false,
+                alertSoundEnabled = false,
+                alertVibrationEnabled = false,
+            ),
+        )
+    }
+
+    suspend fun addPath(
+        count: Int = 10,
+        start: Long = now - 6 * HOUR_MS,
+        accuracy: Float = 5f,
+        latitudeStep: Double = 0.012,
+    ): List<Location> =
+        List(count) { index ->
+            val location =
+                Location(
+                    latitude = 37.0 + index * latitudeStep,
+                    longitude = -122.0,
+                    accuracy = accuracy,
+                    timestamp = start + index * 20 * 60_000L,
+                    provider = "GPS",
+                )
+            val stored = location.copy(id = locationRepository.insertLocation(location))
+            locationRepository.insertUserPath(stored.id, stored)
+            stored
+        }
+
+    suspend fun addDevice(
+        locations: List<Location>,
+        address: String = "A0:00:00:00:00:01",
+        shadow: Boolean = false,
+    ): ScannedDevice {
+        val device =
+            ScannedDevice(
+                address = address,
+                name = null,
+                firstSeen = locations.minOf { it.timestamp },
+                lastSeen = locations.maxOf { it.timestamp },
+                detectionCount = locations.size,
+                highestRssi = -35,
+                manufacturerId = if (shadow) 0x004C else null,
+                deviceType = if (shadow) "TRACKER" else null,
+                isTracker = shadow,
+                appleContinuityType = if (shadow) 0x12 else null,
+                findMyStatus = if (shadow) 0 else null,
+                findMySeparated = shadow,
+                findMyStatusTimestamp = if (shadow) locations.maxOf { it.timestamp } else null,
+                beaconType = if (shadow) "FIND_MY" else null,
+                txPowerLevel = if (shadow) -7 else null,
+            )
+        val profiled = if (shadow) device.copy(shadowKey = ShadowKeyGenerator.generate(device)) else device
+        val stored = profiled.copy(id = database.scannedDeviceDao().insert(profiled))
+        locations.forEachIndexed { index, location ->
+            deviceRepository.insertDeviceLocationRecord(
+                deviceId = stored.id,
+                locationId = location.id,
+                rssi = -35,
+                timestamp = location.timestamp,
+                locationChanged = index > 0,
+                distanceFromLast = null,
+                scanTriggerType = "PERIODIC",
+            )
+        }
+        return stored
+    }
+
+    override fun close() {
+        database.close()
+    }
+
+    companion object {
+        const val HOUR_MS = 3_600_000L
+        const val DAY_MS = 24 * HOUR_MS
+    }
 }

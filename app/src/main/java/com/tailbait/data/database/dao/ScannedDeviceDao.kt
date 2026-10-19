@@ -10,6 +10,30 @@ import androidx.room.Update
 import com.tailbait.data.database.entities.ScannedDevice
 import kotlinx.coroutines.flow.Flow
 
+// Keep detection and explicit trust on the same root/direct-STRONG family boundary.
+internal const val CONFIRMED_DEVICE_FAMILIES_SQL = """
+    WITH confirmed_device_families AS (
+        SELECT member.id AS device_id, COALESCE(root.id, member.id) AS family_id
+        FROM scanned_devices member
+        LEFT JOIN scanned_devices root ON root.id = member.linked_device_id
+          AND member.link_strength = 'STRONG'
+          AND root.linked_device_id IS NULL
+    )
+"""
+
+internal const val UNTRUSTED_DEVICE_FAMILIES_SQL =
+    CONFIRMED_DEVICE_FAMILIES_SQL + """,
+    untrusted_device_families AS (
+        SELECT family.device_id, family.family_id
+        FROM confirmed_device_families family
+        WHERE family.family_id NOT IN (
+            SELECT trusted.family_id
+            FROM confirmed_device_families trusted
+            INNER JOIN whitelist_entries w ON w.device_id = trusted.device_id
+        )
+    )
+"""
+
 /**
  * Data Access Object (DAO) for ScannedDevice entity operations.
  *
@@ -180,13 +204,27 @@ interface ScannedDeviceDao {
     fun searchDevices(query: String): Flow<List<ScannedDevice>>
 
     /**
-     * Delete devices that haven't been seen since the specified timestamp.
-     * Used for data retention cleanup.
+     * Delete expired, explicitly untrusted devices, preserving roots still needed
+     * by live or explicitly trusted children.
      *
      * @param beforeTimestamp Delete devices last seen before this timestamp
      * @return Number of devices deleted
      */
-    @Query("DELETE FROM scanned_devices WHERE last_seen < :beforeTimestamp")
+    @Query(
+        """
+        DELETE FROM scanned_devices
+        WHERE last_seen < :beforeTimestamp
+          AND id NOT IN (SELECT device_id FROM whitelist_entries)
+          AND NOT EXISTS (
+              SELECT 1 FROM scanned_devices child
+              WHERE child.linked_device_id = scanned_devices.id
+                AND (
+                    child.last_seen >= :beforeTimestamp
+                    OR child.id IN (SELECT device_id FROM whitelist_entries)
+                )
+          )
+    """,
+    )
     suspend fun deleteOldDevices(beforeTimestamp: Long): Int
 
     /**
@@ -226,7 +264,7 @@ interface ScannedDeviceDao {
         """
         SELECT * FROM scanned_devices
         WHERE payload_fingerprint = :fingerprint
-        ORDER BY last_seen DESC
+        ORDER BY last_seen DESC, id ASC
         LIMIT 1
     """,
     )
@@ -280,11 +318,9 @@ interface ScannedDeviceDao {
     fun getSeparatedFindMyDevices(): Flow<List<ScannedDevice>>
 
     /**
-     * Get suspicious devices including their linked devices (MAC rotations).
-     * This query considers all locations across all linked devices as one.
-     * Only considers device_location_records with timestamps >= sinceTimestamp.
-     *
-     * This is the CRITICAL query for detecting AirTags that rotate MACs.
+     * Get suspicious confirmed families (a root and its direct STRONG children).
+     * Only observations at or after sinceTimestamp contribute, and explicit
+     * trust on any member excludes the whole family before aggregation.
      *
      * @param minLocationCount Minimum number of distinct locations required
      * @param sinceTimestamp Only consider records after this timestamp (epoch ms)
@@ -292,19 +328,14 @@ interface ScannedDeviceDao {
      */
     @RewriteQueriesToDropUnusedColumns
     @Query(
-        """
-        SELECT sd.*,
-            (SELECT COUNT(DISTINCT dlr.location_id)
-             FROM device_location_records dlr
-             WHERE (dlr.device_id = sd.id
-                OR dlr.device_id IN (SELECT id FROM scanned_devices WHERE linked_device_id = sd.id))
-               AND dlr.timestamp >= :sinceTimestamp
-            ) as total_location_count
+        UNTRUSTED_DEVICE_FAMILIES_SQL + """
+        SELECT sd.*, COUNT(DISTINCT dlr.location_id) AS total_location_count
         FROM scanned_devices sd
-        WHERE sd.id NOT IN (SELECT device_id FROM whitelist_entries)
-          AND sd.linked_device_id IS NULL
+        INNER JOIN untrusted_device_families family ON family.family_id = sd.id
+        INNER JOIN device_location_records dlr ON dlr.device_id = family.device_id
+        WHERE dlr.timestamp >= :sinceTimestamp
         GROUP BY sd.id
-        HAVING total_location_count >= :minLocationCount
+        HAVING COUNT(DISTINCT dlr.location_id) >= :minLocationCount
         ORDER BY total_location_count DESC
     """,
     )
@@ -373,27 +404,6 @@ interface ScannedDeviceDao {
     """,
     )
     suspend fun getStrongLinkedDevices(primaryDeviceId: Long): List<ScannedDevice>
-
-    /**
-     * Update Find My status fields for a device.
-     *
-     * @param deviceId The device ID
-     * @param findMyStatus The raw status byte
-     * @param findMySeparated Whether device is separated from owner
-     */
-    @Query(
-        """
-        UPDATE scanned_devices
-        SET find_my_status = :findMyStatus,
-            find_my_separated = :findMySeparated
-        WHERE id = :deviceId
-    """,
-    )
-    suspend fun updateFindMyStatus(
-        deviceId: Long,
-        findMyStatus: Int,
-        findMySeparated: Boolean,
-    )
 
     // ============================================================================
     // TEMPORAL CLUSTERING (For devices without payload fingerprints)
@@ -517,55 +527,73 @@ interface ScannedDeviceDao {
      * These are candidates for shadow-based suspicious device detection.
      *
      * @param minLocationCount Minimum distinct locations required
+     * @param sinceTimestamp Inclusive observation timestamp cutoff
      * @return List of shadow key strings meeting the threshold
      */
     @Query(
-        """
+        UNTRUSTED_DEVICE_FAMILIES_SQL + """
         SELECT sd.shadow_key
         FROM scanned_devices sd
+        INNER JOIN untrusted_device_families family ON family.device_id = sd.id
         INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
         WHERE sd.shadow_key IS NOT NULL
-          AND sd.id NOT IN (SELECT device_id FROM whitelist_entries)
+          AND dlr.timestamp >= :sinceTimestamp
         GROUP BY sd.shadow_key
         HAVING COUNT(DISTINCT dlr.location_id) >= :minLocationCount
     """,
     )
-    suspend fun getSuspiciousShadowKeys(minLocationCount: Int): List<String>
+    suspend fun getSuspiciousShadowKeys(
+        minLocationCount: Int,
+        sinceTimestamp: Long,
+    ): List<String>
 
     /**
-     * Get all devices with a specific shadow key, ordered by most recently seen.
+     * Get untrusted shadow members with an observation in the requested window.
      *
      * @param shadowKey The shadow key to query
-     * @return List of devices matching this shadow profile
+     * @param sinceTimestamp Inclusive observation timestamp cutoff
+     * @return List of eligible devices ordered by most recently seen
      */
     @Query(
-        """
-        SELECT * FROM scanned_devices
-        WHERE shadow_key = :shadowKey
-        ORDER BY last_seen DESC
+        UNTRUSTED_DEVICE_FAMILIES_SQL + """
+        SELECT DISTINCT sd.*
+        FROM scanned_devices sd
+        INNER JOIN untrusted_device_families family ON family.device_id = sd.id
+        INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
+        WHERE sd.shadow_key = :shadowKey
+          AND dlr.timestamp >= :sinceTimestamp
+        ORDER BY sd.last_seen DESC
     """,
     )
-    suspend fun getDevicesByShadowKey(shadowKey: String): List<ScannedDevice>
+    suspend fun getDevicesByShadowKey(
+        shadowKey: String,
+        sinceTimestamp: Long,
+    ): List<ScannedDevice>
 
     /**
-     * Get per-location device counts for a shadow key.
-     * Returns how many distinct devices with this shadow key were seen at each location.
+     * Get per-location untrusted device counts and RSSI within the requested window.
      *
      * @param shadowKey The shadow key to analyze
+     * @param sinceTimestamp Inclusive observation timestamp cutoff
      * @return List of (locationId, deviceCount, maxRssi) per location
      */
     @Query(
-        """
+        UNTRUSTED_DEVICE_FAMILIES_SQL + """
         SELECT dlr.location_id AS locationId,
                COUNT(DISTINCT sd.id) AS deviceCount,
                MAX(dlr.rssi) AS maxRssi
         FROM scanned_devices sd
+        INNER JOIN untrusted_device_families family ON family.device_id = sd.id
         INNER JOIN device_location_records dlr ON sd.id = dlr.device_id
         WHERE sd.shadow_key = :shadowKey
+          AND dlr.timestamp >= :sinceTimestamp
         GROUP BY dlr.location_id
     """,
     )
-    suspend fun getShadowLocationDeviceCounts(shadowKey: String): List<ShadowLocationCount>
+    suspend fun getShadowLocationDeviceCounts(
+        shadowKey: String,
+        sinceTimestamp: Long,
+    ): List<ShadowLocationCount>
 
     /**
      * Update the shadow key for a device.

@@ -116,15 +116,14 @@ object TrackerAnalyzerFactory {
 
             return when (messageType) {
                 ManufacturerDataParser.AppleContinuityType.FIND_MY -> {
-                    // Parse Find My payload for additional info
-                    val findMyInfo = ManufacturerDataParser.parseFindMyPayload(manufacturerData)
-                    val isSeparated = findMyInfo?.separatedFromOwner ?: false
+                    val findMyInfo = ManufacturerDataParser.parseFindMyPayload(manufacturerData) ?: return null
+                    val noRecentOwnerConnection = findMyInfo.separatedFromOwner
 
-                    // Separated AirTag = CRITICAL threat
+                    // The legacy field means no maintained/recent owner connection, not physical separation.
                     val threatLevel =
                         when {
-                            isSeparated && signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.CRITICAL
-                            isSeparated -> ThreatLevel.HIGH
+                            noRecentOwnerConnection && signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.CRITICAL
+                            noRecentOwnerConnection -> ThreatLevel.HIGH
                             signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
                             else -> ThreatLevel.MEDIUM
                         }
@@ -140,11 +139,9 @@ object TrackerAnalyzerFactory {
                         beaconType = BeaconDetectionUtils.BeaconType.FIND_MY,
                         additionalInfo =
                             buildMap {
-                                put("separatedFromOwner", isSeparated)
-                                findMyInfo?.let {
-                                    put("batteryLevel", it.batteryLevel.name)
-                                    put("fingerprint", it.payloadFingerprint)
-                                }
+                                put("separatedFromOwner", noRecentOwnerConnection)
+                                put("batteryLevel", findMyInfo.batteryLevel.name)
+                                findMyInfo.payloadFingerprint?.let { put("fingerprint", it) }
                             },
                     )
                 }
@@ -378,28 +375,6 @@ object TrackerAnalyzerFactory {
             deviceName: String?,
         ): TrackerAnalysis {
             val signalStrength = SignalStrength.fromRssi(rssi)
-            val isFindMy = TrackerServiceDetector.isGoogleFindMy(serviceUuids)
-
-            if (isFindMy) {
-                val threatLevel =
-                    when {
-                        signalStrength >= SignalStrength.STRONG -> ThreatLevel.HIGH
-                        signalStrength >= SignalStrength.MEDIUM -> ThreatLevel.MEDIUM
-                        else -> ThreatLevel.LOW
-                    }
-
-                return TrackerAnalysis(
-                    isTracker = true,
-                    trackerType = TrackerServiceDetector.TrackerType.GOOGLE_FIND_MY_DEVICE,
-                    manufacturerName = "Google",
-                    deviceModel = "Find My Device Tracker",
-                    confidence = 0.90f,
-                    threatLevel = threatLevel,
-                    signalStrength = signalStrength,
-                    beaconType = null,
-                )
-            }
-
             // Not a tracker, likely a Pixel phone
             return TrackerAnalysis(
                 isTracker = false,
@@ -415,13 +390,6 @@ object TrackerAnalyzerFactory {
     }
 
     // ============================================================================
-    // GENERIC TRACKER ANALYZER — removed.
-    // Its only users were the Pebblebee/Cube manufacturer-ID entries, which the
-    // SIG registry disproved (0x0636 and 0x05B8 belong to unrelated companies).
-    // Those trackers remain detectable via their FE8D/FE8E service UUIDs.
-    // ============================================================================
-
-    // ============================================================================
     // FACTORY REGISTRY
     // ============================================================================
 
@@ -435,9 +403,6 @@ object TrackerAnalyzerFactory {
             ManufacturerDataParser.ManufacturerId.TILE to TileAnalyzer,
             ManufacturerDataParser.ManufacturerId.CHIPOLO to ChipoloAnalyzer,
             ManufacturerDataParser.ManufacturerId.GOOGLE to GoogleAnalyzer,
-            // NOTE: Pebblebee/Cube removed from the manufacturer-ID registry —
-            // their former IDs (0x0636/0x05B8) belong to unrelated companies per
-            // the SIG registry. They remain detectable via FE8D/FE8E service UUIDs.
         )
 
     // ============================================================================
@@ -462,7 +427,8 @@ object TrackerAnalyzerFactory {
      * @param serviceUuids List of advertised service UUIDs
      * @param rssi Signal strength in dBm
      * @param deviceName Device name from advertisement
-     * @return TrackerAnalysis result or null if no analyzer available
+     * @param serviceData Service payloads without the UUID or AD type/length bytes
+     * @return TrackerAnalysis result or null if no evidence or analyzer is available
      */
     fun analyze(
         manufacturerId: Int?,
@@ -470,16 +436,10 @@ object TrackerAnalyzerFactory {
         serviceUuids: List<ParcelUuid>?,
         rssi: Int,
         deviceName: String?,
+        serviceData: Map<ParcelUuid, ByteArray> = emptyMap(),
     ): TrackerAnalysis? {
-        if (manufacturerId == null) return null
-
-        val analyzer = getAnalyzer(manufacturerId)
-        if (analyzer != null) {
-            return analyzer.analyze(manufacturerData, serviceUuids, rssi, deviceName)
-        }
-
-        // Check service UUIDs for trackers from unknown manufacturers
-        val serviceDetection = TrackerServiceDetector.detectTracker(serviceUuids)
+        // Specific service evidence must not be suppressed by a generic manufacturer result.
+        val serviceDetection = TrackerServiceDetector.detectTracker(serviceUuids, serviceData)
         if (serviceDetection.isTracker) {
             val signalStrength = SignalStrength.fromRssi(rssi)
             val threatLevel =
@@ -501,7 +461,7 @@ object TrackerAnalyzerFactory {
             )
         }
 
-        return null
+        return manufacturerId?.let { getAnalyzer(it)?.analyze(manufacturerData, serviceUuids, rssi, deviceName) }
     }
 
     /**

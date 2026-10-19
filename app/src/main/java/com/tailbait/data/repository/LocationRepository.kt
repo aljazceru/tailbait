@@ -3,19 +3,27 @@ package com.tailbait.data.repository
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.os.Looper
+import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
+import androidx.core.location.LocationListenerCompat
+import androidx.core.location.LocationManagerCompat
+import androidx.core.location.LocationRequestCompat
 import com.tailbait.data.database.dao.LocationDao
 import com.tailbait.data.database.entities.Location
 import com.tailbait.util.DistanceCalculator
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 /**
  * Repository interface for managing location data.
@@ -71,7 +79,7 @@ interface LocationRepository {
     suspend fun getLastLocation(): Location?
 
     /**
-     * Get the last known location from the Android system (Fused Location Provider).
+     * Get the last known location from the Android system.
      *
      * This may return a somewhat stale location but is faster and more reliable
      * than waiting for a fresh fix if one isn't immediately available.
@@ -156,12 +164,12 @@ class LocationRepositoryImpl
         private val locationDao: LocationDao,
         private val userPathDao: com.tailbait.data.database.dao.UserPathDao,
     ) : LocationRepository {
-        private val fusedLocationClient: FusedLocationProviderClient =
-            LocationServices.getFusedLocationProviderClient(context)
+        private val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         override suspend fun getCurrentLocationOnce(): Location? = getCurrentLocation()
 
         override suspend fun getCurrentLocation(): Location? {
+            currentCoroutineContext().ensureActive()
             // Require precise location; approximate is insufficient for stalker detection
             if (!hasLocationPermission()) {
                 Timber.w("Precise location permission (ACCESS_FINE_LOCATION) not granted")
@@ -169,14 +177,18 @@ class LocationRepositoryImpl
             }
 
             return try {
-                // Try a fresh reading first
-                val androidLocation =
-                    fusedLocationClient.getCurrentLocation(
-                        Priority.PRIORITY_HIGH_ACCURACY,
-                        null,
-                    ).await()
+                val providers = locationManager.getProviders(true)
+                val provider =
+                    when {
+                        LocationManagerCompat.hasProvider(locationManager, "fused") &&
+                            locationManager.isProviderEnabled("fused") -> "fused"
+                        LocationManager.GPS_PROVIDER in providers -> LocationManager.GPS_PROVIDER
+                        LocationManager.NETWORK_PROVIDER in providers -> LocationManager.NETWORK_PROVIDER
+                        else -> return null
+                    }
+                val androidLocation = requestCurrentLocation(provider)
 
-                if (androidLocation == null) {
+                if (androidLocation == null || !hasLocationPermission()) {
                     Timber.w("Fresh location unavailable; skipping stale last-known location")
                     return null
                 }
@@ -199,14 +211,69 @@ class LocationRepositoryImpl
                     accuracy = androidLocation.accuracy,
                     altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
                     timestamp = now,
-                    provider = androidLocation.provider ?: "FUSED",
+                    provider = androidLocation.provider ?: provider,
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (se: SecurityException) {
                 Timber.e(se, "Location permission revoked while requesting current location")
                 null
             } catch (e: Exception) {
                 Timber.e(e, "Error getting current location")
                 null
+            }
+        }
+
+        @RequiresPermission(anyOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+        private suspend fun requestCurrentLocation(provider: String): android.location.Location? {
+            val requestLock = Any()
+            var listener: LocationListenerCompat? = null
+            try {
+                return withTimeoutOrNull(CURRENT_LOCATION_TIMEOUT_MS) {
+                    suspendCancellableCoroutine { continuation ->
+                        val callback =
+                            object : LocationListenerCompat {
+                                override fun onLocationChanged(location: android.location.Location) {
+                                    if (continuation.isActive) continuation.resume(location)
+                                }
+
+                                override fun onProviderDisabled(provider: String) {
+                                    if (continuation.isActive) continuation.resume(null)
+                                }
+                            }
+                        synchronized(requestLock) {
+                            listener = callback
+                            continuation.invokeOnCancellation {
+                                synchronized(requestLock) {
+                                    removeLocationCallback(callback)
+                                }
+                            }
+                            if (continuation.isActive) {
+                                LocationManagerCompat.requestLocationUpdates(
+                                    locationManager,
+                                    provider,
+                                    CURRENT_LOCATION_REQUEST,
+                                    callback,
+                                    Looper.getMainLooper(),
+                                )
+                            }
+                        }
+                    }
+                }
+            } finally {
+                synchronized(requestLock) {
+                    listener?.let(::removeLocationCallback)
+                }
+            }
+        }
+
+        private fun removeLocationCallback(callback: LocationListenerCompat) {
+            try {
+                LocationManagerCompat.removeUpdates(locationManager, callback)
+            } catch (se: SecurityException) {
+                Timber.w(se, "Location permission revoked while removing current location request")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove current location request")
             }
         }
 
@@ -268,19 +335,32 @@ class LocationRepositoryImpl
         }
 
         override suspend fun getLastKnownLocation(): Location? {
+            currentCoroutineContext().ensureActive()
             if (!hasLocationPermission()) {
                 return null
             }
             return try {
-                val androidLocation = fusedLocationClient.lastLocation.await() ?: return null
+                var newest: android.location.Location? = null
+                for (provider in locationManager.getProviders(true)) {
+                    val candidate = locationManager.getLastKnownLocation(provider) ?: continue
+                    if (newest == null || candidate.elapsedRealtimeNanos > newest.elapsedRealtimeNanos) {
+                        newest = candidate
+                    }
+                }
+                val androidLocation = newest ?: return null
                 Location(
                     latitude = androidLocation.latitude,
                     longitude = androidLocation.longitude,
                     accuracy = androidLocation.accuracy,
                     altitude = if (androidLocation.hasAltitude()) androidLocation.altitude else null,
                     timestamp = androidLocation.time,
-                    provider = androidLocation.provider ?: "FUSED",
+                    provider = androidLocation.provider ?: "unknown",
                 )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (se: SecurityException) {
+                Timber.e(se, "Location permission revoked while requesting last known location")
+                null
             } catch (e: Exception) {
                 Timber.e(e, "Error getting last known location")
                 null
@@ -339,7 +419,14 @@ class LocationRepositoryImpl
         }
 
         companion object {
+            private const val CURRENT_LOCATION_TIMEOUT_MS = 30_000L
             private const val MAX_STALE_LOCATION_AGE_MS = 2 * 60 * 1000L // 2 minutes
             private const val MAX_ACCURACY_METERS = 200f
+            private val CURRENT_LOCATION_REQUEST =
+                LocationRequestCompat.Builder(0L)
+                    .setQuality(LocationRequestCompat.QUALITY_HIGH_ACCURACY)
+                    .setDurationMillis(CURRENT_LOCATION_TIMEOUT_MS)
+                    .setMaxUpdates(1)
+                    .build()
         }
     }

@@ -54,9 +54,9 @@ interface AlertRepository {
     /**
      * Insert an alert with throttling check to prevent duplicate alerts.
      *
-     * CRITICAL FIX: Added to prevent runtime crashes in AlertGenerator.
-     * This method checks if a similar alert exists within the throttle window
-     * before inserting to avoid spamming users with duplicate notifications.
+     * Checks and inserts in one transaction. A higher threat level or a score
+     * increase of at least 0.15 bypasses the tracking-alert cooldown.
+     * Camera glasses presence alerts keep their separate time-only throttle.
      *
      * @param alert The alert to insert
      * @param throttleWindowMs Time window in milliseconds to check for duplicates
@@ -331,27 +331,12 @@ class AlertRepositoryImpl
             return alertHistoryDao.insertAll(alerts)
         }
 
-        /**
-         * CRITICAL FIX: Implementation of insertAlertWithThrottling.
-         * Prevents duplicate alerts from spamming users.
-         */
+        /** The DAO owns the atomic throttle check and insert. */
         override suspend fun insertAlertWithThrottling(
             alert: AlertHistory,
             throttleWindowMs: Long,
         ): Long? {
-            // Calculate throttle threshold timestamp
-            val throttleThreshold = alert.timestamp - throttleWindowMs
-
-            // Check if a similar alert already exists within the throttle window
-            val hasSimilar = hasSimilarRecentAlert(alert.deviceAddresses, throttleThreshold)
-
-            if (hasSimilar) {
-                // Throttle: don't insert duplicate alert
-                return null
-            }
-
-            // No similar alert found, insert the new alert
-            return insertAlert(alert)
+            return alertHistoryDao.insertWithThrottling(alert, throttleWindowMs)
         }
 
         /**

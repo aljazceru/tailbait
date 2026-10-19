@@ -5,10 +5,19 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.tailbait.data.database.entities.AlertHistory
 import com.tailbait.data.database.entities.AlertStatistic
+import com.tailbait.data.model.ThreatLevel
 import kotlinx.coroutines.flow.Flow
+
+private const val ESCALATION_SCORE_INCREASE = 0.15
+
+internal fun AlertHistory.isMeaningfullyEscalatedBy(threatScore: Double): Boolean {
+    return ThreatLevel.fromScore(threatScore).score > ThreatLevel.fromScore(this.threatScore).score ||
+        threatScore >= this.threatScore + ESCALATION_SCORE_INCREASE
+}
 
 /**
  * Data Access Object (DAO) for AlertHistory entity operations.
@@ -27,6 +36,22 @@ interface AlertHistoryDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(alert: AlertHistory): Long
+
+    /** Check and insert atomically so concurrent detection runs cannot duplicate an escalation. */
+    @Transaction
+    suspend fun insertWithThrottling(
+        alert: AlertHistory,
+        throttleWindowMs: Long,
+    ): Long? {
+        val previousAlert = getLatestAlertForDevice(alert.deviceAddresses)
+        if (previousAlert != null &&
+            previousAlert.timestamp >= alert.timestamp - throttleWindowMs &&
+            (alert.isCameraGlassesPresence || !previousAlert.isMeaningfullyEscalatedBy(alert.threatScore))
+        ) {
+            return null
+        }
+        return insert(alert)
+    }
 
     /**
      * Insert multiple alerts in a single transaction.
@@ -333,7 +358,7 @@ interface AlertHistoryDao {
         SELECT * FROM alert_history
         WHERE device_addresses = :deviceAddresses
           AND detection_details NOT LIKE '%camera_glasses_presence%'
-        ORDER BY timestamp DESC
+        ORDER BY timestamp DESC, threat_score DESC, id DESC
         LIMIT 1
     """,
     )
@@ -367,6 +392,7 @@ interface AlertHistoryDao {
      * Delete all alerts.
      * WARNING: This removes all alert history.
      */
+
     /**
      * Hard cap guardrail: keep only the newest [maxRows] undismissed alerts
      * (dismissed ones are already pruned by retention).

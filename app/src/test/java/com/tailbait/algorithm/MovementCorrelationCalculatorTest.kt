@@ -4,6 +4,7 @@ import com.tailbait.data.database.entities.DeviceLocationRecord
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.UserPath
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MovementCorrelationCalculatorTest {
@@ -59,6 +60,7 @@ class MovementCorrelationCalculatorTest {
                 deviceRecords = deviceRecords,
                 userPaths = userPaths,
                 deviceLocations = deviceLocations,
+                userLocations = deviceLocations,
             )
 
         // 3. Verify
@@ -76,6 +78,7 @@ class MovementCorrelationCalculatorTest {
                 UserPath(id = 3, locationId = 3, timestamp = 3000L, accuracy = 10f),
                 UserPath(id = 4, locationId = 1, timestamp = 4000L, accuracy = 10f),
             )
+        val locations = (1L..4L).map { createLocation(it) }
 
         // Device seen at Work -> Gym -> unknown location (not on user's route)
         // Need at least MIN_RECORDS_FOR_ANALYSIS (3) device records
@@ -100,12 +103,13 @@ class MovementCorrelationCalculatorTest {
             calculator.calculateCorrelation(
                 deviceRecords = deviceRecords,
                 userPaths = userPaths,
-                deviceLocations = emptyList(),
+                deviceLocations = locations,
+                userLocations = locations,
             )
 
         // Score should be high but not perfect due to route divergence
-        assert(score > 0.5)
-        assert(score < 1.0)
+        assertTrue(score > 0.5)
+        assertTrue(score < 1.0)
     }
 
     @Test
@@ -124,6 +128,7 @@ class MovementCorrelationCalculatorTest {
                 // Stay at B
                 UserPath(id = 4, locationId = 2, timestamp = 2500L, accuracy = 10f),
             )
+        val locations = listOf(createLocation(1), createLocation(2))
 
         // Device seen at A, then at A again, then at B (need at least 3 records)
         // All timestamps within SYNC_WINDOW_MS (300,000ms) of the user movement at t=2000
@@ -141,13 +146,123 @@ class MovementCorrelationCalculatorTest {
             calculator.calculateWithBreakdown(
                 deviceRecords = deviceRecords,
                 userPaths = userPaths,
-                _deviceLocations = emptyList(),
+                deviceLocations = locations,
+                userLocations = locations,
             )
 
         // User has one movement: locationId change from 1->2 at timestamp 2000
         // Device record at 2050 is within SYNC_WINDOW_MS of 2000
         // syncScore = 1/1 matched movements = 1.0
         assertEquals(1.0, breakdown.movementSyncScore, 0.01)
+    }
+
+    @Test
+    fun calculateWithBreakdown_overlappingAccuracyRegions_doNotScoreSpatialMovement() {
+        val locations = (1L..3L).map { createLocation(it) }
+        val paths = createUserPaths(locations)
+        val records = paths.map { createRecord(it.locationId, it.timestamp) }
+        val accurate = calculator.calculateWithBreakdown(records, paths, locations, locations)
+        val uncertainLocations = locations.map { it.copy(accuracy = 200f) }
+        val uncertainPaths = paths.map { it.copy(accuracy = 200f) }
+
+        for (
+        (placeFixes, pathFixes) in
+        listOf(
+            uncertainLocations to uncertainPaths,
+            locations to uncertainPaths,
+            uncertainLocations to paths,
+        )
+        ) {
+            val uncertain = calculator.calculateWithBreakdown(records, pathFixes, placeFixes, placeFixes)
+
+            assertEquals(0.0, uncertain.movementSyncScore, 0.0)
+            assertEquals(0.0, uncertain.routeOverlapScore, 0.0)
+            assertEquals(accurate.dwellTimeScore, uncertain.dwellTimeScore, 0.0)
+            assertEquals(accurate.timePatternScore, uncertain.timePatternScore, 0.0)
+            assertEquals(0.7, accurate.totalScore - uncertain.totalScore, 0.0001)
+        }
+
+        assertEquals(1.0, accurate.movementSyncScore, 0.0)
+        assertEquals(1.0, accurate.routeOverlapScore, 0.0)
+    }
+
+    @Test
+    fun calculateWithBreakdown_invalidAccuracy_doesNotProveMovement() {
+        val locations = (1L..3L).map { createLocation(it) }
+        val paths = createUserPaths(locations)
+        val records = paths.map { createRecord(it.locationId, it.timestamp) }
+
+        for (accuracy in listOf(0f, -1f, Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY)) {
+            val invalidPaths = paths.map { it.copy(accuracy = accuracy) }
+            val invalidLocations = locations.map { it.copy(accuracy = accuracy) }
+            val pathResult = calculator.calculateWithBreakdown(records, invalidPaths, locations, locations)
+            val placeResult = calculator.calculateWithBreakdown(records, paths, invalidLocations, invalidLocations)
+
+            for (result in listOf(pathResult, placeResult)) {
+                assertEquals("Invalid accuracy $accuracy must not prove synchronization", 0.0, result.movementSyncScore, 0.0)
+                assertEquals("Invalid accuracy $accuracy must not prove a route", 0.0, result.routeOverlapScore, 0.0)
+                assertEquals(0.3, result.totalScore, 0.0001)
+            }
+        }
+    }
+
+    @Test
+    fun calculateWithBreakdown_missingCoordinates_timestampsDoNotProveMovement() {
+        val locations = (1L..3L).map { createLocation(it) }
+        val paths = createUserPaths(locations)
+        val records = paths.map { createRecord(it.locationId, it.timestamp) }
+
+        val result = calculator.calculateWithBreakdown(records, paths, emptyList(), emptyList())
+
+        assertEquals(0.0, result.movementSyncScore, 0.0)
+        assertEquals(0.0, result.routeOverlapScore, 0.0)
+    }
+
+    @Test
+    fun calculateWithBreakdown_invalidUnmatchedTransition_cannotIncreaseConfidence() {
+        val locations = (1L..3L).map { createLocation(it) }
+        val paths =
+            createUserPaths(locations).mapIndexed { index, path ->
+                path.copy(timestamp = index * 600_000L)
+            }
+        val records =
+            listOf(
+                createRecord(1, 0L),
+                createRecord(2, 600_000L),
+                createRecord(2, 600_001L),
+            )
+        val accurate = calculator.calculateWithBreakdown(records, paths, locations, locations)
+        val invalidPaths = paths.map { if (it.locationId == 3L) it.copy(accuracy = Float.NaN) else it }
+
+        val uncertain = calculator.calculateWithBreakdown(records, invalidPaths, locations, locations)
+
+        assertEquals(0.5, accurate.movementSyncScore, 0.0)
+        assertEquals(accurate.movementSyncScore, uncertain.movementSyncScore, 0.0)
+        assertTrue(uncertain.totalScore <= accurate.totalScore)
+    }
+
+    private fun createLocation(id: Long): Location {
+        return Location(
+            id = id,
+            latitude = (id - 1) * 0.001,
+            longitude = 0.0,
+            accuracy = 10f,
+            timestamp = id * 1000L,
+            provider = "fused",
+            createdAt = 0L,
+        )
+    }
+
+    private fun createUserPaths(locations: List<Location>): List<UserPath> {
+        return locations.map {
+            UserPath(
+                id = it.id,
+                locationId = it.id,
+                timestamp = it.timestamp,
+                accuracy = it.accuracy,
+                createdAt = 0L,
+            )
+        }
     }
 
     private fun createRecord(

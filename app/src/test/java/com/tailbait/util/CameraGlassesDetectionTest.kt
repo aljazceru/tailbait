@@ -2,7 +2,7 @@ package com.tailbait.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,27 +57,28 @@ class CameraGlassesDetectionTest {
     }
 
     @Test
-    fun `oculus service uuid fingerprint extracted from FD5F`() {
-        val fingerprint =
-            ManufacturerDataParser.extractServiceUuidFingerprint(
+    fun `oculus service uuid classifies glasses without a physical fingerprint`() {
+        val serviceUuids = listOf(android.os.ParcelUuid(java.util.UUID.fromString("0000FD5F-0000-1000-8000-00805F9B34FB")))
+        assertEquals(ManufacturerDataParser.DeviceType.CAMERA_GLASSES, DeviceIdentifier.getDeviceTypeFromServiceUuids(serviceUuids))
+        assertNull(
+            ManufacturerDataParser.extractBestFingerprint(
                 manufacturerId = null,
-                serviceUuids = listOf(android.os.ParcelUuid(java.util.UUID.fromString(ManufacturerDataParser.TrackerServiceUuid.META_OCULUS))),
                 manufacturerData = byteArrayOf(0x01, 0x02, 0x03, 0x04),
-            )
-        assertNotNull(fingerprint)
-        assertTrue(fingerprint!!.startsWith("CG:FD5F:"))
+                serviceUuids = serviceUuids,
+            ),
+        )
     }
 
     @Test
-    fun `luxottica manufacturer id gets glasses fingerprint for mac correlation`() {
-        val fingerprint =
-            ManufacturerDataParser.extractServiceUuidFingerprint(
-                manufacturerId = 0x0D53,
-                // Glasses advertise service UUIDs (e.g. battery) alongside manufacturer data;
-                // the MFR fallback only runs when serviceUuids is non-empty.
-                serviceUuids = listOf(android.os.ParcelUuid(java.util.UUID.fromString("0000180F-0000-1000-8000-00805F9B34FB"))),
-                manufacturerData = byteArrayOf(0x01, 0x02, 0x03, 0x04),
+    fun `shared glasses manufacturer profiles do not link physical devices`() {
+        for (manufacturerId in listOf(0x0D53, 0x058E, 0x01AB, 0x03C2)) {
+            assertNull(
+                ManufacturerDataParser.extractBestFingerprint(
+                    manufacturerId = manufacturerId,
+                    manufacturerData = byteArrayOf(0x01, 0x02, 0x03, 0x04),
+                    serviceUuids = listOf(android.os.ParcelUuid(java.util.UUID.fromString("0000180F-0000-1000-8000-00805F9B34FB"))),
+                ),
             )
-        assertTrue(fingerprint!!.startsWith("CG:MFR:"))
+        }
     }
 }

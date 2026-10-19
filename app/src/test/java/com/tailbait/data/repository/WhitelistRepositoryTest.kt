@@ -1,473 +1,191 @@
 package com.tailbait.data.repository
 
-import com.tailbait.data.database.dao.ScannedDeviceDao
-import com.tailbait.data.database.dao.WhitelistEntryDao
+import androidx.room.Room
+import app.cash.turbine.test
+import com.tailbait.data.database.TailBaitDatabase
 import com.tailbait.data.database.entities.ScannedDevice
 import com.tailbait.data.database.entities.WhitelistEntry
-import io.mockk.*
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 
-/**
- * Unit tests for WhitelistRepository.
- *
- * Tests cover:
- * - CRUD operations
- * - Category filtering
- * - Search functionality
- * - Bulk operations
- * - Device-entry correlation
- */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class WhitelistRepositoryTest {
-    private lateinit var whitelistEntryDao: WhitelistEntryDao
-    private lateinit var scannedDeviceDao: ScannedDeviceDao
+    private lateinit var database: TailBaitDatabase
     private lateinit var repository: WhitelistRepository
-
-    private val testDevice1 =
-        ScannedDevice(
-            id = 1L,
-            address = "AA:BB:CC:DD:EE:FF",
-            name = "Test Device 1",
-            firstSeen = 1000L,
-            lastSeen = 2000L,
-        )
-
-    private val testDevice2 =
-        ScannedDevice(
-            id = 2L,
-            address = "11:22:33:44:55:66",
-            name = "Test Device 2",
-            firstSeen = 1500L,
-            lastSeen = 2500L,
-        )
-
-    private val testEntry1 =
-        WhitelistEntry(
-            id = 1L,
-            deviceId = 1L,
-            label = "My Phone",
-            category = WhitelistRepository.Category.OWN,
-            notes = "Personal device",
-        )
-
-    private val testEntry2 =
-        WhitelistEntry(
-            id = 2L,
-            deviceId = 2L,
-            label = "Partner's Watch",
-            category = WhitelistRepository.Category.PARTNER,
-            notes = null,
-        )
 
     @Before
     fun setup() {
-        whitelistEntryDao = mockk(relaxed = true)
-        scannedDeviceDao = mockk(relaxed = true)
-        repository = WhitelistRepositoryImpl(whitelistEntryDao, scannedDeviceDao)
+        database =
+            Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), TailBaitDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        repository = WhitelistRepositoryImpl(database.whitelistEntryDao(), database.scannedDeviceDao())
     }
 
     @After
     fun tearDown() {
-        clearAllMocks()
+        database.close()
     }
 
-    // ========== CRUD Operations Tests ==========
-
     @Test
-    fun `addToWhitelist should insert entry and return ID`() =
+    fun `adding an alias trusts only its confirmed family and removal works from another alias`() =
         runTest {
-            // Given
-            val deviceId = 1L
-            val label = "My Device"
-            val category = WhitelistRepository.Category.OWN
-            val notes = "Test notes"
-            val expectedId = 123L
+            seedFamily()
 
-            coEvery { whitelistEntryDao.insert(any()) } returns expectedId
+            val entryId = repository.addToWhitelist(2L, "My tag", WhitelistRepository.Category.OWN, notes = "Personal")
 
-            // When
-            val result =
-                repository.addToWhitelist(
-                    deviceId = deviceId,
-                    label = label,
-                    category = category,
-                    notes = notes,
-                    addedViaLearnMode = false,
-                )
+            assertEquals(1L, repository.getEntryById(entryId)!!.deviceId)
+            assertEquals("Personal", repository.getEntryByDeviceId(3L)!!.notes)
+            for (id in 1L..3L) assertTrue(repository.isDeviceWhitelisted(id))
+            assertFalse(repository.isDeviceWhitelisted(4L))
+            assertFalse(repository.isDeviceWhitelisted(5L))
+            assertNull(repository.getEntryByDeviceId(4L))
+            assertEquals(setOf(1L, 2L, 3L), repository.getAllWhitelistedDeviceIds().first().toSet())
 
-            // Then
-            assertEquals(expectedId, result)
-            coVerify { whitelistEntryDao.insert(any()) }
+            assertEquals(1, repository.removeFromWhitelist(3L))
+            assertTrue(repository.getAllWhitelistedDeviceIds().first().isEmpty())
+            for (id in 1L..5L) assertFalse(repository.isDeviceWhitelisted(id))
+            assertEquals(0, repository.removeFromWhitelist(2L))
         }
 
     @Test
-    fun `removeFromWhitelist should delete entry by device ID`() =
+    fun `legacy trust on confirmed children applies consistently and removal clears every family entry`() =
         runTest {
-            // Given
-            val deviceId = 1L
-            coEvery { whitelistEntryDao.deleteByDeviceId(deviceId) } returns 1
+            seedFamily()
+            database.whitelistEntryDao().insert(entry(101L, 2L, "First alias"))
+            database.whitelistEntryDao().insert(entry(102L, 3L, "Second alias"))
+            database.whitelistEntryDao().insert(entry(103L, 4L, "Different same-profile device"))
 
-            // When
-            val result = repository.removeFromWhitelist(deviceId)
-
-            // Then
-            assertEquals(1, result)
-            coVerify { whitelistEntryDao.deleteByDeviceId(deviceId) }
+            assertEquals(setOf(1L, 2L, 3L, 4L), repository.getAllWhitelistedDeviceIds().first().toSet())
+            for (id in 1L..4L) assertTrue(repository.isDeviceWhitelisted(id))
+            assertFalse(repository.isDeviceWhitelisted(5L))
+            assertEquals(101L, repository.getEntryByDeviceId(1L)!!.id)
+            assertEquals(2, repository.removeFromWhitelist(1L))
+            assertEquals(setOf(4L), repository.getAllWhitelistedDeviceIds().first().toSet())
+            assertEquals("Different same-profile device", repository.getEntryByDeviceId(4L)!!.label)
         }
 
     @Test
-    fun `updateEntry should update existing entry`() =
+    fun `weak orphan self and chained links never spread explicit trust`() =
         runTest {
-            // Given
-            val updatedEntry =
-                testEntry1.copy(
-                    label = "Updated Label",
-                    category = WhitelistRepository.Category.TRUSTED,
-                    notes = "Updated notes",
-                )
-
-            // When
-            repository.updateEntry(updatedEntry)
-
-            // Then
-            coVerify {
-                whitelistEntryDao.update(
-                    match { entry ->
-                        entry.label == "Updated Label" &&
-                            entry.category == WhitelistRepository.Category.TRUSTED &&
-                            entry.notes == "Updated notes"
-                    },
-                )
+            seedFamily()
+            database.scannedDeviceDao().insert(device(6L, 999L, "STRONG"))
+            database.scannedDeviceDao().insert(device(7L, 7L, "STRONG"))
+            database.scannedDeviceDao().insert(device(8L, 2L, "STRONG"))
+            database.scannedDeviceDao().insert(device(9L, 5L, "STRONG"))
+            for (id in listOf(5L, 6L, 7L, 8L)) {
+                val entryId = repository.addToWhitelist(id, "Explicit $id", WhitelistRepository.Category.TRUSTED)
+                assertEquals(id, repository.getEntryById(entryId)!!.deviceId)
             }
+
+            assertEquals(setOf(5L, 6L, 7L, 8L), repository.getAllWhitelistedDeviceIds().first().toSet())
+            for (id in listOf(1L, 2L, 3L, 4L, 9L)) assertFalse(repository.isDeviceWhitelisted(id))
+            assertEquals(0, repository.removeFromWhitelist(1L))
+            assertEquals(1, repository.removeFromWhitelist(5L))
+            assertEquals(setOf(6L, 7L, 8L), repository.getAllWhitelistedDeviceIds().first().toSet())
         }
 
     @Test
-    fun `getEntryById should return entry when exists`() =
+    fun `learn mode batch canonicalizes families while retaining labels and notes`() =
         runTest {
-            // Given
-            val entryId = 1L
-            coEvery { whitelistEntryDao.getById(entryId) } returns testEntry1
+            seedFamily()
+            val first = entry(101L, 2L, "My tag").copy(addedViaLearnMode = true, notes = "Tag note")
+            val second = entry(102L, 4L, "Partner tag").copy(category = WhitelistRepository.Category.PARTNER)
+            val ids = repository.addMultipleToWhitelist(listOf(first, second))
 
-            // When
-            val result = repository.getEntryById(entryId)
-
-            // Then
-            assertEquals(testEntry1, result)
+            assertEquals(listOf(101L, 102L), ids)
+            assertEquals(first.copy(deviceId = 1L), repository.getEntryById(101L))
+            assertEquals(second, repository.getEntryById(102L))
+            assertEquals(setOf(1L, 2L, 3L, 4L), repository.getAllWhitelistedDeviceIds().first().toSet())
+            assertFalse(repository.isDeviceWhitelisted(5L))
+            assertEquals(listOf(first.copy(deviceId = 1L)), repository.getLearnModeEntries().first())
+            assertEquals(listOf(second), repository.getEntriesByCategory(WhitelistRepository.Category.PARTNER).first())
         }
 
     @Test
-    fun `getEntryById should return null when not exists`() =
+    fun `whitelisted IDs include aliases linked after trust without including the shared profile`() =
         runTest {
-            // Given
-            val entryId = 999L
-            coEvery { whitelistEntryDao.getById(entryId) } returns null
-
-            // When
-            val result = repository.getEntryById(entryId)
-
-            // Then
-            assertNull(result)
-        }
-
-    // ========== Bulk Operations Tests ==========
-
-    @Test
-    fun `addMultipleToWhitelist should insert all entries`() =
-        runTest {
-            // Given
-            val entries = listOf(testEntry1, testEntry2)
-            val expectedIds = listOf(1L, 2L)
-
-            coEvery { whitelistEntryDao.insertAll(entries) } returns expectedIds
-
-            // When
-            val result = repository.addMultipleToWhitelist(entries)
-
-            // Then
-            assertEquals(expectedIds, result)
-            coVerify { whitelistEntryDao.insertAll(entries) }
+            seedFamily()
+            repository.addToWhitelist(1L, "My tag", WhitelistRepository.Category.OWN)
+            database.scannedDeviceDao().insert(device(7L, 1L, "WEAK"))
+            repository.getAllWhitelistedDeviceIds().test {
+                assertEquals(setOf(1L, 2L, 3L), awaitItem().toSet())
+                database.scannedDeviceDao().insert(device(6L, 1L, "STRONG"))
+                assertEquals(setOf(1L, 2L, 3L, 6L), awaitItem().toSet())
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertTrue(repository.isDeviceWhitelisted(6L))
+            assertFalse(repository.isDeviceWhitelisted(7L))
+            assertFalse(repository.isDeviceWhitelisted(4L))
         }
 
     @Test
-    fun `clearWhitelist should delete all entries`() =
+    fun `entry updates and UI joins preserve canonical device and user metadata`() =
         runTest {
-            // When
+            seedFamily()
+            val id = repository.addToWhitelist(2L, "My tag", WhitelistRepository.Category.OWN)
+            val updated = repository.getEntryById(id)!!.copy(label = "Keys", notes = "Blue case")
+            repository.updateEntry(updated)
+
+            val displayed = repository.getAllEntriesWithDevices().first().single()
+            assertEquals(updated, displayed.entry)
+            assertEquals(1L, displayed.device.id)
+            assertEquals(listOf(updated), repository.searchEntries("Blue").first())
+            assertEquals(1, repository.getWhitelistCount().first())
             repository.clearWhitelist()
-
-            // Then
-            coVerify { whitelistEntryDao.deleteAll() }
+            assertTrue(repository.getAllWhitelistEntries().first().isEmpty())
+            assertFalse(repository.isDeviceWhitelisted(2L))
         }
 
-    // ========== Query Tests ==========
+    private suspend fun seedFamily() {
+        database.scannedDeviceDao().insertAll(
+            listOf(
+                device(1L),
+                device(2L, 1L, "STRONG"),
+                device(3L, 1L, "STRONG"),
+                device(4L),
+                device(5L, 1L, "WEAK"),
+            ),
+        )
+    }
 
-    @Test
-    fun `isDeviceWhitelisted should return true when device is whitelisted`() =
-        runTest {
-            // Given
-            val deviceId = 1L
-            coEvery { whitelistEntryDao.isDeviceWhitelisted(deviceId) } returns true
+    private fun device(
+        id: Long,
+        linkedId: Long? = null,
+        strength: String? = null,
+    ) = ScannedDevice(
+        id = id,
+        address = "00:00:00:00:00:${id.toString(16).padStart(2, '0')}",
+        name = "Tag $id",
+        firstSeen = 1000L,
+        lastSeen = 2000L,
+        payloadFingerprint = "FM:" + "AB".repeat(22),
+        linkedDeviceId = linkedId,
+        linkStrength = strength,
+        shadowKey = "same-profile",
+    )
 
-            // When
-            val result = repository.isDeviceWhitelisted(deviceId)
-
-            // Then
-            assertTrue(result)
-        }
-
-    @Test
-    fun `isDeviceWhitelisted should return false when device is not whitelisted`() =
-        runTest {
-            // Given
-            val deviceId = 999L
-            coEvery { whitelistEntryDao.isDeviceWhitelisted(deviceId) } returns false
-
-            // When
-            val result = repository.isDeviceWhitelisted(deviceId)
-
-            // Then
-            assertFalse(result)
-        }
-
-    @Test
-    fun `getAllWhitelistEntries should return all entries`() =
-        runTest {
-            // Given
-            val entries = listOf(testEntry1, testEntry2)
-            every { whitelistEntryDao.getAllEntries() } returns flowOf(entries)
-
-            // When
-            val result = repository.getAllWhitelistEntries().first()
-
-            // Then
-            assertEquals(entries, result)
-        }
-
-    @Test
-    fun `getAllEntriesWithDevices should combine entries with devices`() =
-        runTest {
-            // Given
-            val entries = listOf(testEntry1, testEntry2)
-            val devices = listOf(testDevice1, testDevice2)
-
-            every { whitelistEntryDao.getAllEntries() } returns flowOf(entries)
-            every { scannedDeviceDao.getAllDevices() } returns flowOf(devices)
-
-            // When
-            val result = repository.getAllEntriesWithDevices().first()
-
-            // Then
-            assertEquals(2, result.size)
-            assertEquals(testEntry1, result[0].entry)
-            assertEquals(testDevice1, result[0].device)
-            assertEquals(testEntry2, result[1].entry)
-            assertEquals(testDevice2, result[1].device)
-        }
-
-    @Test
-    fun `getEntriesByCategory should filter by category`() =
-        runTest {
-            // Given
-            val category = WhitelistRepository.Category.OWN
-            val entries = listOf(testEntry1)
-
-            every { whitelistEntryDao.getEntriesByCategory(category) } returns flowOf(entries)
-
-            // When
-            val result = repository.getEntriesByCategory(category).first()
-
-            // Then
-            assertEquals(entries, result)
-            verify { whitelistEntryDao.getEntriesByCategory(category) }
-        }
-
-    @Test
-    fun `getEntriesWithDevicesByCategory should filter by category with devices`() =
-        runTest {
-            // Given
-            val category = WhitelistRepository.Category.OWN
-            val entries = listOf(testEntry1)
-            val devices = listOf(testDevice1)
-
-            every { whitelistEntryDao.getEntriesByCategory(category) } returns flowOf(entries)
-            every { scannedDeviceDao.getAllDevices() } returns flowOf(devices)
-
-            // When
-            val result = repository.getEntriesWithDevicesByCategory(category).first()
-
-            // Then
-            assertEquals(1, result.size)
-            assertEquals(testEntry1, result[0].entry)
-            assertEquals(testDevice1, result[0].device)
-        }
-
-    @Test
-    fun `searchEntries should return matching entries`() =
-        runTest {
-            // Given
-            val query = "Phone"
-            val entries = listOf(testEntry1)
-
-            every { whitelistEntryDao.searchEntries(query) } returns flowOf(entries)
-
-            // When
-            val result = repository.searchEntries(query).first()
-
-            // Then
-            assertEquals(entries, result)
-            verify { whitelistEntryDao.searchEntries(query) }
-        }
-
-    @Test
-    fun `searchEntriesWithDevices should return matching entries with devices`() =
-        runTest {
-            // Given
-            val query = "Phone"
-            val entries = listOf(testEntry1)
-            val devices = listOf(testDevice1)
-
-            every { whitelistEntryDao.searchEntries(query) } returns flowOf(entries)
-            every { scannedDeviceDao.getAllDevices() } returns flowOf(devices)
-
-            // When
-            val result = repository.searchEntriesWithDevices(query).first()
-
-            // Then
-            assertEquals(1, result.size)
-            assertEquals(testEntry1, result[0].entry)
-            assertEquals(testDevice1, result[0].device)
-        }
-
-    @Test
-    fun `getAllWhitelistedDeviceIds should return device IDs`() =
-        runTest {
-            // Given
-            val deviceIds = listOf(1L, 2L, 3L)
-            every { whitelistEntryDao.getAllWhitelistedDeviceIds() } returns flowOf(deviceIds)
-
-            // When
-            val result = repository.getAllWhitelistedDeviceIds().first()
-
-            // Then
-            assertEquals(deviceIds, result)
-        }
-
-    @Test
-    fun `getWhitelistCount should return total count`() =
-        runTest {
-            // Given
-            val count = 5
-            every { whitelistEntryDao.getWhitelistCount() } returns flowOf(count)
-
-            // When
-            val result = repository.getWhitelistCount().first()
-
-            // Then
-            assertEquals(count, result)
-        }
-
-    @Test
-    fun `getCountByCategory should return category count`() =
-        runTest {
-            // Given
-            val category = WhitelistRepository.Category.OWN
-            val count = 3
-            every { whitelistEntryDao.getCountByCategory(category) } returns flowOf(count)
-
-            // When
-            val result = repository.getCountByCategory(category).first()
-
-            // Then
-            assertEquals(count, result)
-        }
-
-    @Test
-    fun `getLearnModeEntries should return Learn Mode entries`() =
-        runTest {
-            // Given
-            val learnModeEntry = testEntry1.copy(addedViaLearnMode = true)
-            val entries = listOf(learnModeEntry)
-
-            every { whitelistEntryDao.getLearnModeEntries() } returns flowOf(entries)
-
-            // When
-            val result = repository.getLearnModeEntries().first()
-
-            // Then
-            assertEquals(entries, result)
-        }
-
-    @Test
-    fun `getManualEntries should return manually added entries`() =
-        runTest {
-            // Given
-            val entries = listOf(testEntry1, testEntry2)
-
-            every { whitelistEntryDao.getManualEntries() } returns flowOf(entries)
-
-            // When
-            val result = repository.getManualEntries().first()
-
-            // Then
-            assertEquals(entries, result)
-        }
-
-    // ========== Edge Cases Tests ==========
-
-    @Test
-    fun `getAllEntriesWithDevices should handle missing devices gracefully`() =
-        runTest {
-            // Given
-            val entries = listOf(testEntry1, testEntry2)
-            val devices = listOf(testDevice1) // Only device 1, device 2 is missing
-
-            every { whitelistEntryDao.getAllEntries() } returns flowOf(entries)
-            every { scannedDeviceDao.getAllDevices() } returns flowOf(devices)
-
-            // When
-            val result = repository.getAllEntriesWithDevices().first()
-
-            // Then
-            // Should only return entries with matching devices
-            assertEquals(1, result.size)
-            assertEquals(testEntry1, result[0].entry)
-            assertEquals(testDevice1, result[0].device)
-        }
-
-    @Test
-    fun `removeFromWhitelist should return zero when entry does not exist`() =
-        runTest {
-            // Given
-            val deviceId = 999L
-            coEvery { whitelistEntryDao.deleteByDeviceId(deviceId) } returns 0
-
-            // When
-            val result = repository.removeFromWhitelist(deviceId)
-
-            // Then
-            assertEquals(0, result)
-            coVerify { whitelistEntryDao.deleteByDeviceId(deviceId) }
-        }
-
-    @Test
-    fun `updateEntry should update entry in DAO`() =
-        runTest {
-            // Given
-            val entryToUpdate =
-                testEntry1.copy(
-                    label = "New Label",
-                    category = WhitelistRepository.Category.OWN,
-                    notes = null,
-                )
-
-            // When
-            repository.updateEntry(entryToUpdate)
-
-            // Then
-            coVerify { whitelistEntryDao.update(entryToUpdate) }
-        }
+    private fun entry(
+        id: Long,
+        deviceId: Long,
+        label: String,
+    ) = WhitelistEntry(
+        id = id,
+        deviceId = deviceId,
+        label = label,
+        category = WhitelistRepository.Category.OWN,
+        createdAt = 3000L,
+    )
 }

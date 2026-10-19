@@ -3,6 +3,7 @@ package com.tailbait.algorithm
 import com.tailbait.data.database.entities.DeviceLocationRecord
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.database.entities.UserPath
+import com.tailbait.util.DistanceCalculator
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,8 +45,9 @@ import kotlin.math.min
  * val calculator = MovementCorrelationCalculator()
  * val score = calculator.calculateCorrelation(
  *     deviceRecords = deviceLocationRecords,
- *     userLocations = userLocationHistory,
- *     deviceLocations = deviceLocationHistory
+ *     userPaths = userPathHistory,
+ *     deviceLocations = deviceLocationHistory,
+ *     userLocations = userLocationHistory
  * )
  * ```
  *
@@ -92,14 +94,16 @@ class MovementCorrelationCalculator
          * @param deviceRecords List of device-location records (when device was detected at each location)
          * @param userPaths User movement history (UserPath entity)
          * @param deviceLocations List of locations where device was detected (for position data)
+         * @param userLocations Place coordinates referenced by the user's movement history
          * @return Correlation score between 0.0 (no correlation) and 1.0 (perfect correlation)
          */
         fun calculateCorrelation(
             deviceRecords: List<DeviceLocationRecord>,
             userPaths: List<UserPath>,
             deviceLocations: List<Location>,
+            userLocations: List<Location>,
         ): Double {
-            return calculateWithBreakdown(deviceRecords, userPaths, deviceLocations).totalScore
+            return calculateWithBreakdown(deviceRecords, userPaths, deviceLocations, userLocations).totalScore
         }
 
         /**
@@ -108,7 +112,8 @@ class MovementCorrelationCalculator
         fun calculateWithBreakdown(
             deviceRecords: List<DeviceLocationRecord>,
             userPaths: List<UserPath>,
-            _deviceLocations: List<Location>,
+            deviceLocations: List<Location>,
+            userLocations: List<Location>,
         ): CorrelationBreakdown {
             // Need minimum data for meaningful analysis
             if (deviceRecords.size < MIN_RECORDS_FOR_ANALYSIS || userPaths.size < MIN_RECORDS_FOR_ANALYSIS) {
@@ -130,19 +135,34 @@ class MovementCorrelationCalculator
             // Sort by timestamp (UserPath is already time-ordered usually, but ensure it)
             val sortedDeviceRecords = deviceRecords.sortedBy { it.timestamp }
             val sortedUserPaths = userPaths.sortedBy { it.timestamp }
+            val locationsById = deviceLocations.associateByTo(mutableMapOf()) { it.id }
+            userLocations.associateByTo(locationsById) { it.id }
+            val userMovements = BooleanArray(sortedUserPaths.size)
+            for (index in 1 until sortedUserPaths.size) {
+                val previous = sortedUserPaths[index - 1]
+                val current = sortedUserPaths[index]
+                userMovements[index] =
+                    hasProvenMovement(
+                        locationsById[previous.locationId],
+                        locationsById[current.locationId],
+                        previous.accuracy,
+                        current.accuracy,
+                    )
+            }
+
             // 1. Movement Synchronization (40%)
             // Do we see the device moving when the user moves?
-            val syncScore = calculateMovementSynchronization(sortedDeviceRecords, sortedUserPaths)
+            val syncScore = calculateMovementSynchronization(sortedDeviceRecords, sortedUserPaths, userMovements)
 
             // 2. Route Overlap (30%)
             // Is the sequence of locations the same?
-            val routeScore = calculateRouteOverlap(sortedDeviceRecords, sortedUserPaths)
+            val routeScore = calculateRouteOverlap(sortedDeviceRecords, sortedUserPaths, userMovements, locationsById)
 
-            // 3. Dwell Time Match (15%)
+            // 3. Dwell Time Match (20%)
             // Does the device stay/leave when the user does?
             val dwellScore = calculateDwellTimeMatch(sortedDeviceRecords, sortedUserPaths)
 
-            // 4. Time Pattern (15%)
+            // 4. Time Pattern (10%)
             // Is the device seen at consistent times?
             val timeScore = calculateTimePattern(sortedDeviceRecords)
 
@@ -192,8 +212,8 @@ class MovementCorrelationCalculator
         /**
          * Analyze if device movements synchronize with user movements.
          *
-         * With UserPath, we have a granular history. A "movement" corresponds to
-         * a change in locationId in the UserPath sequence.
+         * A location ID change is movement evidence only when the fixes' accuracy
+         * regions do not overlap.
          *
          * @param deviceRecords Device detection history
          * @param userPaths User movement history
@@ -201,58 +221,33 @@ class MovementCorrelationCalculator
         private fun calculateMovementSynchronization(
             deviceRecords: List<DeviceLocationRecord>,
             userPaths: List<UserPath>,
+            userMovements: BooleanArray,
         ): Double {
-            if (userPaths.size < 2) return 0.0
-
-            // Find user movements (location ID changes)
-            // Group by location ID to find transitions
-            val movementTimestamps = mutableListOf<Long>()
-            var currentLocationId = userPaths.first().locationId
-
-            for (path in userPaths) {
-                if (path.locationId != currentLocationId) {
-                    // User moved to a new Place!
-                    movementTimestamps.add(path.timestamp)
-                    currentLocationId = path.locationId
-                }
-            }
-
-            if (movementTimestamps.isEmpty()) return 0.0
-
-            // Check if device was detected around these movement times
+            var movementCount = 0
             var correlatedMovements = 0
 
-            // Optimize: Sort records by time
-            val sortedRecords = deviceRecords.sortedBy { it.timestamp }
+            for (index in 1 until userPaths.size) {
+                if (userPaths[index].locationId == userPaths[index - 1].locationId) continue
+                // Keep uncertain transitions in the denominator so losing accuracy cannot raise confidence.
+                movementCount++
+                if (!userMovements[index]) continue
 
-            for (moveTime in movementTimestamps) {
-                // Was the device seen within the window of this movement?
-                val foundMatch =
-                    sortedRecords.any { record ->
-                        abs(record.timestamp - moveTime) < SYNC_WINDOW_MS
-                    }
-
-                if (foundMatch) {
+                val moveTime = userPaths[index].timestamp
+                if (deviceRecords.any { abs(it.timestamp - moveTime) < SYNC_WINDOW_MS }) {
                     correlatedMovements++
                 }
             }
 
-            val score =
-                if (movementTimestamps.isNotEmpty()) {
-                    correlatedMovements.toDouble() / movementTimestamps.size
-                } else {
-                    0.0
-                }
-            Timber.tag(TAG).v("Movement sync: $correlatedMovements/${movementTimestamps.size} movements matched")
+            val score = if (movementCount > 0) correlatedMovements.toDouble() / movementCount else 0.0
+            Timber.tag(TAG).v("Movement sync: $correlatedMovements/$movementCount movements matched")
             return score
         }
 
         /**
          * Calculate overlap between device route and user route.
          *
-         * Uses Longest Common Subsequence (LCS) on Location IDs.
-         * Since UserPath and DeviceLocationRecord both link to Location IDs,
-         * we can compare the sequences directly!
+         * Uses Longest Common Subsequence (LCS) on Location IDs supported by
+         * spatially separated fixes, rather than GPS drift or missing coordinates.
          *
          * @param deviceRecords Device detection history
          * @param userPaths User movement history
@@ -260,14 +255,20 @@ class MovementCorrelationCalculator
         private fun calculateRouteOverlap(
             deviceRecords: List<DeviceLocationRecord>,
             userPaths: List<UserPath>,
+            userMovements: BooleanArray,
+            locationsById: Map<Long, Location>,
         ): Double {
             if (deviceRecords.isEmpty() || userPaths.isEmpty()) return 0.0
 
-            // Extract sequence of distinctive Location IDs visited by User
+            // Only endpoints of proven movements contribute to the spatial route.
             val userRoute =
-                userPaths.map { it.locationId }
-                    .distinctUntilChanged() // Extension function to collapse consecutive duplicates (1,1,1,2,2 -> 1,2)
-                    .toList()
+                userPaths.mapIndexedNotNull { index, path ->
+                    if (userMovements[index] || (index < userPaths.lastIndex && userMovements[index + 1])) {
+                        path.locationId
+                    } else {
+                        null
+                    }
+                }.distinctUntilChanged()
 
             // Extract sequence of Location IDs where Device was seen
             val deviceRoute =
@@ -276,15 +277,39 @@ class MovementCorrelationCalculator
                     .distinctUntilChanged()
                     .toList()
 
-            if (userRoute.isEmpty() || deviceRoute.isEmpty()) return 0.0
+            val spatialDeviceRoute =
+                deviceRoute.filterIndexed { index, locationId ->
+                    val location = locationsById[locationId]
+                    (index > 0 && hasProvenMovement(locationsById[deviceRoute[index - 1]], location)) ||
+                        (index < deviceRoute.lastIndex && hasProvenMovement(location, locationsById[deviceRoute[index + 1]]))
+                }
+
+            if (userRoute.size < 2 || spatialDeviceRoute.size < 2) return 0.0
 
             // Calculate LCS of Location IDs
-            val lcsLength = calculateLCS(userRoute, deviceRoute)
+            val lcsLength = calculateLCS(userRoute, spatialDeviceRoute)
 
-            // Score is LCS length divided by device route length
+            // Keep the full device route as the denominator when accuracy removes evidence.
             val score = lcsLength.toDouble() / deviceRoute.size
             Timber.tag(TAG).v("Route overlap: LCS=$lcsLength/$deviceRoute.size")
             return score
+        }
+
+        private fun hasProvenMovement(
+            first: Location?,
+            second: Location?,
+            firstAccuracy: Float = first?.accuracy ?: 0f,
+            secondAccuracy: Float = second?.accuracy ?: 0f,
+        ): Boolean {
+            if (first == null || second == null || first.id == second.id) return false
+            if (firstAccuracy <= 0f || secondAccuracy <= 0f || first.accuracy <= 0f || second.accuracy <= 0f) return false
+
+            // Breadcrumbs reuse place coordinates, so neither source may understate uncertainty.
+            return DistanceCalculator.minimumSeparationMeters(
+                DistanceCalculator.calculateDistance(first, second),
+                maxOf(firstAccuracy, first.accuracy),
+                maxOf(secondAccuracy, second.accuracy),
+            ) > 0.0
         }
 
         /**

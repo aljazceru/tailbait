@@ -1,9 +1,13 @@
 package com.tailbait.service
 
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
-import app.cash.turbine.test
 import com.tailbait.data.database.entities.AppSettings
 import com.tailbait.data.database.entities.Location
 import com.tailbait.data.repository.DeviceRepository
@@ -12,490 +16,475 @@ import com.tailbait.data.repository.SettingsRepository
 import com.tailbait.data.repository.WhitelistRepository
 import com.tailbait.util.Constants
 import io.mockk.*
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import no.nordicsemi.android.kotlin.ble.core.MockServerDevice
+import no.nordicsemi.android.kotlin.ble.core.mapper.ScanRecordSerializer
+import no.nordicsemi.android.kotlin.ble.core.scanner.BleScanFilter
+import no.nordicsemi.android.kotlin.ble.core.scanner.BleScanResult
+import no.nordicsemi.android.kotlin.ble.core.scanner.BleScanResultData
+import no.nordicsemi.android.kotlin.ble.core.scanner.BleScannerSettings
+import no.nordicsemi.android.kotlin.ble.scanner.BleScanner
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-/**
- * Unit tests for BleScannerManager.
- *
- * Tests cover:
- * - Manual scan functionality
- * - Continuous scanning with intervals
- * - Scan result processing and duplicate filtering
- * - Location correlation
- * - Error handling and retry logic
- * - State management
- */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 @OptIn(ExperimentalCoroutinesApi::class)
 class BleScannerManagerTest {
-    // Mocks
-    private lateinit var deviceRepository: DeviceRepository
-    private lateinit var locationRepository: LocationRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var whitelistRepository: WhitelistRepository
-    private lateinit var alertGenerator: AlertGenerator
-    private lateinit var context: Context
-
-    // System under test
+    private val dispatcher = StandardTestDispatcher()
+    private val deviceRepository = mockk<DeviceRepository>(relaxed = true)
+    private val locationRepository = mockk<LocationRepository>(relaxed = true)
+    private val settingsRepository = mockk<SettingsRepository>()
+    private val whitelistRepository = mockk<WhitelistRepository>(relaxed = true)
+    private val alertGenerator = mockk<AlertGenerator>(relaxed = true)
+    private val incoming = MutableSharedFlow<BleScanResult>(extraBufferCapacity = 16)
+    private val persisted = mutableListOf<PersistedDevice>()
+    private val recordTriggers = mutableListOf<String>()
+    private var sourceStarts = 0
+    private var sourceCloses = 0
+    private var closeGate: CompletableDeferred<Unit>? = null
+    private var beforePersist: suspend () -> Unit = {}
     private lateinit var scannerManager: BleScannerManager
 
-    // Test dispatcher
-    private val testDispatcher = StandardTestDispatcher()
-    private val testScope = TestScope(testDispatcher)
-
-    // Test data
-    private val testLocation =
-        Location(
-            id = 1,
-            latitude = 37.7749,
-            longitude = -122.4194,
-            accuracy = 10f,
-            timestamp = System.currentTimeMillis(),
-            provider = "FUSED",
-        )
-
-    private val testSettings =
-        AppSettings(
-            id = 1,
-            isTrackingEnabled = true,
-            scanIntervalSeconds = 300,
-            scanDurationSeconds = 30,
-            batteryOptimizationEnabled = false,
-        )
+    private data class PersistedDevice(
+        val address: String,
+        val isTracker: Boolean,
+        val deviceType: String?,
+        val fingerprint: String?,
+        val method: String?,
+        val highestRssi: Int?,
+    )
 
     @Before
     fun setup() {
-        // Initialize mocks
-        deviceRepository = mockk(relaxed = true)
-        locationRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        whitelistRepository = mockk(relaxed = true)
-        alertGenerator = mockk(relaxed = true)
-        context = mockk(relaxed = true)
-
-        // Set up default mock behaviors
-        coEvery { settingsRepository.getSettingsOnce() } returns testSettings
-        every { settingsRepository.getSettings() } returns flowOf(testSettings)
-        coEvery { locationRepository.getCurrentLocation() } returns testLocation
-        coEvery { locationRepository.insertLocation(any()) } returns 1L
-        coEvery { deviceRepository.upsertDevice(any(), any(), any(), any()) } returns 1L
+        coEvery { settingsRepository.getSettingsOnce() } returns
+            AppSettings(scanDurationSeconds = 1, batteryOptimizationEnabled = false)
+        val location = Location(id = 7, latitude = 37.0, longitude = -122.0, accuracy = 5f, timestamp = 1000L, provider = "TEST")
+        coEvery { locationRepository.getCurrentLocation() } returns location
+        coEvery { locationRepository.getLastKnownLocation() } returns location
+        coEvery { locationRepository.findOrCreateLocation(any(), any()) } returns (7L to true)
+        coEvery {
+            deviceRepository.upsertDeviceWithFingerprint(
+                address = any(),
+                name = any(),
+                advertisedName = any(),
+                lastSeen = any(),
+                manufacturerData = any(),
+                manufacturerId = any(),
+                manufacturerName = any(),
+                deviceType = any(),
+                deviceModel = any(),
+                isTracker = any(),
+                serviceUuids = any(),
+                appearance = any(),
+                txPowerLevel = any(),
+                advertisingFlags = any(),
+                appleContinuityType = any(),
+                identificationConfidence = any(),
+                identificationMethod = any(),
+                payloadFingerprint = any(),
+                findMyStatus = any(),
+                findMySeparated = any(),
+                highestRssi = any(),
+                signalStrength = any(),
+                beaconType = any(),
+                threatLevel = any(),
+            )
+        } coAnswers {
+            beforePersist()
+            persisted +=
+                PersistedDevice(
+                    address = arg(0),
+                    isTracker = arg(9),
+                    deviceType = arg(7),
+                    fingerprint = arg(17),
+                    method = arg(16),
+                    highestRssi = arg(20),
+                )
+            persisted.size.toLong()
+        }
         coEvery {
             deviceRepository.insertDeviceLocationRecord(any(), any(), any(), any(), any(), any(), any())
-        } returns 1L
-
-        // Mock context for BLE scanner - must return BluetoothManager to avoid ClassCastException
-        // Nordic BLE library's BleScanner uses the STRING-based getSystemService:
-        //   context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        // So we must mock that exact overload. The class-based overload is also mocked for safety.
-        val bluetoothManager = mockk<BluetoothManager>(relaxed = true)
-        val bluetoothAdapter = mockk<BluetoothAdapter>(relaxed = true)
-        every { context.getSystemService(Context.BLUETOOTH_SERVICE) } returns bluetoothManager
-        every { context.getSystemService(BluetoothManager::class.java) } returns bluetoothManager
-        every { bluetoothManager.adapter } returns bluetoothAdapter
-        every { bluetoothAdapter.isEnabled } returns true
-        every { bluetoothAdapter.bluetoothLeScanner } returns null
-        every { context.applicationContext } returns context
-        every { context.packageName } returns "com.tailbait.test"
-
-        // Set test dispatcher
-        Dispatchers.setMain(testDispatcher)
-
-        // Note: We cannot fully test BleScannerManager without mocking the Nordic BLE library
-        // This would require additional setup with Robolectric or Android instrumentation tests
-        // For now, these tests focus on the logic that can be tested in isolation
+        } coAnswers {
+            recordTriggers += arg<String>(6)
+            recordTriggers.size.toLong()
+        }
+        scannerManager =
+            manager { _, _ ->
+                flow {
+                    sourceStarts++
+                    try {
+                        incoming.collect { emit(it) }
+                    } finally {
+                        withContext(NonCancellable) {
+                            closeGate?.await()
+                            sourceCloses++
+                        }
+                    }
+                }
+            }
     }
 
     @After
     fun tearDown() {
-        Dispatchers.resetMain()
         clearAllMocks()
     }
 
     @Test
-    fun `test initial state is Idle`() =
-        testScope.runTest {
-            // Given
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
+    fun `overlapping service and manual scans share collection and persistence`() =
+        runTest(dispatcher) {
+            val service = startScan(Constants.SCAN_TRIGGER_PERIODIC)
+            val manual = async { scannerManager.performManualScan() }
+            runCurrent()
+            sighting(result("01", rssi = -75))
+            sighting(result("01", rssi = -45))
+            sighting(result("02", rssi = Constants.MIN_RSSI_THRESHOLD - 1))
+            assertEquals(1, sourceStarts)
+            assertEquals(1, scannerManager.getCurrentDeviceCount())
 
-            // Then
-            scannerManager.scanState.test {
-                assertEquals(BleScannerManager.ScanState.Idle, awaitItem())
+            advanceTimeBy(999)
+            runCurrent()
+            assertFalse(service.isCompleted)
+            assertTrue(persisted.isEmpty())
+            advanceTimeBy(1)
+            runCurrent()
+
+            assertEquals(1, service.await())
+            assertEquals(1, manual.await())
+            assertEquals(-45, persisted.single().highestRssi)
+            assertEquals(listOf(Constants.SCAN_TRIGGER_PERIODIC), recordTriggers)
+            assertEquals(1, sourceCloses)
+            assertEquals(1, scannerManager.processScanResults(Constants.SCAN_TRIGGER_MANUAL))
+            assertEquals(1, persisted.size)
+            assertEquals(BleScannerManager.ScanState.Idle, scannerManager.scanState.value)
+        }
+
+    @Test
+    fun `stop joins source teardown before one stable partial save and rejects new scans`() =
+        runTest(dispatcher) {
+            closeGate = CompletableDeferred()
+            val scan = startScan()
+            sighting(result("01"))
+            val firstStop = launch { scannerManager.stopAndSaveScanResults() }
+            val secondStop = launch { scannerManager.stopAndSaveScanResults() }
+            runCurrent()
+            assertFalse(firstStop.isCompleted)
+            assertFalse(secondStop.isCompleted)
+            assertEquals(0, sourceCloses)
+            assertTrue(persisted.isEmpty())
+            assertEquals(0, incoming.subscriptionCount.value)
+
+            val rejected = async { runCatching { scannerManager.performManualScan() }.exceptionOrNull() }
+            runCurrent()
+            assertTrue(rejected.await() is CancellationException)
+            sighting(result("02"))
+            closeGate!!.complete(Unit)
+            runCurrent()
+            firstStop.join()
+            secondStop.join()
+
+            assertTrue(scan.isCancelled)
+            assertEquals(listOf("AA:BB:CC:DD:EE:01"), persisted.map { it.address })
+            assertEquals(1, sourceStarts)
+            assertEquals(1, sourceCloses)
+            assertEquals(1, recordTriggers.size)
+            sighting(result("03"))
+            scannerManager.stopAndSaveScanResults()
+            assertEquals(1, persisted.size)
+            assertEquals(BleScannerManager.ScanState.Idle, scannerManager.scanState.value)
+        }
+
+    @Test
+    fun `stop during persistence waits for the existing batch without processing twice`() =
+        runTest(dispatcher) {
+            val writing = CompletableDeferred<Unit>()
+            val finishWrite = CompletableDeferred<Unit>()
+            beforePersist = {
+                writing.complete(Unit)
+                finishWrite.await()
             }
-            assertFalse(scannerManager.isScanning())
-            assertEquals(0, scannerManager.getCurrentDeviceCount())
+            val scan = startScan()
+            sighting(result("01"))
+            advanceTimeBy(1000)
+            runCurrent()
+            assertTrue(writing.isCompleted)
+            assertEquals(1, sourceCloses)
+            assertEquals(BleScannerManager.ScanState.Processing, scannerManager.scanState.value)
+            val overlap = async { scannerManager.performManualScan() }
+            val stop = launch { scannerManager.stopAndSaveScanResults() }
+            runCurrent()
+            assertFalse(stop.isCompleted)
+            assertEquals(1, sourceStarts)
+            assertEquals(BleScannerManager.ScanState.Processing, scannerManager.scanState.value)
+
+            finishWrite.complete(Unit)
+            runCurrent()
+            stop.join()
+            assertTrue(scan.isCancelled)
+            assertTrue(overlap.isCancelled)
+            assertEquals(1, persisted.size)
+            assertEquals(1, recordTriggers.size)
+            assertEquals(BleScannerManager.ScanState.Idle, scannerManager.scanState.value)
         }
 
     @Test
-    fun `test stopScanning clears state`() =
-        testScope.runTest {
-            // Given
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // When
-            scannerManager.stopScanning()
-
-            // Then
-            scannerManager.scanState.test {
-                assertEquals(BleScannerManager.ScanState.Idle, awaitItem())
-            }
-            assertFalse(scannerManager.isScanning())
-        }
-
-    @Test
-    fun `test scan returns error when location unavailable`() =
-        testScope.runTest {
-            // Given
-            coEvery { locationRepository.getCurrentLocation() } returns null
-
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // Note: Full scan testing would require mocking the BLE scanner
-            // This test verifies the error handling logic
-
-            // When/Then
-            // The scanner would emit an error state when location is unavailable
-            // This would be tested in an integration test with actual BLE scanner
-        }
-
-    @Test
-    fun `test location change detection works correctly`() =
-        testScope.runTest {
-            // Given
-            val location1 =
-                testLocation.copy(
-                    latitude = 37.7749,
-                    longitude = -122.4194,
-                )
-            val location2 =
-                testLocation.copy(
-                    // ~1km away
-                    latitude = 37.7850,
-                    longitude = -122.4294,
-                )
-
-            var locationCallCount = 0
-            coEvery { locationRepository.getCurrentLocation() } answers {
-                if (locationCallCount == 0) {
-                    locationCallCount++
-                    location1
-                } else {
-                    location2
+    fun `stop cancels pending fresh location and saves the cached observation once`() =
+        runTest(dispatcher) {
+            val locating = CompletableDeferred<Unit>()
+            val locationCancelled = CompletableDeferred<Unit>()
+            val finishLocation = CompletableDeferred<Unit>()
+            coEvery { locationRepository.getCurrentLocation() } coAnswers {
+                locating.complete(Unit)
+                try {
+                    finishLocation.await()
+                    null
+                } finally {
+                    locationCancelled.complete(Unit)
                 }
             }
-
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // Note: Full testing would require actual scan execution
-            // This verifies that the repository setup is correct for location change detection
-        }
-
-    @Test
-    fun `test device upsert is called for each scan result`() =
-        testScope.runTest {
-            // Given
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // Note: Testing actual device upsert would require mocking BLE scan results
-            // This test verifies the mock setup is correct
-
-            // Verify mock is set up correctly
-            coEvery { deviceRepository.upsertDevice(any(), any(), any(), any()) } returns 1L
-
-            // Call would be made during scan processing
-            val deviceId =
-                deviceRepository.upsertDevice(
-                    address = "AA:BB:CC:DD:EE:FF",
-                    name = "Test Device",
-                    lastSeen = System.currentTimeMillis(),
-                    manufacturerData = null,
-                )
-
-            assertEquals(1L, deviceId)
-        }
-
-    @Test
-    fun `test device location record is created with correct data`() =
-        testScope.runTest {
-            // Given
-            val deviceId = 1L
-            val locationId = 1L
-            val rssi = -60
-            val timestamp = System.currentTimeMillis()
-            val scanTriggerType = Constants.SCAN_TRIGGER_MANUAL
-
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // When
-            val recordId =
-                deviceRepository.insertDeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId,
-                    rssi = rssi,
-                    timestamp = timestamp,
-                    locationChanged = true,
-                    distanceFromLast = 100.0,
-                    scanTriggerType = scanTriggerType,
-                )
-
-            // Then
-            assertEquals(1L, recordId)
-            coVerify {
-                deviceRepository.insertDeviceLocationRecord(
-                    deviceId = deviceId,
-                    locationId = locationId,
-                    rssi = rssi,
-                    timestamp = timestamp,
-                    locationChanged = true,
-                    distanceFromLast = 100.0,
-                    scanTriggerType = scanTriggerType,
-                )
+            val scan = startScan()
+            sighting(result("01"))
+            advanceTimeBy(1000)
+            runCurrent()
+            assertTrue(locating.isCompleted)
+            val stop = launch { scannerManager.stopAndSaveScanResults() }
+            try {
+                runCurrent()
+                assertTrue(locationCancelled.isCompleted)
+                assertTrue(stop.isCompleted)
+                assertTrue(scan.isCancelled)
+                assertEquals(1, persisted.size)
+                assertEquals(1, recordTriggers.size)
+                assertEquals(BleScannerManager.ScanState.Idle, scannerManager.scanState.value)
+            } finally {
+                finishLocation.complete(Unit)
+                stop.join()
             }
         }
 
     @Test
-    fun `test settings are retrieved correctly`() =
-        testScope.runTest {
-            // Given
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
+    fun `cancelling the initiating caller preserves cancellation and saves its partial batch`() =
+        runTest(dispatcher) {
+            val scan = startScan()
+            sighting(result("01"))
+            scan.cancel(CancellationException("Learn Mode ended"))
+            runCurrent()
+            scan.join()
 
-            // When
-            val settings = settingsRepository.getSettingsOnce()
-
-            // Then
-            assertEquals(testSettings, settings)
-            assertTrue(settings.isTrackingEnabled)
-            assertEquals(300, settings.scanIntervalSeconds)
-            assertEquals(30, settings.scanDurationSeconds)
+            assertTrue(runCatching { scan.await() }.exceptionOrNull() is CancellationException)
+            assertEquals(1, sourceCloses)
+            assertEquals(0, incoming.subscriptionCount.value)
+            assertEquals(1, persisted.size)
+            assertEquals(1, recordTriggers.size)
+            scannerManager.stopAndSaveScanResults()
+            assertEquals(1, persisted.size)
         }
 
     @Test
-    fun `test battery optimization affects scan mode`() =
-        testScope.runTest {
-            // Given
-            val batteryOptimizedSettings =
-                testSettings.copy(
-                    batteryOptimizationEnabled = true,
-                )
-            coEvery { settingsRepository.getSettingsOnce() } returns batteryOptimizedSettings
-
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // Then
-            val settings = settingsRepository.getSettingsOnce()
-            assertTrue(settings.batteryOptimizationEnabled)
+    fun `cancelling a coalesced caller does not cancel the owner`() =
+        runTest(dispatcher) {
+            val owner = startScan()
+            val waiter = async { scannerManager.performManualScan() }
+            runCurrent()
+            waiter.cancel()
+            runCurrent()
+            assertFalse(owner.isCompleted)
+            assertEquals(1, incoming.subscriptionCount.value)
+            sighting(result("01"))
+            advanceTimeBy(1000)
+            runCurrent()
+            assertEquals(1, owner.await())
+            assertEquals(1, sourceStarts)
+            assertEquals(1, persisted.size)
         }
 
     @Test
-    fun `test multiple devices are deduplicated correctly`() =
-        testScope.runTest {
-            // Given
-            val device1Address = "AA:BB:CC:DD:EE:FF"
-            val device2Address = "11:22:33:44:55:66"
+    fun `caller timeout is not mistaken for the scan window ending`() =
+        runTest(dispatcher) {
+            val outcome =
+                async {
+                    runCatching { withTimeout(300) { scannerManager.performManualScan() } }.exceptionOrNull()
+                }
+            runCurrent()
+            advanceTimeBy(200)
+            runCurrent()
+            sighting(result("01"))
+            advanceTimeBy(100)
+            runCurrent()
 
-            coEvery {
-                deviceRepository.upsertDevice(device1Address, any(), any(), any())
-            } returns 1L
-
-            coEvery {
-                deviceRepository.upsertDevice(device2Address, any(), any(), any())
-            } returns 2L
-
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // Note: Full deduplication testing requires actual BLE scan results
-            // This verifies the repository mock handles multiple devices correctly
+            assertTrue(outcome.await() is TimeoutCancellationException)
+            assertEquals(1, sourceCloses)
+            assertEquals(1, persisted.size)
+            assertEquals(1, recordTriggers.size)
         }
 
     @Test
-    fun `test scan trigger type is passed correctly`() =
-        testScope.runTest {
-            // Given
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
+    fun `single scan entry point persists before returning and later processing does not repeat it`() =
+        runTest(dispatcher) {
+            val scan = async { scannerManager.performSingleScan(1000) }
+            runCurrent()
+            advanceTimeBy(200)
+            runCurrent()
+            sighting(result("01"))
+            advanceTimeBy(1000)
+            runCurrent()
+            scan.await()
 
-            // Note: Testing full scan with trigger type requires BLE scanner mocking
-            // This verifies the constant is defined correctly
-            assertEquals("MANUAL", Constants.SCAN_TRIGGER_MANUAL)
-            assertEquals("CONTINUOUS", Constants.SCAN_TRIGGER_CONTINUOUS)
+            assertEquals(1, scannerManager.processScanResults(Constants.SCAN_TRIGGER_PERIODIC))
+            assertEquals(1, persisted.size)
+            assertEquals(listOf(Constants.SCAN_TRIGGER_PERIODIC), recordTriggers)
         }
 
     @Test
-    fun `test RSSI filtering works correctly`() =
-        testScope.runTest {
-            // Given
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
+    fun `Nordic service data reaches persisted classification and only physical fingerprints`() =
+        runTest(dispatcher) {
+            val key = ByteArray(20) { it.toByte() }
+            val findHub = ad(0x16, byteArrayOf(0xAA.toByte(), 0xFE.toByte(), 0x41) + key + 0xA5.toByte())
+            val appleNearby = ad(0xFF, byteArrayOf(0x4C, 0x00, 0x10, 0x02, 0x00, 0x00))
+            val tile = ad(0x03, byteArrayOf(0xED.toByte(), 0xFE.toByte()))
+            val fastPair = ad(0x16, byteArrayOf(0x2C, 0xFE.toByte(), 0x01, 0x02, 0x03))
+            val eddystone = ad(0x16, byteArrayOf(0xAA.toByte(), 0xFE.toByte(), 0x00) + ByteArray(20))
+            val scan = startScan()
+            sighting(result("01", findHub))
+            sighting(result("02", appleNearby + findHub))
+            sighting(result("03", tile))
+            sighting(result("04", fastPair))
+            sighting(result("05", eddystone))
+            advanceTimeBy(1000)
+            runCurrent()
 
-            // Verify RSSI threshold constant
-            assertEquals(-100, Constants.MIN_RSSI_THRESHOLD)
-
-            // Note: Actual RSSI filtering testing requires BLE scan result mocking
-        }
-
-    @Test
-    fun `test location is stored before processing devices`() =
-        testScope.runTest {
-            // Given
-            val locationSlot = slot<Location>()
-            coEvery { locationRepository.insertLocation(capture(locationSlot)) } returns 1L
-
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // When
-            val locationId = locationRepository.insertLocation(testLocation)
-
-            // Then
-            assertEquals(1L, locationId)
-            assertEquals(testLocation, locationSlot.captured)
-        }
-
-    @Test
-    fun `test continuous scanning respects tracking enabled setting`() =
-        testScope.runTest {
-            // Given
-            val disabledSettings = testSettings.copy(isTrackingEnabled = false)
-            coEvery { settingsRepository.getSettingsOnce() } returns disabledSettings
-
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // Note: Full continuous scanning test requires time advancement and BLE mocking
-            // This verifies the setting is respected
-
-            val settings = settingsRepository.getSettingsOnce()
-            assertFalse(settings.isTrackingEnabled)
-        }
-
-    @Test
-    fun `test scan state transitions correctly`() =
-        testScope.runTest {
-            // Given
-            scannerManager =
-                BleScannerManager(
-                    deviceRepository,
-                    locationRepository,
-                    settingsRepository,
-                    whitelistRepository,
-                    alertGenerator,
-                    context,
-                )
-
-            // Initial state should be Idle
-            scannerManager.scanState.test {
-                assertEquals(BleScannerManager.ScanState.Idle, awaitItem())
+            assertEquals(5, scan.await())
+            persisted.take(2).forEach {
+                assertTrue(it.isTracker)
+                assertEquals("TRACKER", it.deviceType)
+                assertEquals("SERVICE_DATA", it.method)
+                assertEquals("FHN:000102030405060708090A0B0C0D0E0F10111213", it.fingerprint)
             }
+            assertTrue(persisted[2].isTracker)
+            assertNull(persisted[2].fingerprint)
+            persisted.drop(3).forEach {
+                assertFalse(it.isTracker)
+                assertNull(it.fingerprint)
+            }
+        }
 
-            // After stop, should return to Idle
+    @Test
+    fun `changed service bytes replace cached tracker evidence for the same address`() =
+        runTest(dispatcher) {
+            val key = ByteArray(20) { it.toByte() }
+            val valid = ad(0x16, byteArrayOf(0xAA.toByte(), 0xFE.toByte(), 0x40) + key)
+            val truncated = ad(0x16, byteArrayOf(0xAA.toByte(), 0xFE.toByte(), 0x41) + key)
+            val scan = startScan()
+            sighting(result("01", valid))
+            sighting(result("01", truncated))
+            advanceTimeBy(1000)
+            runCurrent()
+
+            assertEquals(1, scan.await())
+            assertFalse(persisted.single().isTracker)
+            assertNull(persisted.single().fingerprint)
+        }
+
+    @Test
+    fun `Nordic native filters retain unknown advertisers and cancellation unregisters the callback`() =
+        runTest(dispatcher) {
+            val context = mockk<Context>()
+            val bluetoothManager = mockk<BluetoothManager>()
+            val adapter = mockk<BluetoothAdapter>()
+            val nativeScanner = mockk<android.bluetooth.le.BluetoothLeScanner>(relaxed = true)
+            every { context.getSystemService(Context.BLUETOOTH_SERVICE) } returns bluetoothManager
+            every { bluetoothManager.adapter } returns adapter
+            every { adapter.bluetoothLeScanner } returns nativeScanner
+            every { adapter.bondedDevices } returns emptySet()
+            val filters = slot<List<ScanFilter>>()
+            val settings = slot<ScanSettings>()
+            val callback = slot<ScanCallback>()
+            every { nativeScanner.startScan(capture(filters), capture(settings), capture(callback)) } just Runs
+            scannerManager = manager(BleScanner(context)::scan)
+            val scan = startScan()
+            val device = mockk<BluetoothDevice>()
+            every { device.address } returns "AA:BB:CC:DD:EE:01"
+            every { device.name } returns null
+            @Suppress("DEPRECATION")
+            val unknown = ScanResult(device, null, -45, 1L)
+
+            // Exercise Nordic's actual native mapping and Android matching, not copied filter construction.
+            assertTrue(filters.captured.any { it.serviceUuid != null })
+            assertTrue(filters.captured.any { it.matches(unknown) })
+            assertEquals(ScanSettings.SCAN_MODE_LOW_LATENCY, settings.captured.scanMode)
+            assertEquals(0L, settings.captured.reportDelayMillis)
+            callback.captured.onScanResult(ScanSettings.CALLBACK_TYPE_ALL_MATCHES, unknown)
+            runCurrent()
+            assertEquals(1, scannerManager.getCurrentDeviceCount())
+
             scannerManager.stopScanning()
-            scannerManager.scanState.test {
-                assertEquals(BleScannerManager.ScanState.Idle, awaitItem())
-            }
+            scannerManager.stopAndSaveScanResults()
+            runCurrent()
+            assertTrue(scan.isCancelled)
+            verify(exactly = 1) { nativeScanner.stopScan(callback.captured) }
+            assertEquals(1, persisted.size)
+            callback.captured.onScanResult(ScanSettings.CALLBACK_TYPE_ALL_MATCHES, unknown)
+            runCurrent()
+            assertEquals(1, persisted.size)
+            assertEquals(BleScannerManager.ScanState.Idle, scannerManager.scanState.value)
         }
+
+    private fun manager(source: (List<BleScanFilter>, BleScannerSettings) -> Flow<BleScanResult>) =
+        BleScannerManager(
+            deviceRepository,
+            locationRepository,
+            settingsRepository,
+            whitelistRepository,
+            alertGenerator,
+            source,
+            dispatcher,
+            dispatcher,
+        )
+
+    private fun TestScope.startScan(trigger: String = Constants.SCAN_TRIGGER_MANUAL): Deferred<Int> {
+        val scan = async { scannerManager.performManualScan(trigger) }
+        runCurrent()
+        advanceTimeBy(200)
+        runCurrent()
+        return scan
+    }
+
+    private suspend fun TestScope.sighting(result: BleScanResult) {
+        incoming.emit(result)
+        runCurrent()
+    }
+
+    private fun result(
+        suffix: String,
+        advertisement: ByteArray = byteArrayOf(0),
+        rssi: Int = -55,
+    ): BleScanResult =
+        BleScanResult(
+            MockServerDevice(name = null, address = "AA:BB:CC:DD:EE:$suffix"),
+            BleScanResultData(rssi, 0L, ScanRecordSerializer.parseFromBytes(advertisement)),
+        )
+
+    private fun ad(
+        type: Int,
+        payload: ByteArray,
+    ): ByteArray = byteArrayOf((payload.size + 1).toByte(), type.toByte()) + payload
 }

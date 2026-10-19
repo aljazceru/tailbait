@@ -56,7 +56,7 @@ import kotlin.math.min
  * ```kotlin
  * val calculator = ThreatScoreCalculator(movementCorrelationCalculator)
  * val score = calculator.calculate(device, locations, distances)
- * val enhancedScore = calculator.calculateEnhanced(device, locations, distances, deviceRecords, userLocations)
+ * val enhancedScore = calculator.calculateEnhanced(device, locations, distances, deviceRecords, userLocations, userPaths)
  * ```
  *
  * Thread Safety:
@@ -149,8 +149,7 @@ class ThreatScoreCalculator
          * @param locations List of locations where the device was detected
          * @param distances List of distances between location pairs
          * @param deviceRecords Device-location records (for movement analysis)
-         * @param deviceRecords Device-location records (for movement analysis)
-         * @param userLocations User's location history (for legacy fallback and context)
+         * @param userLocations Place coordinates referenced by the user's movement history
          * @param userPaths User's granular movement history (for accurate correlation)
          * @return Threat score between 0.0 and 1.0
          */
@@ -159,7 +158,7 @@ class ThreatScoreCalculator
             locations: List<Location>,
             distances: List<Double>,
             deviceRecords: List<DeviceLocationRecord>,
-            _userLocations: List<Location>,
+            userLocations: List<Location>,
             userPaths: List<UserPath>,
         ): Double {
             var totalScore = 0.0
@@ -170,6 +169,7 @@ class ThreatScoreCalculator
                     deviceRecords = deviceRecords,
                     userPaths = userPaths,
                     deviceLocations = locations,
+                    userLocations = userLocations,
                 )
 
             totalScore += correlationScore * WEIGHT_MOVEMENT_CORRELATION
@@ -308,6 +308,7 @@ class ThreatScoreCalculator
             locations: List<Location>,
             distances: List<Double>,
             deviceRecords: List<DeviceLocationRecord>,
+            userLocations: List<Location>,
             userPaths: List<UserPath>,
         ): Map<String, Double> {
             val correlationScore =
@@ -315,6 +316,7 @@ class ThreatScoreCalculator
                     deviceRecords = deviceRecords,
                     userPaths = userPaths,
                     deviceLocations = locations,
+                    userLocations = userLocations,
                 )
             val locationScore = min(locations.size / MAX_LOCATIONS_FOR_NORMALIZATION, 1.0)
             val distanceScore =
